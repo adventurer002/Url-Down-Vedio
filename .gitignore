@@ -8,3 +8,13 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Node
+node_modules/
+frontend/dist/
+
+# Env
+.env
+
+# IDE
+.vscode/

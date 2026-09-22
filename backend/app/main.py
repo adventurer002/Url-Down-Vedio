@@ -1,0 +1,32 @@
+import sentry_sdk
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from backend.app.api.health import router as health_router
+from backend.app.core.config import settings
+from backend.app.core.logging import configure_logging
+from backend.app.core.middleware import RequestIdMiddleware
+
+configure_logging()
+
+if settings.sentry_dsn:
+    sentry_sdk.init(dsn=str(settings.sentry_dsn))
+
+app = FastAPI(title="down-vedio")
+app.add_middleware(RequestIdMiddleware)
+app.include_router(health_router)
+
+
+@app.get("/debug-error")
+async def debug_error() -> None:
+    raise RuntimeError("intentional debug error for sentry verification")
+
+
+@app.exception_handler(Exception)
+async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, RuntimeError) and str(exc).startswith("intentional"):
+        raise exc
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "internal_error", "message": "Internal server error"}},
+    )
