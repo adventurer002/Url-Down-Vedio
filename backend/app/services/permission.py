@@ -102,3 +102,12 @@ async def can_download(
             False, "quota_exceeded", "视频时长超出当前套餐上限",
             )
     return PermissionResult(True)
+
+
+async def check_feature(session: AsyncSession, user_id: uuid.UUID, feature: str) -> PermissionResult:
+    """Generic entitlement gate for AI features (Phase7) and beyond."""
+    plan = await current_plan(session, user_id)
+    features = plan.features or {}
+    if not features.get(feature, False):
+        return PermissionResult(False, "permission_denied", "当前套餐无此权益")
+    return PermissionResult(True)

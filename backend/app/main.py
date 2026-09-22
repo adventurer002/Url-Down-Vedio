@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app.api.auth import router as auth_router
+from backend.app.api.billing import router as billing_router
 from backend.app.api.health import router as health_router
 from backend.app.api.media import router as media_router
 from backend.app.core.config import settings
@@ -29,6 +30,7 @@ app.add_middleware(
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.include_router(auth_router)
+app.include_router(billing_router)
 app.include_router(health_router)
 app.include_router(media_router)
 

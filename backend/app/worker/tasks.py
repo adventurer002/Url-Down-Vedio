@@ -284,6 +284,16 @@ async def _cleanup_impl(
         return await downloads.cleanup_expired(session, store.delete)
 
 
+async def _expire_impl(
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> dict[str, int]:
+    from backend.app.services import billing as billing_service
+
+    maker = session_factory or _session_factory()
+    async with maker() as session:
+        return await billing_service.expire_due(session)
+
+
 @celery_app.task(  # type: ignore[untyped-decorator]
     name="backend.app.worker.tasks.cleanup_expired_files",
     soft_time_limit=300,
@@ -302,4 +312,5 @@ def cleanup_expired_files() -> str:
     queue="default",
 )
 def expire_subscriptions() -> str:
-    return "ok"
+    result = asyncio.run(_expire_impl())
+    return f"ok expired={result}"
