@@ -30,5 +30,12 @@ class Settings(BaseSettings):
     ip_rate_parse_anon_per_min: int = 10
     ip_rate_parse_user_per_min: int = 60
 
+    # Phase5: frontend联调
+    cors_origins: str = "http://localhost:5173"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
 
 settings = Settings()
