@@ -34,7 +34,7 @@
 
 ## Phase 2 — 数据库层
 
-范围：按 `docs/database.md` 实现 12 张表的 SQLAlchemy models、Alembic 异步迁移环境、初始 migration、plans seed 脚本（free / monthly / yearly）。
+范围：按 `docs/database.md` 实现 13 张表的 SQLAlchemy models、Alembic 异步迁移环境、初始 migration、plans seed 脚本（free / monthly / yearly）。
 
 验收：`upgrade head → downgrade -1 → upgrade head` 可逆执行；`\dt` 检查表结构与文档一致；seed 后 plans 三行就绪。
 

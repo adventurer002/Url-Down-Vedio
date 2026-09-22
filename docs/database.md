@@ -239,6 +239,6 @@ AI 类异步任务（音频提取、转写、总结、思维导图）的统一�
 ## 4. 迁移与初始化
 
 - Alembic 使用异步引擎（asyncpg），`alembic/env.py` 从应用 config 读连接串，不单独维护一份。
-- 初始 migration 一次建齐本文件第 3 节的全部 12 张表；pgvector 扩展与 `transcript_chunks` 表留到 Ask Video 阶段单独 migration。
+- 初始 migration 一次建齐本文件第 3 节的全部 13 张表；pgvector 扩展与 `transcript_chunks` 表留到 Ask Video 阶段单独 migration。
 - 提供 seed 脚本写入三个 plan：`free`（每日 3 次下载、时长上限 30 分钟、无 AI 权益）、`monthly`、`yearly`。具体数值是运营配置，写死在 seed 而不是代码里。
 - 每个 migration 必须实现非空的 `downgrade()`，合并前本地执行一次 `upgrade head → downgrade -1 → upgrade head` 验证可逆。
