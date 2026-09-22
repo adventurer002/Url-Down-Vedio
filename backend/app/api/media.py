@@ -1,4 +1,4 @@
-"""Phase3 routes: parse + download. Anonymous allowed (dev only, Phase4 removes it)."""
+"""Phase4 routes: parse + download gated on login; ownership enforced."""
 
 import json
 import uuid
@@ -11,10 +11,11 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.auth_deps import optional_user, require_user
 from backend.app.api.deps import get_session
 from backend.app.core.config import settings
 from backend.app.core.errors import AppError
-from backend.app.db.models import DownloadTask, Video
+from backend.app.db.models import DownloadTask, User, Video
 from backend.app.providers.storage import LocalStorageProvider
 from backend.app.schemas.media import (
     DownloadRequest,
@@ -27,6 +28,7 @@ from backend.app.schemas.media import (
     VideoDetail,
 )
 from backend.app.services import download_service as downloads
+from backend.app.services import permission as perm
 from backend.app.services import video_service as videos
 from backend.app.services.progress import cancel_key, progress_channel
 
@@ -79,36 +81,69 @@ async def _task_out(session: AsyncSession, task: DownloadTask) -> TaskDetail:
 
 @router.post("/videos/parse", response_model=ParseResponse, status_code=202)
 async def parse_video_endpoint(
-    body: ParseRequest, session: AsyncSession = Depends(get_session)
+    body: ParseRequest,
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
 ) -> ParseResponse:
     from backend.app.worker import tasks as worker_tasks
 
-    video = await videos.create_parsing_video(session, body.url, None)
+    user_id = user.id if user else None
+    video = await videos.create_parsing_video(session, body.url, user_id)
     videos.schedule_parse(lambda vid: worker_tasks.parse_video.delay(vid).id, video.id)
     return ParseResponse(video_id=video.id)
 
 
 @router.get("/videos/{video_id}", response_model=VideoDetail)
 async def get_video(
-    video_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    video_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
 ) -> VideoDetail:
     video = await session.get(Video, video_id)
     if video is None:
         raise AppError("not_found", "视频不存在")
+    if user is None or (video.user_id is not None and video.user_id != user.id):
+        raise AppError("not_found", "视频不存在")
     return _video_out(video)
+
+
+@router.get("/videos", response_model=Page)
+async def list_videos(
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> Page:
+    stmt = select(Video).where(Video.user_id == user.id).order_by(Video.created_at.desc())
+    total = (
+        await session.execute(select(func.count()).select_from(stmt.subquery()))
+    ).scalar_one()
+    rows = (
+        await session.execute(stmt.offset((page - 1) * page_size).limit(page_size))
+    ).scalars().all()
+    return Page(
+        items=[_video_out(v) for v in rows], total=total, page=page, page_size=page_size
+    )
 
 
 @router.post("/downloads", response_model=DownloadResponse, status_code=202)
 async def create_download(
     body: DownloadRequest,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
     idempotency_key: str | None = Header(default=None),
 ) -> DownloadResponse:
     from backend.app.worker import tasks as worker_tasks
 
+    video = await session.get(Video, body.video_id)
+    if video is None or (video.user_id is not None and video.user_id != user.id):
+        raise AppError("not_found", "视频不存在")
+    check = await perm.can_download(session, user.id, video.duration_seconds)
+    if not check.allowed:
+        raise AppError(check.code, check.message)
     if idempotency_key:
         r = aredis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
-        cached = await r.get(f"idem:anon:{idempotency_key}")
+        cached = await r.get(f"idem:{user.id}:{idempotency_key}")
         await r.aclose()
         if cached:
             return DownloadResponse(task_id=uuid.UUID(cached.decode()))
@@ -116,12 +151,13 @@ async def create_download(
         session,
         body.video_id,
         body.format_id,
-        None,
+        user.id,
         lambda tid: worker_tasks.download_video.delay(tid).id,
     )
+    await perm.record_download_usage(session, user.id, task.id)
     if idempotency_key:
         r = aredis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
-        await r.set(f"idem:anon:{idempotency_key}", str(task.id), ex=86400)
+        await r.set(f"idem:{user.id}:{idempotency_key}", str(task.id), ex=86400)
         await r.aclose()
     return DownloadResponse(task_id=task.id)
 
@@ -129,11 +165,16 @@ async def create_download(
 @router.get("/downloads")
 async def list_downloads(
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
     status: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> Page:
-    stmt = select(DownloadTask).order_by(DownloadTask.created_at.desc())
+    stmt = (
+        select(DownloadTask)
+        .where(DownloadTask.user_id == user.id)
+        .order_by(DownloadTask.created_at.desc())
+    )
     if status:
         stmt = stmt.where(DownloadTask.status == status)
     total = (
@@ -154,17 +195,21 @@ async def list_downloads(
 
 @router.get("/downloads/{task_id}", response_model=TaskDetail)
 async def get_download(
-    task_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    task_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
 ) -> TaskDetail:
     task = await session.get(DownloadTask, task_id)
-    if task is None:
+    if task is None or task.user_id != user.id:
         raise AppError("not_found", "任务不存在")
     return await _task_out(session, task)
 
 
 @router.post("/downloads/{task_id}/cancel", response_model=TaskDetail)
 async def cancel_download(
-    task_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    task_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
 ) -> TaskDetail:
     from backend.app.worker.celery_app import celery_app
 
@@ -179,7 +224,7 @@ async def cancel_download(
             r.set(cancel_key(tid), "1", ex=3600)
             r.close()
 
-        return await downloads.request_cancel(session, task_id, None, _revoke, _flag)
+        return await downloads.request_cancel(session, task_id, user.id, _revoke, _flag)
 
     task = await _revoke_and_flag()
     return await _task_out(session, task)
@@ -190,9 +235,10 @@ async def download_events(
     task_id: uuid.UUID,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
 ) -> StreamingResponse:
     task = await session.get(DownloadTask, task_id)
-    if task is None:
+    if task is None or task.user_id != user.id:
         raise AppError("not_found", "任务不存在")
 
     async def gen() -> AsyncIterator[str]:
@@ -226,9 +272,11 @@ async def download_events(
 
 @router.get("/downloads/{task_id}/file", response_model=None)
 async def download_file(
-    task_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    task_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
 ) -> FileResponse | RedirectResponse:
-    media = await downloads.resolve_file(session, task_id, None)
+    media = await downloads.resolve_file(session, task_id, user.id)
     if settings.storage_backend == "local":
         local_store = LocalStorageProvider(Path(settings.storage_dir))
         local = await local_store.open_local(media.storage_key)

@@ -25,5 +25,10 @@ class Settings(BaseSettings):
     download_time_limit_seconds: int = 1800
     download_max_retries: int = 2
 
+    # Phase4: auth + limits
+    ip_rate_auth_per_min: int = 10
+    ip_rate_parse_anon_per_min: int = 10
+    ip_rate_parse_user_per_min: int = 60
+
 
 settings = Settings()
