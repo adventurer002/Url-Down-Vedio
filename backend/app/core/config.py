@@ -12,5 +12,18 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me"
     sentry_dsn: AnyUrl | None = None
 
+    # Phase3: media pipeline
+    storage_backend: str = "local"
+    storage_dir: str = "/tmp/downvedio-media"
+    worker_tmp_dir: str = "/tmp/downvedio-tmp"
+    oss_endpoint: str = ""
+    oss_bucket: str = ""
+    oss_access_key: str = ""
+    oss_secret_key: str = ""
+    file_ttl_hours_free: int = 24
+    file_ttl_hours_member: int = 168
+    download_time_limit_seconds: int = 1800
+    download_max_retries: int = 2
+
 
 settings = Settings()
