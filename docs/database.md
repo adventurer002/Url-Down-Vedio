@@ -20,6 +20,7 @@ erDiagram
     users ||--o{ videos : parses
     users ||--o{ download_tasks : creates
     users ||--o{ usage_records : consumes
+    users ||--o{ audit_logs : performs
     plans ||--o{ subscriptions : defines
     plans ||--o{ orders : priced_by
     orders ||--o{ payments : settled_by
@@ -236,9 +237,24 @@ AI 类异步任务（音频提取、转写、总结、思维导图）的统一�
 
 配额统计口径：`action + created_at 当日` 聚合；成本统计口径：全字段按月聚合。
 
+### audit_logs
+
+管理端写操作审计。只追加、不更新；由 `AuditMiddleware` 在管理端写请求成功（状态码 < 400）后统一写入，各端点不自行记录；审计写入失败只记日志，不阻塞请求。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid PK | |
+| actor_user_id | uuid FK → users | nullable；token 解析失败时落 NULL，记录仍写入 |
+| action | varchar(64) | 操作类型：grant / reconcile / revoke / delete_media / cleanup |
+| resource_type | varchar(64) | 资源类型，当前固定 `admin` |
+| resource_id | varchar(128) | 资源标识（当前记录请求 path），默认空串 |
+| meta | jsonb | nullable，附加上下文（如响应状态码） |
+
+索引：`(actor_user_id, created_at)`、`(resource_type, resource_id)`。
+
 ## 4. 迁移与初始化
 
 - Alembic 使用异步引擎（asyncpg），`alembic/env.py` 从应用 config 读连接串，不单独维护一份。
-- 初始 migration 一次建齐本文件第 3 节的全部 13 张表；pgvector 扩展与 `transcript_chunks` 表留到 Ask Video 阶段单独 migration。
+- 初始 migration `8c726b85a1b6` 一次建齐 13 张核心表（users 至 usage_records）；`audit_logs` 由后续 migration `e61d4c5abea1` 单独加入。pgvector 扩展与 `transcript_chunks` 表留到 Ask Video 阶段单独 migration。
 - 提供 seed 脚本写入三个 plan：`free`（每日 3 次下载、时长上限 30 分钟、无 AI 权益）、`monthly`、`yearly`。具体数值是运营配置，写死在 seed 而不是代码里。
 - 每个 migration 必须实现非空的 `downgrade()`，合并前本地执行一次 `upgrade head → downgrade -1 → upgrade head` 验证可逆。

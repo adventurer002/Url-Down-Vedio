@@ -139,4 +139,18 @@ data: {"task_id": "...", "status": "completed", "media_file_id": "..."}
 | GET | /readyz | 就绪探针，检查 DB 与 Redis 连通 |
 | GET | /usage | 当前用户当月用量与配额（AI 页、个人中心展示用） |
 
-管理后台 API（用户/订单/任务/成本看板）挂在 `/admin/` 下、要求 `is_admin`，Phase 9 设计时单独成节补充到本文档。
+## 10. 管理后台
+
+全部端点挂在 `/admin/` 下，要求登录且 `is_admin=true`，否则 403 `permission_denied`。分页约定同 §1，列表默认按 `created_at` 倒序。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /admin/users | 用户列表；`?search=` 按 email 模糊匹配 |
+| GET | /admin/orders | 订单列表；`?status=` 按订单状态过滤 |
+| GET | /admin/usage/summary | 按 action 聚合的用量与成本汇总：`calls`、`llm_input_tokens`、`llm_output_tokens`、`asr_seconds`、`cost_cents` |
+| POST | /admin/subscriptions/{subscription_id}/revoke | 撤销生效中的订阅（置 cancelled）；订阅不存在 404，非 active 返回 validation_error |
+| DELETE | /admin/media/{media_id} | 删除产物文件：DB 软删除（置 deleted_at）并删除存储对象；幂等，重复删除不报错 |
+| POST | /admin/media/cleanup | 清理预览（dry-run）：返回 `{expired_pending}`，即已过期且未清理的文件数，不执行删除 |
+| GET | /admin/audit-logs | 审计日志分页查询 |
+
+审计：管理端写操作（POST/DELETE 且响应状态码 < 400）由中间件自动写入 `audit_logs` 表，端点不自行记录；审计写入失败不阻塞请求。
