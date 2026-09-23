@@ -47,8 +47,8 @@ export function PlansPage() {
           <button
             key={p}
             onClick={() => setProvider(p)}
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-              provider === p ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"
+            className={`seg-item text-sm ${
+              provider === p ? "seg-item-active" : "seg-item-idle"
             }`}
           >
             {PROVIDER_LABEL[p]}

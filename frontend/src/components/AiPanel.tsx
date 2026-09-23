@@ -83,13 +83,13 @@ export function AiPanel({ videoId }: { videoId: string }) {
             >
               {b.label}
             </button>
-            <p className="text-center font-mono text-[11px] text-muted">{b.hint}</p>
+            <p className="text-center font-mono text-eyebrow text-muted">{b.hint}</p>
           </div>
         ))}
       </div>
 
       {outputs.data?.transcript && (
-        <div className="border-t border-line pt-4">
+        <div className="section-divider">
           <p className="label mb-2">转写 · {outputs.data.transcript.language}</p>
           <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">
             {outputs.data.transcript.text}
@@ -98,7 +98,7 @@ export function AiPanel({ videoId }: { videoId: string }) {
       )}
 
       {outputs.data?.summary && (
-        <div className="border-t border-line space-y-3 pt-4">
+        <div className="section-divider space-y-3">
           <p className="label">AI 总结</p>
           <p className="text-sm leading-relaxed">{outputs.data.summary.summary}</p>
           {outputs.data.summary.key_points.length > 0 && (
@@ -117,7 +117,7 @@ export function AiPanel({ videoId }: { videoId: string }) {
       )}
 
       {outputs.data?.mindmap && (
-        <div className="border-t border-line pt-4">
+        <div className="section-divider">
           <p className="label mb-2">思维导图</p>
           <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-faint p-4 font-mono text-xs leading-relaxed">
             {outputs.data.mindmap.markdown}

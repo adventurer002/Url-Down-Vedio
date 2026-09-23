@@ -57,8 +57,8 @@ export function AdminPage() {
           />
         }
         render={(u) => (
-          <div className="flex items-center justify-between border-b border-line py-2 font-mono text-xs">
-            <span>{String(u.email)}</span>
+          <div className="list-row">
+            <span className="font-mono">{String(u.email)}</span>
             <span className="text-muted">
               {u.is_admin ? "admin" : "user"} · {String(u.nickname)}
             </span>
@@ -71,8 +71,8 @@ export function AdminPage() {
         queryKey={["admin-orders"]}
         queryFn={() => adminGet<Record<string, unknown>>("/api/v1/admin/orders?page_size=20")}
         render={(o) => (
-          <div className="flex items-center justify-between border-b border-line py-2 font-mono text-xs">
-            <span>{String(o.order_no)}</span>
+          <div className="list-row">
+            <span className="font-mono">{String(o.order_no)}</span>
             <span className="text-muted">
               {String(o.status)} · {(Number(o.amount_cents) / 100).toFixed(2)}
             </span>
@@ -94,11 +94,11 @@ export function AdminPage() {
         queryKey={["admin-audit"]}
         queryFn={() => adminGet<Record<string, unknown>>("/api/v1/admin/audit-logs?page_size=20")}
         render={(a) => (
-          <div className="flex items-center justify-between border-b border-line py-2 font-mono text-xs">
-            <span>
+          <div className="list-row">
+            <span className="font-mono">
               {String(a.action)} · {String(a.resource_id)}
             </span>
-            <span className="text-muted">{String(a.created_at)}</span>
+            <span className="font-mono text-muted">{String(a.created_at)}</span>
           </div>
         )}
       />
@@ -154,11 +154,11 @@ function UsageSection() {
     <section className="card p-5">
       <h2 className="mb-3 text-sm font-semibold">用量汇总</h2>
       {q.data && (
-        <div className="space-y-1 font-mono text-xs">
+        <div>
           {q.data.map((r) => (
-            <div key={String(r.action)} className="flex justify-between border-b border-line py-1.5">
-              <span>{String(r.action)}</span>
-              <span className="text-muted">
+            <div key={String(r.action)} className="list-row">
+              <span className="font-mono">{String(r.action)}</span>
+              <span className="font-mono text-muted">
                 {Number(r.calls)} 次 · in {Number(r.llm_input_tokens)} / out{" "}
                 {Number(r.llm_output_tokens)} · asr {Number(r.asr_seconds)}s
               </span>

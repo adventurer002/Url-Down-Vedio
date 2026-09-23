@@ -39,7 +39,7 @@ export function Nav() {
                   管理
                 </Link>
               )}
-              <span className="hidden font-mono text-xs text-muted sm:inline">
+              <span className="hidden meta sm:inline">
                 {me ? `${me.plan_name} · 今日 ${me.today_downloads_used}/${me.today_downloads_quota}` : ""}
               </span>
               <button
@@ -57,7 +57,7 @@ export function Nav() {
               <Link to="/login" className="text-muted transition-colors hover:text-ink">
                 登录
               </Link>
-              <Link to="/register" className="btn btn-primary !h-8 !px-3">
+              <Link to="/register" className="btn btn-primary btn-sm">
                 注册
               </Link>
             </>

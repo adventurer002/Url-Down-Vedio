@@ -81,7 +81,7 @@ export function VideoCard({
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-semibold">{video.title}</p>
-          <p className="mt-1 font-mono text-xs text-muted">
+          <p className="mt-1 meta">
             {[video.platform, video.uploader, formatDuration(video.duration_seconds)]
               .filter(Boolean)
               .join(" · ")}
@@ -96,10 +96,8 @@ export function VideoCard({
                     <button
                       key={f.format_id}
                       onClick={() => onSelectFormat(f.format_id)}
-                      className={`rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${
-                        active
-                          ? "border-ink bg-ink text-paper"
-                          : "border-line bg-paper text-ink hover:border-ink"
+                      className={`seg-item font-mono text-xs ${
+                        active ? "seg-item-active" : "seg-item-idle"
                       }`}
                     >
                       {f.resolution || f.format_id} · {f.ext}
@@ -135,14 +133,14 @@ export function UrlForm({
       }}
     >
       <input
-        className="field !h-12 flex-1 !text-base"
+        className="field field-lg flex-1"
         placeholder="粘贴视频链接，例如 https://…"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         inputMode="url"
         aria-label="视频链接"
       />
-      <button type="submit" className="btn btn-primary !h-12 !px-6" disabled={loading || !url.trim()}>
+      <button type="submit" className="btn btn-primary btn-lg" disabled={loading || !url.trim()}>
         {loading ? "解析中…" : "解析"}
       </button>
     </form>

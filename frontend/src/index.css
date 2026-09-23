@@ -73,9 +73,9 @@
     @apply text-heading font-normal text-ink;
   }
 
-  /* 分段选择项：与 .seg-item-active / .seg-item-idle 二选一搭配 */
+  /* 分段选择项：与 .seg-item-active / .seg-item-idle 二选一搭配；字号由使用方定 */
   .seg-item {
-    @apply cursor-pointer rounded-md border px-3 py-1.5 text-sm transition-colors duration-150;
+    @apply cursor-pointer rounded-md border px-3 py-1.5 transition-colors duration-150;
   }
 
   .seg-item-active {
