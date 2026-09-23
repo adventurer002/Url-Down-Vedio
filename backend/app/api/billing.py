@@ -1,6 +1,6 @@
-"""Plans, orders, manual grant (Phase6; payment webhook arrives in Phase8)."""
+"""Plans, orders, webhooks, reconcile (Phase8: Stripe + WeChat + Alipay)."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,11 +8,14 @@ from backend.app.api.auth_deps import require_user
 from backend.app.api.deps import get_session
 from backend.app.core.errors import AppError
 from backend.app.db.models import Order, Plan, User
+from backend.app.providers.payment import PaymentError
 from backend.app.schemas.billing import (
     GrantRequest,
     GrantResponse,
     OrderCreate,
+    OrderCreateResponse,
     OrderOut,
+    PayParamsOut,
     PlanOut,
 )
 from backend.app.schemas.media import Page
@@ -58,14 +61,26 @@ async def _order_out(session: AsyncSession, order: Order) -> OrderOut:
     )
 
 
-@router.post("/orders", response_model=OrderOut, status_code=201)
+@router.post("/orders", response_model=OrderCreateResponse, status_code=201)
 async def create_order(
     body: OrderCreate,
     session: AsyncSession = Depends(get_session),
     user: User = Depends(require_user),
-) -> OrderOut:
+) -> OrderCreateResponse:
     order = await billing_service.create_order(session, user.id, body.plan_code)
-    return await _order_out(session, order)
+    params = await billing_service.build_pay_params(session, order, body.provider)
+    return OrderCreateResponse(
+        order_no=order.order_no,
+        amount_cents=order.amount_cents,
+        currency=order.currency,
+        pay_params=PayParamsOut(
+            provider=params.provider,
+            pay_url=params.pay_url,
+            qr_code=params.qr_code,
+            client_secret=params.client_secret,
+        ),
+        providers=billing_service.enabled_providers(),
+    )
 
 
 @router.get("/orders", response_model=Page)
@@ -102,6 +117,40 @@ async def get_order(
     if order is None:
         raise AppError("not_found", "订单不存在")
     return await _order_out(session, order)
+
+
+@router.post("/webhooks/payments/{provider}")
+async def payment_webhook(provider: str, request: Request) -> dict[str, str]:
+    from backend.app.db.session import SessionLocal
+
+    channel = billing_service.get_provider(provider)
+    body = await request.body()
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    try:
+        event = channel.verify_webhook(headers, body)
+    except PaymentError:
+        raise AppError("validation_error", "签名校验失败")
+    async with SessionLocal() as session:
+        result, _ = await billing_service.apply_webhook_event(session, event)
+    return {"result": result}
+
+
+@router.post("/admin/orders/{order_no}/reconcile", response_model=OrderOut)
+async def reconcile_order(
+    order_no: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_user),
+) -> OrderOut:
+    if not user.is_admin:
+        raise AppError("permission_denied", "需要管理员权限")
+    order = (
+        await session.execute(select(Order).where(Order.order_no == order_no))
+    ).scalar_one_or_none()
+    if order is None:
+        raise AppError("not_found", "订单不存在")
+    _, updated = await billing_service.reconcile_order(session, order)
+    await session.refresh(updated)
+    return await _order_out(session, updated)
 
 
 @router.post("/admin/grant", response_model=GrantResponse)

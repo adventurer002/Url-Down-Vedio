@@ -117,7 +117,7 @@ async def test_stale_pending_order_expires(maker: async_sessionmaker[AsyncSessio
         assert reloaded is not None and reloaded.status == "expired"
 
 
-def test_plans_orders_grant_routes() -> None:
+def test_plans_orders_grant_routes(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = create_async_engine(TEST_DB_URL, poolclass=NullPool)
 
     async def setup() -> None:
@@ -149,6 +149,17 @@ def test_plans_orders_grant_routes() -> None:
                 yield s
 
         app.dependency_overrides[get_session] = override
+
+        from backend.app.providers.payment import PayParams
+        from backend.app.services import billing as billing_service
+
+        class FakeChannel:
+            provider = "stripe"
+
+            async def create_payment(self, order_no, amount_cents, currency, subject):  # type: ignore[no-untyped-def]
+                return PayParams(provider="stripe", pay_url=f"https://pay.example/{order_no}")
+
+        monkeypatch.setattr(billing_service, "get_provider", lambda name: FakeChannel())
         with TestClient(app) as c:
             r = c.get("/api/v1/plans")
             assert r.status_code == 200
@@ -157,11 +168,12 @@ def test_plans_orders_grant_routes() -> None:
 
             r = c.post(
                 "/api/v1/orders",
-                json={"plan_code": "monthly"},
+                json={"plan_code": "monthly", "provider": "stripe"},
                 headers={"Authorization": f"Bearer {buyer_token}"},
             )
             assert r.status_code == 201, r.text
-            assert r.json()["status"] == "pending"
+            assert r.json()["pay_params"]["pay_url"].startswith("https://pay.example/")
+            assert r.json()["amount_cents"] > 0
             order_no = r.json()["order_no"]
             first_amount = r.json()["amount_cents"]
 

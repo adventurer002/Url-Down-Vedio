@@ -65,6 +65,63 @@ export async function fetchMe(): Promise<MeResponse> {
   return apiFetch("/api/v1/users/me");
 }
 
+export interface Plan {
+  code: string;
+  name: string;
+  price_cents: number;
+  currency: string;
+  duration_days?: number | null;
+  features: Record<string, boolean>;
+  max_daily_downloads: number;
+  max_video_duration_seconds: number;
+  sort_order: number;
+}
+
+export interface PayParams {
+  provider: string;
+  pay_url?: string | null;
+  qr_code?: string | null;
+  client_secret?: string | null;
+}
+
+export interface OrderCreated {
+  order_no: string;
+  amount_cents: number;
+  currency: string;
+  pay_params: PayParams;
+  providers: string[];
+}
+
+export interface OrderStatus {
+  order_no: string;
+  plan_code: string;
+  amount_cents: number;
+  currency: string;
+  status: string;
+  paid_at?: string | null;
+  expired_at?: string | null;
+}
+
+export async function listPlans(): Promise<Plan[]> {
+  return apiFetch("/api/v1/plans");
+}
+
+export async function createOrder(planCode: string, provider: string): Promise<OrderCreated> {
+  return apiFetch("/api/v1/orders", {
+    method: "POST",
+    body: JSON.stringify({ plan_code: planCode, provider }),
+  });
+}
+
+export async function getOrder(orderNo: string): Promise<OrderStatus> {
+  return apiFetch(`/api/v1/orders/${orderNo}`);
+}
+
+export function formatPrice(cents: number, currency: string): string {
+  if (currency === "CNY") return `¥${(cents / 100).toFixed(2)}`;
+  return `${(cents / 100).toFixed(2)} ${currency}`;
+}
+
 const AI_PATH: Record<string, string> = {
   audio: "audio",
   transcribe: "transcribe",

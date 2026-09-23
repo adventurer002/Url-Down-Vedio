@@ -49,6 +49,26 @@ class Settings(BaseSettings):
     # Phase5: frontend联调
     cors_origins: str = "http://localhost:5173,http://localhost:5199"
 
+    # Phase8: payments (each provider independently enabled)
+    stripe_enabled: bool = False
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_success_url: str = "http://localhost:5199/pay/success"
+    stripe_cancel_url: str = "http://localhost:5199/pay/cancel"
+    wechat_enabled: bool = False
+    wechat_mchid: str = ""
+    wechat_appid: str = ""
+    wechat_serial_no: str = ""
+    wechat_private_key: str = ""
+    wechat_apiv3_key: str = ""
+    wechat_notify_url: str = ""
+    alipay_enabled: bool = False
+    alipay_app_id: str = ""
+    alipay_private_key: str = ""
+    alipay_public_key: str = ""
+    alipay_notify_url: str = ""
+    alipay_return_url: str = "http://localhost:5199/pay/success"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

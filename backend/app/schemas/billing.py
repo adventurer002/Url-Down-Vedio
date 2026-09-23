@@ -21,6 +21,22 @@ class PlanOut(BaseModel):
 
 class OrderCreate(BaseModel):
     plan_code: str = Field(max_length=32)
+    provider: str = Field(default="alipay", max_length=16)
+
+
+class PayParamsOut(BaseModel):
+    provider: str
+    pay_url: str | None = None
+    qr_code: str | None = None
+    client_secret: str | None = None
+
+
+class OrderCreateResponse(BaseModel):
+    order_no: str
+    amount_cents: int
+    currency: str
+    pay_params: PayParamsOut
+    providers: list[str]
 
 
 class OrderOut(BaseModel):

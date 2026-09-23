@@ -26,6 +26,9 @@ export function Nav() {
           <Link to="/" className="text-muted transition-colors hover:text-ink">
             首页
           </Link>
+          <Link to="/plans" className="text-muted transition-colors hover:text-ink">
+            套餐
+          </Link>
           {loggedIn ? (
             <>
               <Link to="/history" className="text-muted transition-colors hover:text-ink">
