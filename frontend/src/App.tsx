@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Footer, Nav } from "./components/Nav";
 import { LoginPage, RegisterPage } from "./pages/Auth";
 import { HistoryPage } from "./pages/History";
+import { AdminPage } from "./pages/Admin";
 import { PayPage, PlansPage } from "./pages/Plans";
 import { HomePage } from "./pages/Home";
 import { useAuthStore } from "./stores/auth";
@@ -31,6 +32,14 @@ export function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/plans" element={<PlansPage />} />
+              <Route
+                path="/admin"
+                element={
+                  <RequireAuth>
+                    <AdminPage />
+                  </RequireAuth>
+                }
+              />
               <Route
                 path="/pay/:orderNo"
                 element={

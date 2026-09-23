@@ -3,11 +3,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from backend.app.api.admin import router as admin_router
 from backend.app.api.ai import router as ai_router
 from backend.app.api.auth import router as auth_router
 from backend.app.api.billing import router as billing_router
 from backend.app.api.health import router as health_router
 from backend.app.api.media import router as media_router
+from backend.app.core.audit import AuditMiddleware
 from backend.app.core.config import settings
 from backend.app.core.errors import AppError, app_error_handler
 from backend.app.core.logging import configure_logging
@@ -29,8 +31,10 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "Retry-After"],
 )
 app.add_middleware(RequestIdMiddleware)
+app.add_middleware(AuditMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(ai_router)
 app.include_router(billing_router)
 app.include_router(health_router)

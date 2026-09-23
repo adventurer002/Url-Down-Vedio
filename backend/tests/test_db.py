@@ -60,8 +60,8 @@ async def test_tables_exist(session: AsyncSession) -> None:
         )
         if t != "alembic_version"
     ]
-    assert len(tables) == 13, tables  # 13 incl. usage_records; doc said 12, fixed in docs
-    for name in ("users", "plans", "videos", "usage_records"):
+    assert len(tables) == 14, tables  # 13 + audit_logs (Phase9)
+    for name in ("users", "plans", "videos", "usage_records", "audit_logs"):
         row = await session.execute(sa.text(f"SELECT id, created_at, updated_at FROM {name} LIMIT 0"))
         assert set(row.keys()) >= {"id", "created_at", "updated_at"}
 

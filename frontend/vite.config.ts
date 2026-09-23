@@ -11,4 +11,12 @@ export default defineConfig({
       "/readyz": "http://localhost:8000",
     },
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      "/api": "http://backend:8000",
+      "/healthz": "http://backend:8000",
+      "/readyz": "http://backend:8000",
+    },
+  },
 });

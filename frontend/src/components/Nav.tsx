@@ -34,6 +34,11 @@ export function Nav() {
               <Link to="/history" className="text-muted transition-colors hover:text-ink">
                 历史记录
               </Link>
+              {me?.user.is_admin && (
+                <Link to="/admin" className="text-muted transition-colors hover:text-ink">
+                  管理
+                </Link>
+              )}
               <span className="hidden font-mono text-xs text-muted sm:inline">
                 {me ? `${me.plan_name} · 今日 ${me.today_downloads_used}/${me.today_downloads_quota}` : ""}
               </span>

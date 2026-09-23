@@ -1,4 +1,4 @@
-"""All 12 tables per docs/database.md. Structure only, no business logic."""
+"""All tables per docs/database.md. Structure only, no business logic."""
 
 import uuid
 from datetime import datetime
@@ -309,3 +309,21 @@ class UsageRecord(BaseModel):
     asr_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     storage_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     cost_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class AuditLog(BaseModel):
+    """Admin action trail. Written by middleware, never updated."""
+
+    __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_actor_created", "actor_user_id", "created_at"),
+        Index("ix_audit_logs_resource", "resource_type", "resource_id"),
+    )
+
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
