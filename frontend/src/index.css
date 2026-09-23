@@ -13,7 +13,7 @@
   }
 
   body {
-    @apply bg-paper text-ink;
+    @apply bg-faint text-ink;
     font-feature-settings: "cv11", "ss01";
   }
 
@@ -35,15 +35,62 @@
     @apply border-line bg-paper text-ink hover:border-ink;
   }
 
+  .btn-lg {
+    @apply h-12 px-6 text-base;
+  }
+
+  .btn-sm {
+    @apply h-8 px-3;
+  }
+
   .field {
     @apply h-10 w-full rounded-md border border-line bg-paper px-3 text-sm outline-none transition-colors duration-150 placeholder:text-muted focus:border-ink;
   }
 
+  .field-lg {
+    @apply h-12 px-4 text-base;
+  }
+
   .card {
-    @apply rounded-lg border border-line bg-paper;
+    @apply rounded-md border border-line bg-paper;
   }
 
   .label {
     @apply text-xs font-medium uppercase tracking-wider text-muted;
+  }
+
+  /* Geist 体系：mono 小号大写印章标签 */
+  .eyebrow {
+    @apply font-mono text-eyebrow uppercase text-muted;
+  }
+
+  /* 拉丁/数字元数据行；中文内容勿用（mono 回退观感差） */
+  .meta {
+    @apply font-mono text-caption text-muted;
+  }
+
+  .page-title {
+    @apply text-heading font-normal text-ink;
+  }
+
+  /* 分段选择项：与 .seg-item-active / .seg-item-idle 二选一搭配 */
+  .seg-item {
+    @apply cursor-pointer rounded-md border px-3 py-1.5 text-sm transition-colors duration-150;
+  }
+
+  .seg-item-active {
+    @apply border-ink bg-ink text-paper;
+  }
+
+  .seg-item-idle {
+    @apply border-line bg-paper text-ink hover:border-ink;
+  }
+
+  .section-divider {
+    @apply border-t border-line pt-4;
+  }
+
+  .list-row {
+    @apply flex items-center justify-between border-b border-line py-2 text-caption;
   }
 }
