@@ -8,7 +8,8 @@ export function HistoryPage() {
 
   return (
     <div className="mx-auto max-w-2xl pt-10">
-      <h1 className="text-2xl font-bold tracking-tight">历史记录</h1>
+      <p className="eyebrow">History</p>
+      <h1 className="page-title mt-3">历史记录</h1>
       <p className="mt-1 text-sm text-muted">你解析过的视频都在这里，刷新不丢失。</p>
 
       <div className="mt-6 space-y-3">
@@ -28,7 +29,7 @@ export function HistoryPage() {
         {data?.items.map((v) => (
           <Link key={v.id} to={`/?video=${v.id}`} className="card block p-4 transition-colors hover:border-ink">
             <p className="truncate text-sm font-medium">{v.title}</p>
-            <p className="mt-1 font-mono text-xs text-muted">
+            <p className="mt-1 meta">
               {[v.platform, formatDuration(v.duration_seconds), v.status]
                 .filter(Boolean)
                 .join(" · ")}

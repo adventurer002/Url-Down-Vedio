@@ -32,8 +32,8 @@ export function PlansPage() {
   return (
     <div className="space-y-8 pt-10">
       <section className="text-center">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted">Pricing</p>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight">选择适合你的套餐</h1>
+        <p className="eyebrow">Pricing</p>
+        <h1 className="mt-3 text-4xl font-normal tracking-[-0.02em]">选择适合你的套餐</h1>
         <p className="mx-auto mt-3 max-w-xl text-muted">
           免费版每日 3 次下载。会员解锁转写、总结、思维导图与更高配额。
         </p>
@@ -60,7 +60,7 @@ export function PlansPage() {
         {(plansQuery.data ?? []).map((plan) => (
           <div key={plan.code} className="card flex flex-col p-6">
             <p className="text-sm font-semibold">{plan.name}</p>
-            <p className="mt-2 text-3xl font-bold tracking-tight">
+            <p className="mt-2 text-3xl font-normal tracking-tight">
               {plan.price_cents === 0 ? "免费" : formatPrice(plan.price_cents, plan.currency)}
             </p>
             <p className="mt-1 font-mono text-xs text-muted">
@@ -69,10 +69,10 @@ export function PlansPage() {
               每日 {plan.max_daily_downloads} 次
             </p>
             <div className="mt-4 flex-1 space-y-1.5 text-sm text-muted">
-              {plan.features.transcribe && <p>✓ 视频转写</p>}
-              {plan.features.summarize && <p>✓ AI 总结</p>}
-              {plan.features.mindmap && <p>✓ 思维导图</p>}
-              {plan.features.audio_extract && <p>✓ 音频提取</p>}
+              {plan.features.transcribe && <p><span className="text-ok">✓</span> 视频转写</p>}
+              {plan.features.summarize && <p><span className="text-ok">✓</span> AI 总结</p>}
+              {plan.features.mindmap && <p><span className="text-ok">✓</span> 思维导图</p>}
+              {plan.features.audio_extract && <p><span className="text-ok">✓</span> 音频提取</p>}
               {!plan.features.transcribe && <p>— AI 功能需会员</p>}
             </div>
             {plan.price_cents === 0 ? (
@@ -126,7 +126,8 @@ export function PayPage() {
 
   return (
     <div className="mx-auto max-w-xl space-y-6 pt-10">
-      <h1 className="text-2xl font-bold tracking-tight">完成支付</h1>
+      <p className="eyebrow">Payment</p>
+      <h1 className="page-title">完成支付</h1>
       {!order && <p className="text-sm text-muted">加载订单…</p>}
       {order && (
         <>
@@ -144,11 +145,15 @@ export function PayPage() {
             <div className="flex justify-between text-sm">
               <span className="text-muted">状态</span>
               <span className="font-medium">
-                {order.status === "paid"
-                  ? "已支付 ✓"
-                  : order.status === "pending"
-                    ? "等待支付…（自动刷新）"
-                    : order.status}
+                {order.status === "paid" ? (
+                  <>
+                    已支付 <span className="text-ok">✓</span>
+                  </>
+                ) : order.status === "pending" ? (
+                  "等待支付…（自动刷新）"
+                ) : (
+                  order.status
+                )}
               </span>
             </div>
           </div>

@@ -83,10 +83,8 @@ export function HomePage() {
   return (
     <div className="space-y-8">
       <section className="pt-10 text-center sm:pt-16">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-          Video · Download · AI
-        </p>
-        <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
+        <p className="eyebrow">Video · Download · AI</p>
+        <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-normal leading-[1.15] tracking-[-0.02em] sm:text-heading-lg">
           粘贴链接，
           <br />
           剩下的交给我们。

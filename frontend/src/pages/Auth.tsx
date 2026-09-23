@@ -6,15 +6,18 @@ import { ErrorNote } from "../components/VideoCard";
 import { useLogin, useRegister } from "../hooks/useAuth";
 
 function Shell({
+  eyebrow,
   title,
   children,
 }: {
+  eyebrow: string;
   title: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="mx-auto max-w-sm pt-14">
-      <h1 className="text-center text-2xl font-bold tracking-tight">{title}</h1>
+      <p className="eyebrow text-center">{eyebrow}</p>
+      <h1 className="page-title mt-3 text-center">{title}</h1>
       <div className="card mt-6 space-y-4 p-6">{children}</div>
     </div>
   );
@@ -28,7 +31,7 @@ export function LoginPage() {
   const login = useLogin(setCode);
 
   return (
-    <Shell title="登录">
+    <Shell eyebrow="Login" title="登录">
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -89,7 +92,7 @@ export function RegisterPage() {
   const register = useRegister(() => {});
 
   return (
-    <Shell title="注册">
+    <Shell eyebrow="Register" title="注册">
       <form
         className="space-y-4"
         onSubmit={(e) => {

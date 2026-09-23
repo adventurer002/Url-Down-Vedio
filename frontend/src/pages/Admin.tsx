@@ -32,8 +32,8 @@ export function AdminPage() {
   return (
     <div className="space-y-8 pt-10">
       <section>
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted">Admin</p>
-        <h1 className="mt-4 text-3xl font-bold tracking-tight">管理控制台</h1>
+        <p className="eyebrow">Admin</p>
+        <h1 className="page-title mt-3">管理控制台</h1>
         {me && !me.user.is_admin && (
           <p className="mt-2 text-sm text-muted">当前账号不是管理员，仅管理员可查看数据。</p>
         )}

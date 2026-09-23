@@ -6,8 +6,10 @@ import { useAuthStore } from "../stores/auth";
 export function Logo() {
   return (
     <Link to="/" className="flex items-center gap-2">
-      <span className="inline-block h-4 w-4 bg-ink" aria-hidden />
-      <span className="text-base font-semibold tracking-tight">down-vedio</span>
+      <span className="text-lg leading-none text-brand" aria-hidden>
+        ▼
+      </span>
+      <span className="text-sm font-medium tracking-tight">down-vedio</span>
     </Link>
   );
 }
@@ -20,7 +22,7 @@ export function Nav() {
 
   return (
     <header className="border-b border-line">
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <Logo />
         <nav className="flex items-center gap-5 text-sm">
           <Link to="/" className="text-muted transition-colors hover:text-ink">
@@ -71,7 +73,7 @@ export function Nav() {
 export function Footer() {
   return (
     <footer className="border-t border-line">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6 text-xs text-muted">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 text-xs text-muted">
         <span className="font-mono">down-vedio</span>
         <span>视频解析 · 下载 · AI 处理</span>
       </div>
