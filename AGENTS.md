@@ -65,7 +65,7 @@
 
 - 禁止 `any`；API 请求统一走 `src/api/` 与 `src/hooks/`，组件内不直接写 fetch/axios。
 - 服务器状态用 TanStack Query，客户端状态用 Zustand，二者不混用。
-- 设计风格以极简黑白为基准：大量留白，不引入渐变、玻璃拟态、装饰性背景。
+- 设计风格以简约黑白为基准
 
 ## Security（红线）
 

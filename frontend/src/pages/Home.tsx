@@ -5,6 +5,7 @@ import { downloadFileUrl } from "../api/videos";
 import { ApiRequestError } from "../api/client";
 import { ErrorNote, UrlForm, VideoCard } from "../components/VideoCard";
 import { AiPanel } from "../components/AiPanel";
+import TextLoop from "../components/TextLoop";
 import { TaskStatusLine } from "../components/VideoCard";
 import { useAuthStore } from "../stores/auth";
 import {
@@ -81,8 +82,8 @@ export function HomePage() {
   const done = status === "completed";
 
   return (
-    <div className="space-y-8">
-      <section className="pt-10 text-center sm:pt-16">
+    <div className="flex min-h-[calc(100vh-160px)] flex-col items-center justify-center gap-8 py-10">
+      <section className="text-center">
         <p className="eyebrow">Video · Download · AI</p>
         <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-normal leading-[1.15] tracking-[-0.02em] sm:text-heading-lg">
           粘贴链接，
@@ -93,6 +94,23 @@ export function HomePage() {
           解析视频信息，一键下载，会员解锁转写、总结与思维导图。
         </p>
       </section>
+
+      <TextLoop
+        text={["TikTok", "YouTube", "Bilibili", "Instagram", "抖音", "Vimeo", "Twitter", "Dailymotion"]}
+        shape="line"
+        speed={80}
+        direction="forward"
+        separator="✦"
+        curviness={0}
+        fontSize={40}
+        fontWeight={500}
+        letterSpacing={10}
+        uppercase
+        color="#171717"
+        ribbon={false}
+        pauseOnHover
+        className="h-[45px] flex items-center "
+      />
 
       <section className="mx-auto max-w-2xl">
         <UrlForm onSubmit={submitUrl} loading={parse.isPending} />
