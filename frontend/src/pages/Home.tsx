@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { downloadFileUrl } from "../api/videos";
 import { ApiRequestError } from "../api/client";
 import { ErrorNote, UrlForm, VideoCard } from "../components/VideoCard";
+import { AiPanel } from "../components/AiPanel";
 import { TaskStatusLine } from "../components/VideoCard";
 import { useAuthStore } from "../stores/auth";
 import {
@@ -124,6 +125,7 @@ export function HomePage() {
           {video.status === "ready" && (
             <>
               <VideoCard video={video} selectedFormat={formatId} onSelectFormat={setFormatId} />
+              {loggedIn && <AiPanel videoId={video.id} />}
               <div className="flex items-center gap-3">
                 <button
                   className="btn btn-primary flex-1"

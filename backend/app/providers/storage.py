@@ -15,6 +15,7 @@ class StorageProvider(Protocol):
     async def open_local(self, key: str) -> Path | None:
         """Return a local path for direct serving, None when not applicable."""
         ...
+    async def download_to(self, key: str, destination: Path) -> Path: ...
 
 
 def build_key(env: str, user_part: str, kind: str, ext: str) -> str:
@@ -52,6 +53,14 @@ class LocalStorageProvider:
         p = self._resolve(key)
         return p if p.is_file() else None
 
+    async def download_to(self, key: str, destination: Path) -> Path:
+        source = await self.open_local(key)
+        if source is None:
+            raise FileNotFoundError(key)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        return destination
+
 
 class OSSStorageProvider:
     """Production backend over Alibaba Cloud OSS. Requires oss2 installed."""
@@ -75,3 +84,6 @@ class OSSStorageProvider:
 
     async def open_local(self, key: str) -> Path | None:
         return None
+
+    async def download_to(self, key: str, destination: Path) -> Path:
+        raise NotImplementedError("OSS download_to must be implemented with the object SDK")

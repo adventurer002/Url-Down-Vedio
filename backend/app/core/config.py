@@ -1,5 +1,5 @@
 
-from pydantic import AnyUrl
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@postgres:5432/downvedio"
     redis_url: str = "redis://redis:6379/0"
     jwt_secret: str = "change-me"
-    sentry_dsn: AnyUrl | None = None
+    sentry_dsn: str = ""
 
     # Phase3: media pipeline
     storage_backend: str = "local"
@@ -30,8 +30,24 @@ class Settings(BaseSettings):
     ip_rate_parse_anon_per_min: int = 10
     ip_rate_parse_user_per_min: int = 60
 
+    # Phase7: AI pipeline
+    llm_base_url: str = Field(
+        default="https://api.deepseek.com",
+        validation_alias=AliasChoices("LLM_BASE_URL", "DEEPSEEK_BASE_URL"),
+    )
+    llm_api_key: str = Field(
+        default="", validation_alias=AliasChoices("LLM_API_KEY", "DEEPSEEK_API_KEY")
+    )
+    llm_model: str = Field(
+        default="deepseek-flash", validation_alias=AliasChoices("LLM_MODEL", "DEEPSEEK_MODEL")
+    )
+    llm_prompt_version: str = "v1"
+    whisper_model: str = "small"
+    asr_cost_cents_per_min: int = 2
+    llm_cost_cents_per_1k_tokens: int = 1
+
     # Phase5: frontend联调
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://localhost:5199"
 
     @property
     def cors_origin_list(self) -> list[str]:

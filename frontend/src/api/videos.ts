@@ -64,3 +64,53 @@ export async function login(
 export async function fetchMe(): Promise<MeResponse> {
   return apiFetch("/api/v1/users/me");
 }
+
+const AI_PATH: Record<string, string> = {
+  audio: "audio",
+  transcribe: "transcribe",
+  summarize: "summarize",
+  mindmap: "mindmap",
+};
+
+export async function triggerAi(
+  videoId: string,
+  kind: "audio" | "transcribe" | "summarize" | "mindmap",
+): Promise<{ task_id?: string; output_id?: string; reused: boolean }> {
+  return apiFetch(`/api/v1/videos/${videoId}/${AI_PATH[kind]}`, { method: "POST" });
+}
+
+export async function getAiTask(id: string) {
+  return apiFetch<{
+    id: string;
+    task_type: string;
+    status: string;
+    output_id?: string | null;
+    error_code?: string | null;
+    error_message?: string | null;
+  }>(`/api/v1/tasks/${id}`);
+}
+
+export async function getTranscript(videoId: string) {
+  return apiFetch<{
+    id: string;
+    language: string;
+    text: string;
+    segments: { start: number; end: number; text: string }[];
+  }>(`/api/v1/videos/${videoId}/transcript`);
+}
+
+export async function getSummary(videoId: string) {
+  return apiFetch<{
+    id: string;
+    summary: string;
+    key_points: string[];
+    chapters: { title: string; start: number; end: number }[];
+    keywords: string[];
+  }>(`/api/v1/videos/${videoId}/summary`);
+}
+
+export async function getMindmap(videoId: string) {
+  return apiFetch<{ id: string; markdown: string }>(
+    `/api/v1/videos/${videoId}/mindmap`,
+  );
+}

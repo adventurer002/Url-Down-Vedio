@@ -22,19 +22,11 @@ def find_ffmpeg() -> str:
     return path
 
 
-def remux_to_mp4(
-    src: Path, dest: Path, should_cancel: Callable[[], bool], timeout_seconds: int = 1800
-) -> Path:
-    """Copy-codec remux into an mp4 container. Returns dest. No-op if already mp4."""
-    if src.suffix.lower() == ".mp4":
-        if src != dest:
-            dest.write_bytes(src.read_bytes())
-        return dest
-    ffmpeg = find_ffmpeg()
+def _run_cancellable(
+    cmd: list[str], should_cancel: Callable[[], bool], timeout_seconds: int
+) -> None:
     proc = subprocess.Popen(
-        [ffmpeg, "-y", "-i", str(src), "-c", "copy", str(dest)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
     started = time.monotonic()
     try:
@@ -50,4 +42,33 @@ def remux_to_mp4(
             proc.wait()
     if proc.returncode != 0:
         raise FFmpegError(f"ffmpeg exited with {proc.returncode}")
+
+
+def remux_to_mp4(
+    src: Path, dest: Path, should_cancel: Callable[[], bool], timeout_seconds: int = 1800
+) -> Path:
+    """Copy-codec remux into an mp4 container. Returns dest. No-op if already mp4."""
+    if src.suffix.lower() == ".mp4":
+        if src != dest:
+            dest.write_bytes(src.read_bytes())
+        return dest
+    ffmpeg = find_ffmpeg()
+    _run_cancellable(
+        [ffmpeg, "-y", "-i", str(src), "-c", "copy", str(dest)],
+        should_cancel,
+        timeout_seconds,
+    )
+    return dest
+
+
+def extract_audio(
+    src: Path, dest: Path, should_cancel: Callable[[], bool], timeout_seconds: int = 1800
+) -> Path:
+    """Extract audio track to mp3. Raises FFmpegCancelled/FFmpegError."""
+    ffmpeg = find_ffmpeg()
+    _run_cancellable(
+        [ffmpeg, "-y", "-i", str(src), "-vn", "-acodec", "libmp3lame", "-ab", "128k", str(dest)],
+        should_cancel,
+        timeout_seconds,
+    )
     return dest

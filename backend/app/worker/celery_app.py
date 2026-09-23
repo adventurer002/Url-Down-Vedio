@@ -6,7 +6,10 @@ from backend.app.core.config import settings
 if settings.sentry_dsn:
     sentry_sdk.init(dsn=str(settings.sentry_dsn))
 
-celery_app = Celery("downvedio", broker=settings.redis_url, backend=settings.redis_url)
+celery_app = Celery("downvedio", broker=settings.redis_url, backend=settings.redis_url, include=[
+    "backend.app.worker.tasks",
+    "backend.app.worker.ai_tasks",
+])
 celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
