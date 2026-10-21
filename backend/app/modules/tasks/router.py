@@ -1,0 +1,50 @@
+import json
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
+
+from app.core.exceptions import AppException
+from app.core.response import success_response
+from app.infrastructure.database.session import SessionLocal
+from app.infrastructure.queue.progress_bus import ProgressBus
+from app.infrastructure.queue.redis_client import redis_client
+from app.modules.tasks.repository import TaskRepository
+from app.modules.tasks.service import TaskService
+
+router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+def get_task_service() -> TaskService:
+    return TaskService(TaskRepository(SessionLocal), ProgressBus(redis_client))
+
+
+@router.get("/{task_id}")
+async def get_task(task_id: UUID, service: TaskService = Depends(get_task_service)):
+    return success_response(await service.get(task_id))
+
+
+@router.post("/{task_id}/cancel")
+async def cancel_task(task_id: UUID, service: TaskService = Depends(get_task_service)):
+    return success_response(await service.cancel(task_id))
+
+
+@router.get("/{task_id}/events")
+async def task_events(task_id: UUID, request: Request, service: TaskService = Depends(get_task_service)):
+    subscription, initial = await service.open_events(task_id)
+
+    async def stream():
+        try:
+            async for event in service.events(task_id, subscription, initial):
+                if event is None:
+                    yield ": heartbeat\n\n"
+                else:
+                    yield f"id: {event['seq']}\nevent: progress\ndata: {json.dumps(event)}\n\n"
+        except AppException as exc:
+            error = {"error": {"code": exc.code, "message": exc.message, "request_id": request.state.request_id}}
+            yield f"event: error\ndata: {json.dumps(error)}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                             background=BackgroundTask(subscription.close))
