@@ -1,10 +1,18 @@
 from celery import Celery
+from celery.signals import after_setup_logger, after_setup_task_logger
+from app.core.logging import install_log_redaction
+
+@after_setup_logger.connect
+@after_setup_task_logger.connect
+def protect_worker_logs(**kwargs):
+    install_log_redaction()
+
 
 from app.core.config import settings
 
 celery_app = Celery(
     "videohub", broker=settings.CELERY_BROKER_URL, backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.modules.tasks.worker", "app.modules.download.worker"],
+    include=["app.modules.tasks.worker", "app.modules.download.worker", "app.modules.media.worker", "app.modules.transcript.worker", "app.modules.ai.worker"],
 )
 celery_app.conf.update(
     task_serializer="json",

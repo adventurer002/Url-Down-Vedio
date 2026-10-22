@@ -73,7 +73,11 @@ def download(payload: dict, directory: Path, emit) -> None:
         video = metadata_from_info(info)
         if (video.platform, video.platform_video_id) != (payload["platform"], payload["platform_video_id"]):
             raise AppException("VIDEO_ID_CHANGED", "视频身份发生变化", 422)
-        streams = select_streams(video, payload["preset_id"])
+        if payload.get("_audio_only"):
+            from app.modules.media.audio import select_audio_stream
+            streams = [select_audio_stream(video)]
+        else:
+            streams = select_streams(video, payload["preset_id"])
         sources = []
         for index, stream in enumerate(streams):
             extension = stream.get("ext")
@@ -95,7 +99,7 @@ def download(payload: dict, directory: Path, emit) -> None:
                 emit({"stage": "downloading", "progress": min(85, int((index + ratio) / len(streams) * 85))})
 
             download_options = {**options, "skip_download": False, "simulate": False,
-                                "outtmpl": str(source), "format": "best", "fixup": "never",
+                                "outtmpl": str(source), "format": "bestaudio/best" if payload.get("_audio_only") else "best", "fixup": "never",
                                 "postprocessors": [], "hls_prefer_native": True,
                                 "concurrent_fragment_downloads": 1, "skip_unavailable_fragments": False,
                                 "progress_hooks": [progress_hook], "overwrites": False,

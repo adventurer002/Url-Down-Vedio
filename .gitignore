@@ -15,3 +15,6 @@ storage/tmp/*
 !storage/tmp/.gitkeep
 storage/files/*
 !storage/files/.gitkeep
+
+# Local stack supervisor logs
+.runtime/

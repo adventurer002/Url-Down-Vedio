@@ -127,3 +127,18 @@ async def test_probe_total_timeout(monkeypatch, dependency):
 def test_system_ping_registration():
     assert "system.ping" in celery_app.tasks
     assert system_ping.run() == {"pong": True}
+
+
+async def test_frontend_cors_allows_local_vite_origin():
+    from httpx import ASGITransport, AsyncClient
+    from app.main import create_app
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as client:
+        response = await client.options("/api/v1/videos/parse", headers={
+            "Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type"})
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+        response = await client.get("/api/v1/health/live", headers={"Origin": "https://untrusted.example"})
+        assert "access-control-allow-origin" not in response.headers
+        response = await client.get("/api/v1/unknown", headers={"Origin": "http://127.0.0.1:5173"})
+        assert response.status_code == 404 and response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"

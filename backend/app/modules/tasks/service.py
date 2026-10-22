@@ -32,7 +32,7 @@ class TaskService:
 
     async def create(self, task_type: str = "simulate_progress", video_id: UUID | None = None,
                      input_payload: dict | None = None) -> TaskRecord:
-        if task_type not in {"simulate_progress", "download"} or self.dispatcher is None:
+        if task_type not in {"simulate_progress", "download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap"} or self.dispatcher is None:
             raise AppException("UNSUPPORTED_TASK_TYPE", "不支持该任务类型", 422)
         task = await database_call(self.repository.create, task_type, video_id, input_payload, utcnow() + timedelta(hours=24))
         try:
@@ -61,6 +61,10 @@ class TaskService:
                 task = await database_call(self.repository.get, task_id)
         except AppException:
             snapshot = None  # GET remains usable using durable database state.
+        return self.serialize(task, snapshot)
+
+    @staticmethod
+    def serialize(task: TaskRecord, snapshot: dict | None = None) -> dict:
         data = asdict(task)
         data["task_id"] = str(data.pop("id"))
         data.update(seq=0, stage=task.status, updated_at=(task.finished_at or task.started_at or task.created_at).isoformat())

@@ -39,6 +39,10 @@ class ProcessRunner:
             return True
         except ProcessLookupError:
             return False
+        except PermissionError:
+            # EPERM means the group still exists. macOS may report it briefly
+            # while SIGKILL descendants are being reaped; keep waiting.
+            return True
 
     async def stop_group(self, process: subprocess.Popen) -> None:
         pgid = process.pid
@@ -99,7 +103,9 @@ class ProcessRunner:
                     messages = {"SSRF_BLOCKED": "禁止访问非公开网络地址", "INVALID_URL": "目标 URL 无效",
                                 "UNSUPPORTED_URL": "视频不受支持", "PRESET_UNAVAILABLE": "视频已不提供所选档位",
                                 "DOWNLOAD_TIMEOUT": "下载或转换超时", "FILE_TOO_LARGE": "文件超过任务体积上限",
-                                "FFMPEG_UNAVAILABLE": "服务端缺少 FFmpeg", "VIDEO_ID_CHANGED": "视频身份发生变化"}
+                                "FFMPEG_UNAVAILABLE": "服务端缺少 FFmpeg", "VIDEO_ID_CHANGED": "视频身份发生变化",
+                                "AUDIO_STREAM_UNAVAILABLE": "没有独立音轨，已阻止下载完整视频",
+                                "SUBTITLE_FETCH_FAILED": "字幕获取失败", "SUBTITLE_TOO_LARGE": "字幕文件超过大小限制"}
                     if code not in messages:
                         code = "DOWNLOAD_FAILED"
                     raise AppException(code, messages.get(code, "视频下载失败"), 502)

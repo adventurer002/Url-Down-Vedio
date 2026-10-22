@@ -133,7 +133,9 @@ def extract_metadata(url: str, proxy: str | None = None) -> dict:
     try:
         with guard.installed():
             guard.check_url(url)
-            with guarded_downloader(guard, extraction_options(proxy)) as downloader:
+            options = extraction_options(proxy)
+            options["listsubtitles"] = True
+            with guarded_downloader(guard, options) as downloader:
                 info = downloader.extract_info(url, download=False)
             if guard.violation:
                 raise guard.violation

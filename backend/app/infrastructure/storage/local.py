@@ -66,7 +66,10 @@ class LocalStorageAdapter:
     def remove_task_directory(self, task_id: UUID) -> None:
         directory = self.task_directory(task_id)
         if directory.exists():
-            shutil.rmtree(directory)
+            try:
+                shutil.rmtree(directory)
+            except FileNotFoundError:
+                pass
 
     def resolve_file(self, storage_key: str) -> Path:
         if not re.fullmatch(r"files/[0-9a-f-]{36}\.(mp4|mp3)", storage_key):

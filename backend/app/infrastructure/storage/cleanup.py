@@ -22,6 +22,7 @@ async def cleanup_expired_files(storage: StorageAdapter | None = None, media: Me
     cutoff = (now - timedelta(hours=settings.STORAGE_FILE_TTL_HOURS)).timestamp()
     counts = {"files": 0, "temporary_directories": 0, "orphan_files": 0}
     with storage.lease():
+        before_bytes = storage.used_bytes()
         for item in await database_call(media.expired, now):
             storage.remove_file(item.storage_key)
             await database_call(media.delete_expired, item.id, now)
@@ -68,6 +69,8 @@ async def cleanup_expired_files(storage: StorageAdapter | None = None, media: Me
                 except AppException as exc:
                     if exc.code != "FILE_NOT_FOUND":
                         raise
+        after_bytes = storage.used_bytes()
+        counts.update(freed_bytes=max(0, before_bytes - after_bytes), used_bytes=after_bytes)
     return counts
 
 

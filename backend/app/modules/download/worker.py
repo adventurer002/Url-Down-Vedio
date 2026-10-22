@@ -27,7 +27,7 @@ class DownloadDispatcher:
 
 
 async def execute_download(task_id: UUID, service: TaskService, media: MediaRepository,
-                           storage: StorageAdapter, downloader: DownloadAdapter) -> dict:
+                           storage: StorageAdapter, downloader: DownloadAdapter, reuse_result=None) -> dict:
     repository = service.repository
     if not await database_call(repository.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(repository.get, task_id)).status}
@@ -60,6 +60,12 @@ async def execute_download(task_id: UUID, service: TaskService, media: MediaRepo
     try:
         await cleanup_expired_files(storage, media, repository)
         with storage.lease():
+            if reuse_result is not None:
+                reused = await reuse_result(task)
+                if reused:
+                    task = await database_call(repository.complete_with, task_id, reused, lambda session: None)
+                    await publish(task)
+                    return {"task_id": str(task_id), "status": task.status}
             storage.check_capacity(settings.MAX_FILE_SIZE_MB * 1024 * 1024)
             if await cancelled():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)

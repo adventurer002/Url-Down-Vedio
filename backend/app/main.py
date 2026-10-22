@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
@@ -21,6 +23,8 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    from app.core.logging import install_log_redaction
+    install_log_redaction()
     app = FastAPI(title="VideoHub AI", version="0.1.0", lifespan=lifespan)
 
     @app.middleware("http")
@@ -47,6 +51,9 @@ def create_app() -> FastAPI:
     async def unhandled_exception_handler(request: Request, exc: Exception):
         return error_response("INTERNAL_SERVER_ERROR", "服务器内部错误", request.state.request_id, 500)
 
+    app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS,
+                       allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type"],
+                       expose_headers=["X-Request-ID"], allow_credentials=False)
     app.include_router(router)
     return app
 

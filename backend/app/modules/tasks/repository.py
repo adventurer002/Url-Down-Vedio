@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import sessionmaker
 
 from app.core.exceptions import AppException
@@ -48,6 +48,12 @@ class TaskRepository:
             session.add(task)
             session.flush()
             return record(task)
+
+    def list_recent(self, limit: int = 20, offset: int = 0) -> tuple[list[TaskRecord], int]:
+        with self.sessions() as session:
+            total = session.scalar(select(func.count()).select_from(Task))
+            items = session.scalars(select(Task).order_by(Task.created_at.desc(), Task.id.desc()).limit(limit).offset(offset))
+            return [record(item) for item in items], total
 
     def get(self, task_id: UUID) -> TaskRecord:
         with self.sessions() as session:
@@ -101,6 +107,14 @@ class TaskRepository:
                      result_payload=None, error_code="TASK_CANCELLED", error_message="任务已取消"))
         return self.get(task_id)
 
+    def perform_if_active(self, task_id: UUID, writer):
+        """Serialize intermediate module writes against cancellation without completing the parent."""
+        with self.sessions.begin() as session:
+            task = session.scalar(select(Task).where(Task.id == task_id).with_for_update())
+            if task is None or task.status not in (TaskStatus.running, TaskStatus.processing) or task.cancel_requested:
+                raise AppException("TASK_CANCELLED", "任务已取消或终止", 409)
+            return writer(session)
+
     def complete_with(self, task_id: UUID, result_payload: dict, write_result) -> TaskRecord:
         """CAS and module-owned result registration share one database transaction."""
         with self.sessions.begin() as session:
@@ -110,7 +124,9 @@ class TaskRepository:
             ).values(status=TaskStatus.completed, progress=100, result_payload=result_payload,
                      finished_at=utcnow(), error_code=None, error_message=None)).rowcount
             if changed:
-                write_result(session)
+                result = write_result(session)
+                if isinstance(result, dict):
+                    session.execute(update(Task).where(Task.id == task_id).values(result_payload=result))
         task = self.get(task_id)
         if task.status in {"running", "processing"} and task.cancel_requested:
             task = self.finish(task_id, "cancelled", task.progress, error_code="TASK_CANCELLED", error_message="任务已取消")

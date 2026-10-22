@@ -254,3 +254,240 @@ uv run pytest
 完成 CAS 与媒体注册回滚，以及真实 yt-dlp HTTP 传输和 FFmpeg 合流。
 媒体测试使用临时生成的短片和隔离测试服务器，提取器/DNS 由测试夹具代替；生产 SSRF 校验不放宽。
 真实媒体测试需要 `ffmpeg`、`ffprobe`，缺少时会跳过这一项。
+
+## 阶段 5：按需音频与字幕优先转写
+
+本阶段新增 `0002_transcripts_cache` 迁移，无 PyTorch、Transformers 或本地大模型依赖。
+`httpcore` 原已由 httpx 安装，本阶段显式声明它，用于 ASR 网络连接的 DNS 校验与 IP 固定。
+在 `backend/` 执行：
+
+```sh
+uv sync --locked
+uv run alembic upgrade head
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+另一个终端进入 `backend/`：
+
+```sh
+uv run celery -A app.infrastructure.queue.celery_app:celery_app worker --pool=solo -c 1 --loglevel=info
+```
+
+音频提取只支持 MP3，HTTP 请求负责验证和入队，FFmpeg / 网络音频传输均在 Worker 执行：
+
+```sh
+curl --max-time 45 -X POST http://127.0.0.1:8000/api/v1/audio/extractions \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.youtube.com/watch?v=BaW_jenozKc","format":"mp3"}'
+```
+
+返回 HTTP 202 与 `data.task_id/status`。沿用任务查询、SSE 与取消接口：
+
+```sh
+TASK_ID='返回的任务 UUID'
+curl -N --max-time 620 "http://127.0.0.1:8000/api/v1/tasks/$TASK_ID/events"
+curl "http://127.0.0.1:8000/api/v1/tasks/$TASK_ID"
+curl -X POST "http://127.0.0.1:8000/api/v1/tasks/$TASK_ID/cancel"
+```
+
+成功结果含 `file_id` 和 `/api/v1/files/{file_id}/download`，可下载 MP3。
+Worker 优先复用同一视频仍有效的本地 MP3（同一 file_id，`reused=true`，保留原过期时间）；
+其次从有效本地音视频文件使用 FFmpeg 抽取音轨；没有本地文件时只选择独立音频流，
+使用固定 `bestaudio/best` 选择器下载已选音轨，再转为 MP3。
+若平台只提供合并视频流，返回 `AUDIO_STREAM_UNAVAILABLE`，不会为提取音频下载完整高清视频。
+所有 FFmpeg / yt-dlp 子进程继续使用阶段 4 Watchdog、配额、超时和协作取消。
+
+创建转写任务：
+
+```sh
+curl --max-time 45 -X POST http://127.0.0.1:8000/api/v1/transcriptions \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.youtube.com/watch?v=BaW_jenozKc","language":"zh"}'
+```
+
+语言可省略；显式语言支持 `zh`、`en`、`zh-Hans` 等标签并按小写规范化。
+POST 返回 HTTP 202，完成后从任务 `result_payload.transcript_id` 查询：
+
+```sh
+TRANSCRIPT_ID='任务完成后返回的转写 UUID'
+curl "http://127.0.0.1:8000/api/v1/transcriptions/$TRANSCRIPT_ID"
+```
+
+响应包含 `content_text`、`source_type`、`language`、`content_version`、`asr_model`、SHA256 `content_hash`
+和 `segments: [{"start": 0.0, "end": 1.0, "text": "..."}]`。Swagger `/docs` 提供 audio 和 transcriptions 分组。
+
+字幕与缓存策略：
+
+1. Worker 先查 `(video_id, source_type, language, content_version, asr_model)` 多维缓存。
+   当前版本字幕优先；ASR 缓存只匹配当前模型。版本或 ASR 模型变化会失配；未指定语言时可使用已缓存语言。
+   字幕记录固定 `asr_model=none`，Mock ASR 固定 `mock-v1`，不会混入真实模型的缓存。
+2. 缓存未命中时，仅通过 yt-dlp 拉目标字幕，启用手工/自动字幕并强制 `skip_download=True`。
+   手工字幕优先，允许同语言地区变体；支持 VTT / SRT / JSON3，过滤其他格式。
+   清洗样式、重复行与重叠滚动字幕，标准化时间轴，再计算 UTF-8 正文 SHA256。
+   字幕网络失败会明确报错；仅目标语言没有可用字幕或字幕为空时才进入 ASR。
+3. ASR 优先读取已有有效 MP3，其次本地视频抽音，再次按需拉独立音轨。
+   转写专用音频仅放在任务临时目录，完成、失败或取消后及时删除；复用的共享媒体文件不删除。
+   转写记录注册与任务完成 CAS 共用数据库事务，取消获胜时不会留下新的转写缓存。
+
+API 请求不接受模型、API Key、Cookie、代理或 CLI 参数。
+首次解析仍需平台网络可达；已记录的同一规范化 URL 可复用视频身份，避免缓存命中前再次提取元数据。
+
+云端 ASR 配置只由服务端根目录 `.env` 或进程环境提供。例如：
+
+```dotenv
+ASR_PROVIDER=auto
+ASR_API_BASE_URL=https://api.openai.com/v1
+ASR_API_KEY=填写服务端密钥
+ASR_MODEL=whisper-1
+ASR_TOTAL_TIMEOUT_SECONDS=90
+ASR_MAX_UPLOAD_MB=25
+SUBTITLE_TIMEOUT_SECONDS=45
+TRANSCRIPT_CONTENT_VERSION=v1
+```
+
+兼容服务可改为其 OpenAI 兼容前缀，例如 Groq 的 `https://api.groq.com/openai/v1`，
+并设置服务实际支持的模型（如 `whisper-large-v3-turbo`）；服务必须支持 `verbose_json` 和分段时间轴。
+适配器向 `<ASR_API_BASE_URL>/audio/transcriptions` 发送 multipart `file/model/language/response_format`
+及 `timestamp_granularities[]=segment`。参考 [OpenAI Speech-to-text](https://platform.openai.com/docs/guides/speech-to-text)。
+本次环境无法读取官方文档站点，字段兼容性通过 HTTP 契约测试验证，未使用真实云端凭据调用。
+
+连接超时 5 秒、读取 60 秒、写入 30 秒，整次 ASR 操作（含至多 1 次有限重试）默认最多 90 秒。
+仅对超时、网络错误及 429 / 部分 5xx 重试，401 等配置/鉴权错误不重试。
+禁止跟随重定向与隐式系统代理；实际连接前校验全部 DNS 结果并连接到校验过的 IP，保留原 Host / TLS SNI。
+私网 API 地址会被阻止；API Key 和底层服务响应不写入任务或对外错误。
+请求上传最大默认 25 MiB，响应最大 2 MiB；暂不自动切分长音频，超限返回 `ASR_AUDIO_TOO_LARGE`。
+
+不配置密钥时，有字幕的视频照常完成；没有字幕则返回清晰的 `ASR_NOT_CONFIGURED`，并在拉音频前停止。
+不会自动把 Mock 结果伪装为真实识别结果。离线测试可显式配置：
+
+```dotenv
+ASR_PROVIDER=mock
+ASR_MOCK_TEXT=离线模拟转写内容（非真实识别结果）
+```
+
+重启 Worker 后生效。Mock 只替代 ASR，不替代首次平台元数据/字幕网络获取；单元测试使用夹具避免外网。
+`ASR_PROVIDER=disabled` 可明确关闭 ASR，同时保留字幕与已有缓存能力。
+
+验证命令：
+
+```sh
+uv run alembic current
+uv run alembic check
+uv run pytest
+```
+
+阶段 5 测试覆盖本地视频/音频复用、独立音轨限制、VTT/SRT/JSON3 清洗、缓存维度、字幕优先与 ASR 回退、
+SHA256、HTTP multipart/超时/有限重试、DNS 固定、取消 CAS 和临时音频清理。
+字幕集成测试使用隔离 HTTP 服务，实际验证只请求字幕而不下载媒体。
+
+## 阶段 6：结构化总结与 JSON 思维导图
+
+新增 `ai_results`，迁移版本 `0003`。仅后端，无本地大模型依赖。已有 PostgreSQL / Redis 就绪后，
+在 `backend/` 执行（API 与 Worker 分别使用一个终端）：
+
+```sh
+uv sync --locked
+uv run alembic upgrade head
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+```sh
+uv run celery -A app.infrastructure.queue.celery_app:celery_app worker --pool=solo -c 1 --loglevel=info
+```
+
+服务端配置示例（可放入现有根目录 `.env`；本阶段未修改根目录配置模板）：
+
+```dotenv
+LLM_PROVIDER=auto
+LLM_API_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=
+LLM_MODEL=gpt-4o-mini
+LLM_TIMEOUT_SECONDS=90
+AI_TASK_TIMEOUT_SECONDS=900
+LLM_CHUNK_CHARS=12000
+LLM_MAX_CHUNKS=64
+LLM_MAX_OUTPUT_TOKENS=4096
+SUMMARY_PROMPT_VERSION=summary-v1
+MINDMAP_PROMPT_VERSION=mindmap-v1
+MINDMAP_SCHEMA_VERSION=tree-v1
+# 可选，填实际服务/模型的每百万 Token 美元单价；未配置时费用返回 null
+# LLM_INPUT_COST_PER_MILLION=0.00
+# LLM_OUTPUT_COST_PER_MILLION=0.00
+```
+
+`auto` 无 Key 时选择确定性的 `heuristic-v1`，有 Key 时选择 OpenAI 兼容服务。
+可显式设置 `LLM_PROVIDER=heuristic` 或 `openai_compatible`。启发式模式按时间段抽取源文稿，
+不具备生成式推理或翻译能力；`language` 控制标签，源语言摘录保持原文，Token 与费用为零。
+无 LLM Key 不影响本地总结闭环；若视频也无字幕，仍须按阶段 5 配置真实 ASR 或显式 Mock。
+Mock ASR 内容不代表真实识别。首次公开 URL 的解析与字幕获取仍需要网络。
+
+云端适配器发送 `<LLM_API_BASE_URL>/chat/completions`，使用 `messages`、`response_format=json_object`、
+`temperature=0` 和 `max_tokens`，并向模型提供 JSON Schema。兼容服务须支持这些参数。
+显式连接超时 5 秒、读取最多 60 秒、写入 30 秒；默认单次操作含有限重试总计不超过 90 秒。
+仅网络错误/超时、429 与部分 5xx 最多重试一次；鉴权错误不重试。
+响应限制 2 MiB，禁用重定向和隐式代理，校验 DNS 并固定实际连接 IP，禁止私网云 API。
+上游响应、Key 不写入任务错误。云 API 经 HTTP 契约测试，未使用真实付费凭据调用。
+
+每个请求由统一 TaskService 创建任务，在 Celery 内自动获取字幕/转写。
+现有转写缓存优先；无缓存则在同一个 AI 任务内执行阶段 5 流水线，避免 Solo Worker 等待子任务。
+`language` 是 AI 输出语言，字幕源语言自动选择。字幕、按需音轨与 ASR 保留原有取消、限额与临时清理机制。
+AI 总时限覆盖转写与模型操作；模型操作每 500ms 检查取消，HTTP 取消会关闭请求。
+最终任务完成与 AI 记录注册在同一个 CAS 事务中；取消已获胜时不写入新 AI 结果。
+已完成的中间转写/总结缓存可保留供后续任务复用。
+
+长文稿按时间戳段落切分，超长单段也切分；每段 Map 后按字符预算分层 Reduce。
+最终保留所有 Map 章节证据，时间戳统一 `HH:MM:SS`，缺失字段/非法时间戳依据源段落修复后严格校验。
+字符阈值是源内容预算，API 消息还包含 JSON 与 Schema 开销；超过最大 Chunk 数明确报错。
+思维导图使用总结缓存，沿完整时间轴最多聚合为 40 组，输出递归 JSON 树与转义后的 Markdown。
+树限制 500 节点/8 层；Markdown 前三级用标题，更深用嵌套列表。
+
+缓存键严格为 `source_content_hash + result_type + llm_model + prompt_version + output_language`。
+模型字段使用服务端配置的逻辑模型名；更换其实际模型版本时应更新模型名或 prompt 版本以失效缓存。
+思维导图版本组合为 `mindmap-v1:tree-v1`，因此 Schema 版本变化也使缓存失效。
+相同正文跨视频可复用同一结果，结果关联首次生成的转写记录；`source_basis` 描述该记录来源。
+思维导图行仅统计其自身生成调用；预处理总结的用量单独记录在 summary 行，避免重复计费。
+费用仅依赖服务端单价配置，不假设固定供应商价格；上游缺少 usage 时 Token/费用为 null。
+
+验证（替换为当前公开可用的视频地址）：
+
+```sh
+VIDEO_URL='https://www.youtube.com/watch?v=BaW_jenozKc'
+curl --max-time 40 -X POST http://127.0.0.1:8000/api/v1/ai/summaries \
+  -H 'Content-Type: application/json' \
+  -d "{\"url\":\"$VIDEO_URL\",\"language\":\"zh\"}"
+
+# 用响应中的 task_id 替换，终态自动关闭；长任务超过 300 秒时重新连接
+TASK_ID='替换为task_id'
+curl -N --max-time 310 "http://127.0.0.1:8000/api/v1/tasks/$TASK_ID/events"
+curl --max-time 5 "http://127.0.0.1:8000/api/v1/tasks/$TASK_ID"
+
+# completed 后从 result_payload.result_id 读取全文、章节、来源和用量
+RESULT_ID='替换为result_id'
+curl --max-time 5 "http://127.0.0.1:8000/api/v1/ai/results/$RESULT_ID"
+
+curl --max-time 40 -X POST http://127.0.0.1:8000/api/v1/ai/mindmaps \
+  -H 'Content-Type: application/json' \
+  -d "{\"url\":\"$VIDEO_URL\",\"language\":\"zh\"}"
+
+# 在另一个终端取消仍在运行的任务
+curl --max-time 5 -X POST "http://127.0.0.1:8000/api/v1/tasks/$TASK_ID/cancel"
+
+uv run alembic check
+uv run pytest
+```
+
+在 [Swagger](http://127.0.0.1:8000/docs) 的 `ai` 分组也可依次创建任务、查询结果。
+重复相同请求将复用相同 `result_id`，任务结果标记 `cache_hit=true`；更换输出语言会使用独立缓存。
+思维导图 GET 返回 `content_json` 与 `markdown_export`，后者可保存为 `.md`。
+
+阶段 6 文件清单（均位于 `backend/`）：
+
+- 新增 `alembic/versions/0003_ai_results.py`、`tests/test_ai_module.py`、`app/infrastructure/http_client.py`。
+- 新增 `app/modules/ai/`：`__init__.py`、`models.py`、`schemas.py`、`repository.py`、`service.py`、
+  `router.py`、`worker.py`、`summarizer.py`、`mindmap.py`；`providers/` 下的 `__init__.py`、
+  `base.py`、`heuristic.py`、`openai_compatible.py`。
+- 修改 `app/core/config.py`、`app/infrastructure/database/models.py`、
+  `app/infrastructure/queue/celery_app.py`、`app/api/v1/router.py`。
+- 修改 `app/modules/tasks/repository.py`、`service.py`，新增受取消保护的中间写入契约与 AI 任务类型。
+- 修改 `app/modules/transcript/service.py`、`worker.py`、`providers.py`，复用转写流水线及共用受保护 HTTP 传输。
+- 修改本 `README.md`。本阶段无新增依赖，无前端变更。

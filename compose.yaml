@@ -1,6 +1,18 @@
+name: videohub_ai
+
+# API, Solo Worker and Vite run natively via ./scripts/dev.sh --docker.
+# Keep Docker limited to PG/Redis on an M1 with 8GB RAM.
+x-logging: &local-logging
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "2"
+
 services:
   postgres:
     image: postgres:16-alpine
+    logging: *local-logging
+    stop_grace_period: 20s
     environment:
       POSTGRES_USER: videohub_user
       POSTGRES_PASSWORD: videohub_pass
@@ -17,6 +29,8 @@ services:
     mem_limit: 512m
   redis:
     image: redis:7-alpine
+    logging: *local-logging
+    stop_grace_period: 10s
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
     ports:
       - "127.0.0.1:6379:6379"

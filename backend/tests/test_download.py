@@ -360,3 +360,10 @@ async def test_watchdog_size_abort_persists_exact_error_code(repository, storage
     result = await execute_download(task.id, TaskService(repository, MemoryBus()), MediaRepository(repository.sessions), storage, OversizeAdapter())
     assert result["status"] == "failed" and repository.get(task.id).error_code == "FILE_TOO_LARGE"
     assert not storage.task_directory(task.id).exists()
+
+
+def test_watchdog_permission_probe_does_not_assume_process_group_exited(monkeypatch):
+    def denied(*args):
+        raise PermissionError
+    monkeypatch.setattr(os, "killpg", denied)
+    assert ProcessRunner.group_exists(123) is True

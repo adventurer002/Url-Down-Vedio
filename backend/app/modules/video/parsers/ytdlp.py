@@ -24,7 +24,10 @@ def metadata_from_info(info: dict) -> ParsedVideo:
     if not platform or platform == "generic":
         raise AppException("UNSUPPORTED_URL", "暂不支持该链接的平台", 422)
     languages = sorted({language for key in ("subtitles", "automatic_captions")
-                        for language, tracks in (info.get(key) or {}).items() if tracks})
+                        for language, tracks in (info.get(key) or {}).items()
+                        if language not in {"danmaku", "live_chat"}
+                        and any(track.get("ext") in {"vtt", "srt", "json3", "ttml", "ass", "srv1", "srv2", "srv3"}
+                                for track in tracks)})
     duration = info.get("duration")
     if not isinstance(duration, (int, float)) or isinstance(duration, bool) or not math.isfinite(duration) or duration < 0:
         duration = None

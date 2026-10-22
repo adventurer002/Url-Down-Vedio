@@ -50,3 +50,15 @@ class MediaRepository:
     def storage_keys(self) -> set[str]:
         with self.sessions() as session:
             return set(session.scalars(select(MediaFile.storage_key)))
+
+    def available(self, file_ids: list[UUID], now: datetime) -> list[MediaRecord]:
+        with self.sessions() as session:
+            return [MediaRecord(**{key: getattr(item, key) for key in MediaRecord.__dataclass_fields__})
+                    for item in session.scalars(select(MediaFile).where(MediaFile.id.in_(file_ids), MediaFile.expires_at > now))]
+
+    def reusable(self, video_id: UUID, now: datetime) -> list[MediaRecord]:
+        with self.sessions() as session:
+            return [MediaRecord(**{key: getattr(item, key) for key in MediaRecord.__dataclass_fields__})
+                    for item in session.scalars(select(MediaFile).where(
+                        MediaFile.video_id == video_id, MediaFile.expires_at > now
+                    ).order_by(MediaFile.created_at.desc()))]

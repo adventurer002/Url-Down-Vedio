@@ -1,7 +1,7 @@
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
@@ -18,6 +18,19 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 def get_task_service() -> TaskService:
     return TaskService(TaskRepository(SessionLocal), ProgressBus(redis_client))
+
+
+def get_history_service():
+    from app.modules.tasks.history import TaskHistoryService
+    from app.modules.video.repository import VideoRepository
+    from app.modules.download.router import get_media_service
+    return TaskHistoryService(get_task_service(), VideoRepository(SessionLocal), get_media_service())
+
+
+@router.get("")
+async def list_tasks(limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+                     service=Depends(get_history_service)):
+    return success_response(await service.list(limit, offset))
 
 
 @router.get("/{task_id}")
