@@ -1,9 +1,8 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { createPinia, setActivePinia } from "pinia";
 import { api } from "../api";
-import { useWorkspace } from "../stores/workspace";
+import { createWorkspace } from "../stores/workspace";
 import type { VideoParseResult } from "../types/api";
-vi.mock("../composables/useTaskPoller", async (importOriginal) => ({
+vi.mock("../lib/taskTracker", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createTaskTracker: vi.fn(() => ({ stop: vi.fn() })),
 }));
@@ -13,7 +12,6 @@ beforeEach(() => {
     getItem: (k: string) => data.get(k) || null,
     setItem: (k: string, v: string) => data.set(k, v),
   });
-  setActivePinia(createPinia());
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -31,14 +29,13 @@ const metadata: VideoParseResult = {
   download_options: [],
 };
 it("persists parsed video metadata so direct refresh can restore the workspace", () => {
-  const store = useWorkspace(),
+  const store = createWorkspace(),
     key = store.remember("https://example.com/video", metadata);
   expect(key).toBe("demo_one");
-  setActivePinia(createPinia());
-  expect(useWorkspace().videos[0]?.metadata.title).toBe("测试视频");
+  expect(createWorkspace().videos[0]?.metadata.title).toBe("测试视频");
 });
 it("prevents duplicate active jobs and retains independent job kinds", async () => {
-  const store = useWorkspace();
+  const store = createWorkspace();
   store.remember("https://example.com/video", metadata);
   const create = vi
     .spyOn(api, "create")
@@ -51,7 +48,7 @@ it("prevents duplicate active jobs and retains independent job kinds", async () 
   expect(store.activeCount).toBe(1);
 });
 it("clears submission state when enqueue fails, allowing retry", async () => {
-  const store = useWorkspace();
+  const store = createWorkspace();
   store.remember("https://example.com/video", metadata);
   vi.spyOn(api, "create").mockRejectedValue(new Error("offline"));
   await expect(
@@ -93,7 +90,7 @@ it("loads server history and reconstructs workspaces missing from browser storag
     offset: 0,
     limit: 20,
   });
-  const store = useWorkspace();
+  const store = createWorkspace();
   await store.loadHistory();
   expect(store.historyTasks[0]?.snapshot?.result_payload?.result_id).toBe(
     "result-id",
@@ -122,7 +119,7 @@ it("replaces stale downloadable IDs after a server cleanup refresh", async () =>
   const history = vi
     .spyOn(api, "history")
     .mockResolvedValue({ items: [item], total: 1, offset: 0, limit: 20 });
-  const store = useWorkspace();
+  const store = createWorkspace();
   await store.loadHistory();
   expect(store.historyTasks[0]?.snapshot?.result_payload?.file_id).toBe(
     "file-id",
@@ -135,4 +132,42 @@ it("replaces stale downloadable IDs after a server cleanup refresh", async () =>
   });
   await store.loadHistory();
   expect(store.historyTasks[0]?.snapshot?.result_payload).toBeNull();
+});
+
+it("does not restart subscriptions when an in-flight history request finishes after cleanup", async () => {
+  const { createTaskTracker } = await import("../lib/taskTracker");
+  vi.mocked(createTaskTracker).mockClear();
+  let resolveHistory!: (page: import("../types/api").TaskHistoryPage) => void;
+  vi.spyOn(api, "history").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveHistory = resolve;
+      }),
+  );
+  const store = createWorkspace();
+  const pending = store.loadHistory();
+  store.stopAll();
+  resolveHistory({
+    items: [
+      {
+        task_id: "late-task",
+        task_type: "download",
+        status: "running",
+        progress: 20,
+        seq: 2,
+        stage: "downloading",
+        error_code: null,
+        updated_at: "2026-10-22",
+        created_at: "2026-10-22",
+        video: null,
+      },
+    ] as import("../types/api").TaskHistoryItem[],
+    total: 1,
+    offset: 0,
+    limit: 20,
+  });
+  await pending;
+  expect(createTaskTracker).not.toHaveBeenCalled();
+  store.restore();
+  expect(createTaskTracker).toHaveBeenCalledTimes(1);
 });

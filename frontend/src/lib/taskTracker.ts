@@ -1,4 +1,3 @@
-import { onScopeDispose } from "vue";
 import { api } from "../api";
 import { apiUrl, normalizeError } from "../api/client";
 import type { TaskEvent, TaskSnapshot, TaskStatus } from "../types/api";
@@ -136,9 +135,4 @@ export function createTaskTracker(taskId: string, options: TrackerOptions) {
       return lastSeq;
     },
   };
-}
-export function useTaskPoller(taskId: string, options: TrackerOptions) {
-  const tracker = createTaskTracker(taskId, options);
-  onScopeDispose(tracker.stop);
-  return tracker;
 }

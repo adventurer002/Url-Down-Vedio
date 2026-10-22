@@ -1,6 +1,6 @@
 # VideoHub AI · 本地 V1
 
-Vue 3 黑白视频工作台 + FastAPI / PostgreSQL / Redis / Celery Solo 后端。
+React 19 黑白视频工作台 + FastAPI / PostgreSQL / Redis / Celery Solo 后端。
 支持公开视频解析与下载、按需纯音频、字幕优先转写、结构化总结、JSON 思维导图、任务历史与安全过期清理。
 默认不安装 PyTorch 或本地大模型，适配 M1 8GB / 256GB。
 
@@ -173,7 +173,7 @@ docker compose config --quiet
 额外联调记录：当前本地实例已成功下载 B 站 BV1g2JX6nESP 的 480p 文件，并验证 Range 分发。
 云端 ASR / LLM 的真实效果与额度不在离线自动化通过的结论范围内。
 
-本次本地回归：后端 **183 项通过**，前端 **22 项通过**；`vue-tsc --noEmit`、Vite 构建和 Compose 配置校验通过。
+React 迁移回归（2026-10-22）：后端 **193 项通过**，前端 **32 项通过**；`tsc --noEmit`、Vite 构建和 Compose 配置校验通过。
 一键脚本已验证启动、正常退出 / 再启动及端口冲突时拒绝重复启动。
 
 ## 21 项 V1 验收清单
@@ -202,7 +202,7 @@ docker compose config --quiet
 | 18 | [x] AI 缓存、JSON 树与 Markdown / SVG 导出 | 后端缓存测试与前端浏览器导出验收 |
 | 19 | [x] 服务器任务历史、分页、关联视频与有效结果 | 专项后端 / 前端测试与抽屉联调 |
 | 20 | [x] URL 敏感参数日志脱敏 | 专项测试及真实 Uvicorn 访问日志探针 |
-| 21 | [x] SSE 去重/轮询回退、移动 Tab、类型与构建 | Vitest、vue-tsc、Vite build、浏览器响应式验收 |
+| 21 | [x] SSE 去重/轮询回退、移动 Tab、类型与构建 | Vitest、tsc、Vite build、浏览器响应式验收 |
 
 更多实现与配置细节：[后端文档](backend/README.md) · [前端文档](frontend/README.md)。
 
@@ -211,5 +211,14 @@ docker compose config --quiet
 - 后端：`app/core/logging.py`、`app/__init__.py`、API / Celery 日志初始化；`tasks/history.py`、
   任务 Repository / Service / Router；视频元数据与媒资有效性查询契约；存储清理字节统计；
   `modules/system/router.py`；`tests/test_history_and_security.py`。
-- 前端：历史 / 清理 API 类型与客户端、Pinia 服务器历史合并、任务抽屉、历史工作台档位刷新与对应样式 / 测试。
+- 前端：历史 / 清理 API 类型与客户端、服务器历史合并、任务抽屉、历史工作台档位刷新与对应样式 / 测试。
 - 本地运行：`scripts/dev.sh`、`scripts/dev.py`、`compose.yaml`、`.gitignore` 与根目录 / 前端 README。
+
+
+## React 迁移（2026-10-22）
+
+前端已从 Vue 3 / Pinia 迁移至 React 19 / React Router，采用 Context + `useSyncExternalStore` 管理共享状态。
+保留原有页面、响应式样式、API 契约、任务 SSE / 轮询机制及本地视频 / 任务缓存；后端无代码变动。
+现有启动脚本和部署方式继续适用。登录注册、充值和后台管理属于后续功能。
+
+迁移文件清单、测试与浏览器验收边界见 [前端文档的 React 迁移说明](frontend/README.md#react-迁移说明2026-10-22)。

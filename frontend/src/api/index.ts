@@ -19,10 +19,10 @@ export const api = {
     get<TaskSnapshot>(`/tasks/${encodeURIComponent(id)}`, signal),
   cancel: (id: string) =>
     post<TaskSnapshot>(`/tasks/${encodeURIComponent(id)}/cancel`),
-  transcript: (id: string) =>
-    get<TranscriptResult>(`/transcriptions/${encodeURIComponent(id)}`),
-  result: (id: string) =>
-    get<AIResult>(`/ai/results/${encodeURIComponent(id)}`),
+  transcript: (id: string, signal?: AbortSignal) =>
+    get<TranscriptResult>(`/transcriptions/${encodeURIComponent(id)}`, signal),
+  result: (id: string, signal?: AbortSignal) =>
+    get<AIResult>(`/ai/results/${encodeURIComponent(id)}`, signal),
   ready: (signal?: AbortSignal) =>
     get<ReadinessStatus>("/health/ready", signal),
   create: (kind: JobKind, url: string, presetId?: string) => {

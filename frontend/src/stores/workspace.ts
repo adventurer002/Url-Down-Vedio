@@ -1,8 +1,6 @@
-import { defineStore } from "pinia";
-import { computed, ref } from "vue";
 import { api } from "../api";
 import { ApiError, normalizeError } from "../api/client";
-import { createTaskTracker, terminal } from "../composables/useTaskPoller";
+import { createTaskTracker, terminal } from "../lib/taskTracker";
 import type {
   JobKind,
   TaskEvent,
@@ -41,37 +39,35 @@ function write(key: string, value: unknown) {
     /* Private/full storage must not prevent normal operation. */
   }
 }
-export const useWorkspace = defineStore("workspace", () => {
+export function createWorkspace() {
+  let version = 0;
+  let trackingEnabled = true;
+  const listeners = new Set<() => void>();
+  function notify() {
+    version++;
+    listeners.forEach((listener) => listener());
+  }
   const saved = read<SavedVideo[]>("videohub.videos.v1", []);
-  const videos = ref<SavedVideo[]>(
-    Array.isArray(saved)
+  const stored = read<LocalTask[]>("videohub.tasks.v1", []);
+  const state = {
+    videos: Array.isArray(saved)
       ? saved
           .filter((v) => v?.key && v?.metadata?.platform_video_id && v?.url)
           .slice(0, 30)
       : [],
-  );
-  const stored = read<LocalTask[]>("videohub.tasks.v1", []);
-  const tasks = ref<LocalTask[]>(
-    Array.isArray(stored)
+    tasks: Array.isArray(stored)
       ? stored
           .filter((t) => t?.id && t?.event?.status && t?.videoKey)
           .slice(0, 50)
       : [],
-  );
-  const historyOpen = ref(false);
-  const submitting = ref<string[]>([]);
-  const historyIds = ref<string[]>([]),
-    historyTotal = ref(0),
-    historyOffset = ref(0);
-  const historyLoading = ref(false),
-    historyLoaded = ref(false);
-  const historyTasks = computed(() =>
-    historyLoaded.value
-      ? historyIds.value
-          .map((id) => tasks.value.find((t) => t.id === id))
-          .filter((t): t is LocalTask => !!t)
-      : tasks.value,
-  );
+    historyOpen: false,
+    submitting: [] as string[],
+    historyIds: [] as string[],
+    historyTotal: 0,
+    historyOffset: 0,
+    historyLoading: false,
+    historyLoaded: false,
+  };
   const jobLabels: Record<string, string> = {
     download: "视频下载",
     audio_extraction: "纯音频提取",
@@ -81,18 +77,19 @@ export const useWorkspace = defineStore("workspace", () => {
     simulate_progress: "系统演示任务",
   };
   async function loadHistory(reset = true) {
-    if (historyLoading.value) return;
-    historyLoading.value = true;
+    if (state.historyLoading) return;
+    state.historyLoading = true;
+    notify();
     try {
-      const page = await api.history(20, reset ? 0 : historyOffset.value);
+      const page = await api.history(20, reset ? 0 : state.historyOffset);
       const pageIds: string[] = [];
       for (const snapshot of page.items) {
         const v = snapshot.video;
         const videoKey = v
           ? `${v.platform}_${v.platform_video_id}`
           : `system_${snapshot.task_id}`;
-        if (v && !videos.value.some((item) => item.key === videoKey)) {
-          videos.value.push({
+        if (v && !state.videos.some((item) => item.key === videoKey)) {
+          state.videos.push({
             key: videoKey,
             url: v.source_url,
             partial: true,
@@ -109,7 +106,7 @@ export const useWorkspace = defineStore("workspace", () => {
             },
           });
         }
-        const existing = tasks.value.find((t) => t.id === snapshot.task_id);
+        const existing = state.tasks.find((t) => t.id === snapshot.task_id);
         const event =
           existing &&
           existing.event.seq > snapshot.seq &&
@@ -131,48 +128,47 @@ export const useWorkspace = defineStore("workspace", () => {
           snapshot,
         };
         if (existing) Object.assign(existing, item);
-        else tasks.value.push(item);
+        else state.tasks.push(item);
         pageIds.push(item.id);
         if (!terminal(snapshot.status)) track(existing || item);
       }
-      tasks.value.sort(
+      state.tasks.sort(
         (a, b) =>
           Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
           b.id.localeCompare(a.id),
       );
-      historyIds.value = [
-        ...new Set(reset ? pageIds : [...historyIds.value, ...pageIds]),
+      state.historyIds = [
+        ...new Set(reset ? pageIds : [...state.historyIds, ...pageIds]),
       ];
-      historyTotal.value = page.total;
-      historyOffset.value = page.offset + page.items.length;
-      historyLoaded.value = true;
+      state.historyTotal = page.total;
+      state.historyOffset = page.offset + page.items.length;
+      state.historyLoaded = true;
       persist();
     } finally {
-      historyLoading.value = false;
+      state.historyLoading = false;
+      notify();
     }
   }
   const trackers = new Map<string, ReturnType<typeof createTaskTracker>>();
-  const activeCount = computed(
-    () => tasks.value.filter((t) => !terminal(t.event.status)).length,
-  );
   function persist() {
-    write("videohub.videos.v1", videos.value);
-    write("videohub.tasks.v1", tasks.value);
+    write("videohub.videos.v1", state.videos);
+    write("videohub.tasks.v1", state.tasks);
+    notify();
   }
   function remember(url: string, metadata: VideoParseResult) {
     const key = `${metadata.platform}_${metadata.platform_video_id}`;
-    videos.value = [
+    state.videos = [
       { key, url, metadata },
-      ...videos.value.filter((v) => v.key !== key),
+      ...state.videos.filter((v) => v.key !== key),
     ].slice(0, 30);
     persist();
     return key;
   }
   function track(item: LocalTask) {
-    if (trackers.has(item.id)) return;
+    if (!trackingEnabled || trackers.has(item.id)) return;
     const tracker = createTaskTracker(item.id, {
       onEvent(event) {
-        const target = tasks.value.find((t) => t.id === item.id);
+        const target = state.tasks.find((t) => t.id === item.id);
         if (target) {
           target.event = event;
           target.trackingError = undefined;
@@ -180,7 +176,7 @@ export const useWorkspace = defineStore("workspace", () => {
         }
       },
       onSnapshot(snapshot) {
-        const target = tasks.value.find((t) => t.id === item.id);
+        const target = state.tasks.find((t) => t.id === item.id);
         if (target) {
           target.snapshot = snapshot;
           if (snapshot.seq === 0 && terminal(snapshot.status))
@@ -190,8 +186,11 @@ export const useWorkspace = defineStore("workspace", () => {
         }
       },
       onError(error) {
-        const target = tasks.value.find((t) => t.id === item.id);
-        if (target) target.trackingError = normalizeError(error).message;
+        const target = state.tasks.find((t) => t.id === item.id);
+        if (target) {
+          target.trackingError = normalizeError(error).message;
+          notify();
+        }
       },
       onMode(mode) {
         if (mode === "stopped") trackers.delete(item.id);
@@ -207,8 +206,8 @@ export const useWorkspace = defineStore("workspace", () => {
   ) {
     const key = `${video.key}:${kind}`;
     if (
-      submitting.value.includes(key) ||
-      tasks.value.some(
+      state.submitting.includes(key) ||
+      state.tasks.some(
         (t) =>
           t.videoKey === video.key &&
           t.kind === kind &&
@@ -219,7 +218,8 @@ export const useWorkspace = defineStore("workspace", () => {
         "TASK_ALREADY_RUNNING",
         "同类任务正在执行，请等待完成或取消。",
       );
-    submitting.value.push(key);
+    state.submitting.push(key);
+    notify();
     try {
       const created = await api.create(kind, video.url, presetId);
       const item: LocalTask = {
@@ -240,22 +240,24 @@ export const useWorkspace = defineStore("workspace", () => {
         },
       };
       // Keep active jobs, even when the history cap is reached.
-      tasks.value = [item, ...tasks.value].filter(
+      state.tasks = [item, ...state.tasks].filter(
         (t, i) => i < 50 || !terminal(t.event.status),
       );
-      historyIds.value = [
+      state.historyIds = [
         item.id,
-        ...historyIds.value.filter((id) => id !== item.id),
+        ...state.historyIds.filter((id) => id !== item.id),
       ];
       persist();
       track(item);
       return item;
     } finally {
-      submitting.value = submitting.value.filter((v) => v !== key);
+      state.submitting = state.submitting.filter((v) => v !== key);
+      notify();
     }
   }
   async function cancel(item: LocalTask) {
     const snapshot = await api.cancel(item.id);
+    item = state.tasks.find((task) => task.id === item.id) || item;
     // Cancellation response may race a newer SSE frame; never regress the event version.
     if (snapshot.seq >= item.event.seq || snapshot.seq === 0) {
       item.snapshot = snapshot;
@@ -266,30 +268,68 @@ export const useWorkspace = defineStore("workspace", () => {
     }
   }
   function restore() {
-    tasks.value
+    trackingEnabled = true;
+    state.tasks
       .filter((t) => !terminal(t.event.status) || !t.snapshot)
       .forEach(track);
   }
   function stopAll() {
+    trackingEnabled = false;
     trackers.forEach((t) => t.stop());
     trackers.clear();
   }
   return {
-    videos,
-    tasks,
-    historyOpen,
-    historyTasks,
-    historyTotal,
-    historyOffset,
-    historyLoading,
-    historyLoaded,
+    get videos() {
+      return state.videos;
+    },
+    get tasks() {
+      return state.tasks;
+    },
+    get submitting() {
+      return state.submitting;
+    },
+    get historyOpen() {
+      return state.historyOpen;
+    },
+    setHistoryOpen(open: boolean) {
+      state.historyOpen = open;
+      notify();
+    },
+    get historyTasks() {
+      return state.historyLoaded
+        ? state.historyIds
+            .map((id) => state.tasks.find((task) => task.id === id))
+            .filter((task): task is LocalTask => !!task)
+        : state.tasks;
+    },
+    get historyTotal() {
+      return state.historyTotal;
+    },
+    get historyOffset() {
+      return state.historyOffset;
+    },
+    get historyLoading() {
+      return state.historyLoading;
+    },
+    get historyLoaded() {
+      return state.historyLoaded;
+    },
+    get activeCount() {
+      return state.tasks.filter((task) => !terminal(task.event.status)).length;
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getVersion: () => version,
     loadHistory,
-    submitting,
-    activeCount,
     remember,
     create,
     cancel,
     restore,
     stopAll,
   };
-});
+}
+export type Workspace = ReturnType<typeof createWorkspace>;

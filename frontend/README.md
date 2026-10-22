@@ -1,7 +1,8 @@
-# VideoHub AI 前端 · 本地 V1（阶段 8）
+# VideoHub AI 前端 · React 迁移版
 
-Vue 3 + TypeScript + Vite + Vue Router + Pinia + Tailwind CSS v4（`@tailwindcss/vite`）。
-Axios 统一响应与错误处理；Markmap 按需加载；Vitest 验证请求契约和任务追踪。
+React 19 + TypeScript + Vite + React Router + Tailwind CSS v4（`@tailwindcss/vite`）。
+共享状态通过 React Context + `useSyncExternalStore` 订阅；Axios 统一响应与错误处理；Markmap 按需加载。
+Vitest 验证请求契约、任务追踪及 React 页面交互。
 无示例数据注入生产代码，所有业务操作调用现有 `/api/v1`。
 
 ## 启动
@@ -76,23 +77,23 @@ pnpm preview
 ```
 
 Vitest 覆盖：SSE 严格版本去重、四种终态关闭、同序号终态结果读取、断线 1.5s 轮询、
-GET 失败重试、404 停止、错误任务 ID、作用域清理、Redis 降级 `seq=0`、响应解包、错误规范化、
+GET 失败重试、404 停止、错误任务 ID、订阅清理、Redis 降级 `seq=0`、响应解包、错误规范化、
 请求体契约、受控文件地址、树转 Markdown、视频元数据持久化、重复任务防护及入队失败重试。
 
-`dist/` 是静态发布产物。服务器需将 `/video/*` 回退至 `index.html`（Vue Router history 模式），
+`dist/` 是静态发布产物。服务器需将 `/video/*` 回退至 `index.html`（React Router BrowserRouter 模式），
 例如 Nginx `try_files $uri $uri/ /index.html;`。生产 API 使用 HTTPS，并配置对应 CORS 来源。
 Markmap 解析器与渲染器分包，仅在导图生成后加载。
 
 ## 文件清单
 
 - 工程：`package.json`、`pnpm-lock.yaml`、`vite.config.ts`、`tsconfig.json`、`index.html`、`.gitignore`、`.env.example`。
-- 应用与页面：`src/main.ts`、`src/App.vue`、`src/style.css`、`src/views/HomeView.vue`、`VideoWorkspaceView.vue`。
+- 应用与页面：`src/main.tsx`、`src/App.tsx`、`src/style.css`、`src/views/HomeView.tsx`、`VideoWorkspaceView.tsx`。
 - 契约与请求：`src/types/api.ts`、`src/api/client.ts`、`src/api/index.ts`。
-- 状态与追踪：`src/stores/workspace.ts`、`src/composables/useTaskPoller.ts`。
-- 组件：`AppHeader.vue`、`AppFooter.vue`、`TaskHistory.vue`、`TaskCard.vue`、`MindMapViewer.vue`、`ErrorNotice.vue`、`Icon.vue`。
-- 工具与测试：`src/utils.ts`、`src/tests/client.test.ts`、`taskPoller.test.ts`、`workspace.test.ts`。
-- 后端配套修改：`backend/app/core/config.py`、`backend/app/main.py`、`backend/tests/test_health.py`，仅新增可配置 CORS 与回归测试。
-- 根目录配套修改：`.env.example`、`.env.docker.example` 增补 CORS 示例。
+- 状态与追踪：`src/stores/workspace.ts`、`src/lib/taskTracker.ts`、`src/hooks/useWorkspace.tsx`、`src/hooks/useWorkspaceResults.ts`。
+- 组件：`AppHeader.tsx`、`AppFooter.tsx`、`TaskHistory.tsx`、`TaskCard.tsx`、`MindMapViewer.tsx`、`ErrorNotice.tsx`、`Icon.tsx`。
+- 工具与测试：`src/utils.ts`、`src/tests/client.test.ts`、`taskPoller.test.ts`、`workspace.test.ts`、`reactApp.test.tsx`。
+- 阶段 8 历史后端配套修改（本次迁移未修改后端）：`backend/app/core/config.py`、`backend/app/main.py`、`backend/tests/test_health.py`，仅新增可配置 CORS 与回归测试。
+- 阶段 8 历史根目录配套修改：`.env.example`、`.env.docker.example` 增补 CORS 示例。
 
 ## 阶段 8：服务器历史与过期清理
 
@@ -107,3 +108,28 @@ Markmap 解析器与渲染器分包，仅在导图生成后加载。
 
 推荐在项目根目录执行 `./scripts/dev.sh` 统一启动，确保 Solo Worker 不被遗漏。
 完整 21 项验收清单见根目录 README。
+
+
+## React 迁移说明（2026-10-22）
+
+- 所有 Vue 单文件组件迁移为 TSX，移除 Vue、Vue Router、Pinia、vue-tsc 与 Vue Vite 插件。
+- 保留首页、三栏工作台、移动端分区、下载、音频、文稿、总结、导图、历史、清理及错误重试。
+- 保留 `/api/v1`、文件下载 URL 和 `videohub.videos.v1` / `videohub.tasks.v1` 缓存格式，已有记录可直接恢复。
+- 任务追踪抽取为不依赖界面框架的 `src/lib/taskTracker.ts`；SSE 去重、轮询回退与终态完整结果查询规则保持一致。
+- React effect 清理关闭订阅、定时器和导图实例；结果请求在离开页面时中止，迟到的历史响应不会在应用卸载后重新启动订阅。
+- React 交互测试覆盖解析与刷新、错误重试、SSE 进度与保存、取消、总结与文稿、移动端 Tab、历史清理、焦点恢复、Strict Mode 和迟到响应。
+- 本次迁移只替换前端框架；登录注册、充值与管理端尚未实现。
+
+验收记录：前端 32 项测试、TypeScript 类型检查、生产构建通过；后端 `uv run pytest` 193 项通过。
+浏览器验收使用独立临时 API 夹具验证成功流程，夹具不进入生产代码；正常开发服务仍连接原后端。
+浏览器另验证原有 Vue 缓存可在 React 中恢复。真实平台与付费 AI 调用未在本次迁移重新验证。
+
+修改文件分组：
+
+- 工程依赖与入口：`package.json`、`pnpm-lock.yaml`、`tsconfig.json`、`vite.config.ts`、`index.html`、`src/main.tsx`、`src/App.tsx`。
+- 页面与组件：`src/views/*.tsx`、`src/components/*.tsx`，删除对应 `.vue` 文件与旧 `src/main.ts`。
+- 状态与异步：`src/stores/workspace.ts`、`src/hooks/*`、`src/lib/taskTracker.ts`、`src/api/index.ts`，删除旧 Vue composable。
+- 回归与文档：`src/tests/workspace.test.ts`、`src/tests/taskPoller.test.ts`、`src/tests/reactApp.test.tsx`、本文件与根目录 README。
+
+启动和验证命令沿用上文。后端运行时可通过 `curl --max-time 2 http://127.0.0.1:8000/api/v1/health/live`
+验证存活，在 `http://127.0.0.1:8000/docs` 检查 API；打开 `http://127.0.0.1:5173` 按浏览器交互验收逐项验证。

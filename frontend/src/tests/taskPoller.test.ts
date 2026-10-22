@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { effectScope } from "vue";
-import { createTaskTracker, useTaskPoller } from "../composables/useTaskPoller";
+import { createTaskTracker } from "../lib/taskTracker";
 import type { TaskEvent, TaskSnapshot } from "../types/api";
 import { ApiError } from "../api/client";
 class FakeSource {
@@ -150,20 +149,17 @@ describe("task SSE and polling", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(s.fetchTask).toHaveBeenCalledTimes(1);
   });
-  it("scope disposal closes the source, aborts I/O and cancels timers", async () => {
+  it("stopping closes the source, aborts I/O and cancels timers", async () => {
     const source = new FakeSource(),
       fetchTask = vi.fn().mockResolvedValue(snapshot(1));
-    const scope = effectScope();
-    scope.run(() =>
-      useTaskPoller("task-1", {
-        eventSource: () => source,
-        fetchTask,
-        onEvent: vi.fn(),
-        onSnapshot: vi.fn(),
-      }),
-    );
+    const tracker = createTaskTracker("task-1", {
+      eventSource: () => source,
+      fetchTask,
+      onEvent: vi.fn(),
+      onSnapshot: vi.fn(),
+    });
     source.onerror?.({} as Event);
-    scope.stop();
+    tracker.stop();
     await vi.advanceTimersByTimeAsync(5000);
     expect(source.close).toHaveBeenCalled();
     expect(fetchTask).not.toHaveBeenCalled();
