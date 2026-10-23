@@ -1,3 +1,4 @@
+from app.modules.auth.dependencies import creation_user
 from fastapi import APIRouter, Depends
 
 from app.core.response import success_response
@@ -13,5 +14,5 @@ def get_video_service() -> VideoService:
 
 
 @router.post("/parse", response_model=ParseResponse)
-async def parse_video(body: ParseRequest, service: VideoService = Depends(get_video_service)):
+async def parse_video(body: ParseRequest, service: VideoService = Depends(get_video_service), user=Depends(creation_user)):
     return success_response(await service.parse(body.url))

@@ -15,5 +15,7 @@ class AIService:
             {**payload, "output_language": language.lower(), "language": None,
              "content_version": settings.TRANSCRIPT_CONTENT_VERSION, "preset_id": "audio_mp3"})
 
-    async def get(self, result_id):
-        return asdict(await database_call(self.results.get, result_id))
+    async def get(self, result_id, user=None):
+        result = await database_call(self.results.get, result_id)
+        await self.tasks.authorize_artifact("result_id", result_id, result.task_id, user)
+        return asdict(result)

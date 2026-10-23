@@ -1,3 +1,4 @@
+import { authStore } from "../stores/auth";
 import axios from "axios";
 import type { ApiErrorBody } from "../types/api";
 export class ApiError extends Error {
@@ -43,19 +44,58 @@ export function normalizeError(error: unknown): ApiError {
 export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"
 ).replace(/\/$/, "");
-export const client = axios.create({ baseURL: API_BASE_URL, timeout: 45000 });
+export const client = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 45000,
+  withCredentials: true,
+});
+client.interceptors.request.use((config) => {
+  const token = authStore.getState().token;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 client.interceptors.response.use(
   (response) => {
     response.data = response.data.data;
     return response;
   },
-  (error) => Promise.reject(normalizeError(error)),
+  (error) => {
+    const normalized = normalizeError(error);
+    const current = authStore.getState();
+    const sentAuthorization = error.config?.headers?.Authorization || "";
+    const currentAuthorization = current.token ? `Bearer ${current.token}` : "";
+    if (
+      ["INVALID_TOKEN", "WECHAT_UNSUBSCRIBED"].includes(normalized.code) &&
+      sentAuthorization === currentAuthorization
+    ) {
+      authStore.clear(normalized.message);
+      if (error.config?.url !== "/auth/me") authStore.open();
+    }
+    if (
+      normalized.code === "AUTH_REQUIRED" &&
+      error.config?.url !== "/auth/me" &&
+      !current.user
+    )
+      authStore.open();
+    return Promise.reject(normalized);
+  },
 );
 export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await client.get<T>(path, { signal, timeout: 5000 })).data;
 }
-export async function post<T>(path: string, data?: unknown): Promise<T> {
-  return (await client.post<T>(path, data)).data;
+export async function post<T>(
+  path: string,
+  data?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
+  return (
+    await (signal
+      ? client.post<T>(path, data, { signal })
+      : client.post<T>(path, data))
+  ).data;
+}
+export async function del<T>(path: string): Promise<T> {
+  return (await client.delete<T>(path, { timeout: 10000 })).data;
 }
 export function apiUrl(path: string): string {
   const base = new URL(API_BASE_URL, window.location.origin);
@@ -67,5 +107,12 @@ export function apiUrl(path: string): string {
   ).href;
 }
 export function fileDownloadUrl(fileId: string): string {
-  return apiUrl(`/files/${encodeURIComponent(fileId)}/download`);
+  return authenticatedUrl(`/files/${encodeURIComponent(fileId)}/download`);
+}
+
+export function authenticatedUrl(path: string): string {
+  const url = new URL(apiUrl(path));
+  const token = authStore.getState().token;
+  if (token) url.searchParams.set("token", token);
+  return url.href;
 }

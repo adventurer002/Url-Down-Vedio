@@ -14,7 +14,10 @@ from app.modules.transcript.router import router as transcript_router
 
 from app.modules.ai.router import router as ai_router
 
+from app.modules.auth.router import router as auth_router
+
 router = APIRouter(prefix="/api/v1")
+router.include_router(auth_router)
 router.include_router(ai_router)
 from app.modules.system.router import router as system_router
 router.include_router(system_router)

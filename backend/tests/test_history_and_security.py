@@ -13,6 +13,8 @@ from sqlalchemy import select, update
 from test_tasks import MemoryBus, repository
 from test_download import storage, video
 from test_media_and_transcript import seed_media, task_for
+from app.modules.auth.dependencies import optional_user
+from app.modules.auth.repository import UserRepository
 from app.core.exceptions import AppException
 from app.core.logging import SensitiveURLFilter, install_log_redaction, redact_urls
 from app.infrastructure.storage import LocalStorageAdapter
@@ -36,14 +38,16 @@ def history(repository, storage):
 
 
 async def test_task_history_pagination_order_title_and_empty_page(repository, storage, video):
+    user = UserRepository(repository.sessions).subscription("history-user", True)
     ids = []
     for index in range(5):
         task = task_for(repository, video)
         ids.append(task.id)
         with repository.sessions.begin() as session:
-            session.execute(update(Task).where(Task.id == task.id).values(created_at=utcnow() + timedelta(seconds=index)))
+            session.execute(update(Task).where(Task.id == task.id).values(user_id=user.id, created_at=utcnow() + timedelta(seconds=index)))
     service = history(repository, storage)
     app = create_app(); app.dependency_overrides[get_history_service] = lambda: service
+    app.dependency_overrides[optional_user] = lambda: user
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get('/api/v1/tasks?limit=2&offset=1')
         assert response.status_code == 200
@@ -180,3 +184,44 @@ async def test_cleanup_endpoint_returns_bytes_and_unified_busy_error():
 def test_non_sensitive_query_email_is_not_mistaken_for_basic_auth():
     value = 'https://example.com?email=user@example.com&quality=720'
     assert redact_urls(value) == value
+
+
+async def test_history_delete_is_owned_persistent_and_keeps_jobs_and_grants(repository, storage):
+    users = UserRepository(repository.sessions)
+    owner = users.subscription("delete-history-owner", True)
+    other = users.subscription("delete-history-other", True)
+    active = repository.create("transcription", user_id=owner.id)
+    repository.start(active.id)
+    file_id = uuid4()
+    completed = repository.create("download", user_id=owner.id)
+    repository.finish(completed.id, "completed", 100, {"file_id": str(file_id)})
+    foreign = repository.create("download", user_id=other.id)
+    service = history(repository, storage)
+    app = create_app()
+    app.dependency_overrides[get_history_service] = lambda: service
+    app.dependency_overrides[optional_user] = lambda: owner
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.delete(f"/api/v1/tasks/history/{foreign.id}")).status_code == 404
+        assert (await client.delete(f"/api/v1/tasks/history/{uuid4()}")).status_code == 404
+        deleted = await client.delete(f"/api/v1/tasks/history/{active.id}")
+        assert deleted.json()["data"]["deleted_count"] == 1
+        assert (await client.get("/api/v1/tasks")).json()["data"]["total"] == 1
+        assert repository.get(active.id).status == "running"
+        assert not repository.get(active.id).cancel_requested
+        repository.finish(active.id, "completed", 100)
+        assert (await client.get("/api/v1/tasks")).json()["data"]["total"] == 1
+        # Bulk clear covers records beyond the visible first page.
+        for _ in range(25):
+            repository.create("download", user_id=owner.id)
+        cleared = await client.delete("/api/v1/tasks/history")
+        assert cleared.json()["data"]["deleted_count"] == 26
+        assert (await client.get("/api/v1/tasks")).json()["data"]["total"] == 0
+        assert (await client.delete("/api/v1/tasks/history")).json()["data"]["deleted_count"] == 0
+        assert (await client.delete(f"/api/v1/tasks/history/{active.id}")).json()["data"]["deleted_count"] == 0
+    assert repository.get(completed.id).result_payload["file_id"] == str(file_id)
+    assert repository.has_result_grant("file_id", [file_id], owner.id)
+    assert (await service.list(20, 0, user_id=other.id))["total"] == 1
+    app.dependency_overrides[optional_user] = lambda: None
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.delete("/api/v1/tasks/history")).status_code == 401
+        assert (await client.delete(f"/api/v1/tasks/history/{foreign.id}")).status_code == 401

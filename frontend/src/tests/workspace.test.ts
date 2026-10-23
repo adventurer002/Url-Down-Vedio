@@ -171,3 +171,73 @@ it("does not restart subscriptions when an in-flight history request finishes af
   store.restore();
   expect(createTaskTracker).toHaveBeenCalledTimes(1);
 });
+
+function historyItem(id: string, status = "completed") {
+  return {
+    task_id: id,
+    task_type: "download",
+    status,
+    progress: status === "completed" ? 100 : 20,
+    seq: 1,
+    stage: status,
+    error_code: null,
+    created_at: "2026-10-23T10:00:00Z",
+    video: null,
+    video_title: "历史任务",
+    download_available: false,
+  } as unknown as import("../types/api").TaskHistoryItem;
+}
+
+it("deletes history persistently without removing or cancelling active work", async () => {
+  vi.spyOn(api, "history").mockResolvedValue({
+    items: [historyItem("active", "running"), historyItem("done")],
+    total: 2,
+    offset: 0,
+    limit: 20,
+  });
+  vi.spyOn(api, "deleteHistory").mockResolvedValue({ deleted_count: 1 });
+  vi.spyOn(api, "clearHistory").mockResolvedValue({ deleted_count: 1 });
+  const cancel = vi.spyOn(api, "cancel");
+  const store = createWorkspace();
+  await store.loadHistory();
+  await store.deleteHistory("active");
+  expect(store.historyTasks.map((task) => task.id)).toEqual(["done"]);
+  expect(store.tasks.find((task) => task.id === "active")?.event.status).toBe(
+    "running",
+  );
+  expect(store.activeCount).toBe(1);
+  await store.deleteHistory();
+  expect(store.historyTasks).toEqual([]);
+  expect(store.historyTotal).toBe(0);
+  expect(store.tasks).toHaveLength(2);
+  expect(createWorkspace().historyTasks).toEqual([]);
+  expect(cancel).not.toHaveBeenCalled();
+});
+
+it("ignores an older history response after deletion and retains records on deletion failure", async () => {
+  const item = historyItem("done");
+  const page = { items: [item], total: 1, offset: 0, limit: 20 };
+  const history = vi.spyOn(api, "history").mockResolvedValue(page);
+  const remove = vi
+    .spyOn(api, "deleteHistory")
+    .mockRejectedValueOnce(new Error("offline"));
+  const store = createWorkspace();
+  await store.loadHistory();
+  await expect(store.deleteHistory("done")).rejects.toThrow("offline");
+  expect(store.historyTasks).toHaveLength(1);
+  expect(store.historyMutating).toBe(false);
+  let resolve!: (value: typeof page) => void;
+  history.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const loading = store.loadHistory();
+  remove.mockResolvedValueOnce({ deleted_count: 1 });
+  await store.deleteHistory("done");
+  resolve(page);
+  await loading;
+  expect(store.historyTasks).toEqual([]);
+  expect(store.historyTotal).toBe(0);
+});

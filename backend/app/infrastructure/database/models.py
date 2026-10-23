@@ -6,4 +6,6 @@ from app.modules.video.models import Video
 from app.modules.transcript.models import Transcript
 from app.modules.ai.models import AIResult
 
-__all__ = ["Video", "Task", "MediaFile", "Transcript", "AIResult"]
+from app.modules.auth.models import User
+
+__all__ = ["Video", "Task", "MediaFile", "Transcript", "AIResult", "User"]

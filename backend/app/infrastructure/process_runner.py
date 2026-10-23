@@ -105,10 +105,18 @@ class ProcessRunner:
                                 "DOWNLOAD_TIMEOUT": "下载或转换超时", "FILE_TOO_LARGE": "文件超过任务体积上限",
                                 "FFMPEG_UNAVAILABLE": "服务端缺少 FFmpeg", "VIDEO_ID_CHANGED": "视频身份发生变化",
                                 "AUDIO_STREAM_UNAVAILABLE": "没有独立音轨，已阻止下载完整视频",
-                                "SUBTITLE_FETCH_FAILED": "字幕获取失败", "SUBTITLE_TOO_LARGE": "字幕文件超过大小限制"}
+                                "SUBTITLE_FETCH_FAILED": "字幕获取失败", "SUBTITLE_TOO_LARGE": "字幕文件超过大小限制",
+                                "YTDLP_PROXY_INVALID": "服务器视频网络出口配置无效，请联系管理员",
+                                "YTDLP_RUNTIME_UNAVAILABLE": "服务器视频解析运行时不可用，请联系管理员",
+                                "SOURCE_ACCESS_RESTRICTED": "视频平台要求额外验证或限制了服务器访问，请稍后重试",
+                                "SOURCE_RATE_LIMITED": "视频平台请求频率受限，请稍后重试",
+                                "SOURCE_NETWORK_UNAVAILABLE": "服务器暂时无法连接视频平台，请稍后重试",
+                                "PARSE_TIMEOUT": "视频平台连接或解析超时",
+                                "PARSE_FAILED": "视频平台解析失败"}
                     if code not in messages:
                         code = "DOWNLOAD_FAILED"
-                    raise AppException(code, messages.get(code, "视频下载失败"), 502)
+                    status = 503 if code in {"YTDLP_PROXY_INVALID", "YTDLP_RUNTIME_UNAVAILABLE", "SOURCE_RATE_LIMITED"} else 504 if code == "PARSE_TIMEOUT" else 502
+                    raise AppException(code, messages.get(code, "视频下载失败"), status)
                 if isinstance(event.get("progress"), int) and 0 <= event["progress"] <= 100:
                     await on_progress(event)
                 last = event

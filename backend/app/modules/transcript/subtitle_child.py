@@ -1,12 +1,14 @@
 from contextlib import redirect_stdout
 import json
-import os
 from pathlib import Path
 import re
 import sys
 
+from yt_dlp.utils import DownloadError
+
 from app.core.exceptions import AppException
-from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info
+from app.modules.video.parsers.runtime import server_proxy
+from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info, map_extraction_error
 from app.modules.video.parsers.ytdlp_worker import NetworkGuard, guarded_downloader
 
 
@@ -26,10 +28,11 @@ def select_language(info: dict, requested: str | None) -> str | None:
 
 
 def fetch(payload: dict, directory: Path, emit):
-    guard = NetworkGuard(os.environ.get("YTDLP_PROXY"))
+    proxy = server_proxy()
+    guard = NetworkGuard(proxy)
     with guard.installed():
         guard.check_url(payload["url"])
-        options = extraction_options(os.environ.get("YTDLP_PROXY"))
+        options = extraction_options(proxy)
         # Bilibili (and some other extractors) only query subtitle tracks on request.
         # The metadata-only downloader still forbids all file/media writes.
         options["listsubtitles"] = True
@@ -73,7 +76,13 @@ def main():
         with redirect_stdout(sys.stderr):
             fetch(json.loads(sys.argv[1]), Path(sys.argv[2]), emit)
     except Exception as exc:
-        emit({"error_code": exc.code if isinstance(exc, AppException) else "SUBTITLE_FETCH_FAILED"})
+        if isinstance(exc, AppException):
+            code = exc.code
+        elif isinstance(exc, DownloadError):
+            code = map_extraction_error(exc).code
+        else:
+            code = "SUBTITLE_FETCH_FAILED"
+        emit({"error_code": code})
         raise SystemExit(1)
 
 

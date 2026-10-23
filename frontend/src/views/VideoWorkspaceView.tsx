@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceResults } from "../hooks/useWorkspaceResults";
@@ -6,24 +6,34 @@ import { api } from "../api";
 import { ApiError, normalizeError } from "../api/client";
 import { terminal } from "../lib/taskTracker";
 import type { JobKind } from "../types/api";
-import { filesize, timecode } from "../utils";
+import { timecode } from "../utils";
 import Icon from "../components/Icon";
 import ErrorNotice from "../components/ErrorNotice";
 import TaskCard from "../components/TaskCard";
 import MindMapViewer from "../components/MindMapViewer";
+import DownloadSettings from "../components/DownloadSettings";
+
 export default function VideoWorkspaceView() {
   const store = useWorkspace(),
     { id = "" } = useParams();
   const video = store.videos.find((item) => item.key === id),
     jobs = store.tasks.filter((task) => task.videoKey === id);
-  const [tab, setTab] = useState("content"),
+  const [tab, setTab] = useState("media"),
     [raw, setRaw] = useState(false),
-    [collapsed, setCollapsed] = useState(false),
     [thumbnailFailed, setThumbnailFailed] = useState(false);
   const [error, setError] = useState<ApiError | null>(null),
     [refreshingMetadata, setRefreshingMetadata] = useState(false);
   const { summary, transcript, mindmap, resultError, reloadResults } =
     useWorkspaceResults(id);
+  const [copying, setCopying] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<{ message: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!copyFeedback) return;
+    const timer = window.setTimeout(() => setCopyFeedback(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copyFeedback]);
   function busy(kind: JobKind) {
     return (
       store.submitting.includes(`${video?.key}:${kind}`) ||
@@ -73,14 +83,15 @@ export default function VideoWorkspaceView() {
         <Link to="/">首页</Link>
         <span>/</span>
         <span>视频工作台</span>
-        <span className="workspace-tag">WORKSPACE</span>
       </div>
       <div className="workspace-heading">
         <div>
-          <span className="eyebrow">MAKE IT YOURS</span>
-          <h1>一个视频，无限收获。</h1>
+          <h1>视频工作台</h1>
         </div>
-        <span className="workspace-heading-note">下载 · 阅读 · 理解</span>
+        <Link to="/" className="button secondary new-video">
+          <Icon name="plus-circle" size={22} />
+          解析新视频
+        </Link>
       </div>
       <ErrorNotice error={error} />
       <ErrorNotice error={resultError}>
@@ -88,122 +99,141 @@ export default function VideoWorkspaceView() {
           重新加载结果
         </button>
       </ErrorNotice>
-      <nav className="mobile-tabs" aria-label="工作台分区">
+      <nav className="workspace-tabs" role="tablist" aria-label="工作台分区">
         {[
-          { id: "media", label: "视频与下载" },
-          { id: "content", label: "文稿与总结" },
-          { id: "mindmap", label: "思维导图" },
-        ].map((item) => (
+          { id: "media", label: "视频下载", icon: "download" },
+          { id: "content", label: "文稿与总结", icon: "text" },
+          { id: "mindmap", label: "思维导图", icon: "map" },
+        ].map((item, index, items) => (
           <button
             key={item.id}
-            className={tab === item.id ? "active" : ""}
-            aria-pressed={tab === item.id}
+            id={`tab-${item.id}`}
+            role="tab"
+            aria-selected={tab === item.id}
+            aria-controls={`panel-${item.id}`}
+            tabIndex={tab === item.id ? 0 : -1}
             onClick={() => setTab(item.id)}
+            onKeyDown={(event) => {
+              let next = index;
+              if (event.key === "ArrowRight") next = (index + 1) % items.length;
+              else if (event.key === "ArrowLeft")
+                next = (index + items.length - 1) % items.length;
+              else if (event.key === "Home") next = 0;
+              else if (event.key === "End") next = items.length - 1;
+              else return;
+              event.preventDefault();
+              setTab(items[next]!.id);
+              document.getElementById(`tab-${items[next]!.id}`)?.focus();
+            }}
           >
+            <Icon name={item.icon} size={23} />
             {item.label}
           </button>
         ))}
       </nav>
-      <div className={"workspace-grid" + (collapsed ? " map-collapsed" : "")}>
-        <aside
-          className={
-            "workspace-panel media-panel" +
-            (tab === "media" ? " mobile-active" : "")
-          }
+      <div className="workspace-grid">
+        <section
+          className="workspace-panel media-panel"
+          role="tabpanel"
+          id="panel-media"
+          aria-labelledby="tab-media"
+          hidden={tab !== "media"}
         >
-          <div className="panel-heading">
-            <span className="panel-number">01</span>
-            <h2>视频与下载</h2>
-            <Icon name="download" size={18} />
-          </div>
-          <div className="thumbnail">
-            {video.metadata.thumbnail && !thumbnailFailed ? (
-              <img
-                src={video.metadata.thumbnail}
-                alt="视频封面"
-                referrerPolicy="no-referrer"
-                onError={() => setThumbnailFailed(true)}
-              />
-            ) : (
-              <div className="thumbnail-placeholder">
-                <Icon name="play" size={34} />
-                <span>VIDEOHUB</span>
-              </div>
-            )}
-            <span className="duration">
-              {timecode(video.metadata.duration)}
+          <div className="download-panel-heading">
+            <Icon name="download" size={30} />
+            <div>
+              <h2>视频下载</h2>
+              <p>选择格式与清晰度，保存精彩内容。</p>
+            </div>
+            <span className="parse-status">
+              <span />
+              {video.partial ? "待更新档位" : "解析完成"}
             </span>
           </div>
-          <div className="video-meta">
-            {video.partial && (
-              <button
-                className="button secondary full"
-                disabled={refreshingMetadata}
-                onClick={refreshMetadata}
-              >
-                {refreshingMetadata ? "正在更新档位…" : "重新解析可用下载档位"}
-              </button>
-            )}
-            <span className="platform-badge">{video.metadata.platform}</span>
-            <h2>{video.metadata.title}</h2>
-            <p>{video.metadata.uploader || "公开资源"}</p>
-          </div>
-          <div className="download-section">
-            <div className="mini-heading">
-              选择下载格式
-              <span>{video.metadata.download_options.length} 个选项</span>
-            </div>
-            {video.metadata.download_options.map((option) => (
-              <button
-                key={option.id}
-                className="format-button"
-                disabled={busy("download")}
-                onClick={() => void create("download", option.label, option.id)}
-              >
-                <span>
-                  <strong>
-                    {option.height
-                      ? option.height + "P " + option.container.toUpperCase()
-                      : "仅音频 MP3"}
-                  </strong>
-                  <small>{filesize(option.estimated_size_bytes)}</small>
+          <div className="download-layout">
+            <div className="video-preview-column">
+              <div className="thumbnail">
+                {video.metadata.thumbnail && !thumbnailFailed ? (
+                  <img
+                    src={video.metadata.thumbnail}
+                    alt="视频封面"
+                    referrerPolicy="no-referrer"
+                    onError={() => setThumbnailFailed(true)}
+                  />
+                ) : (
+                  <div className="thumbnail-placeholder">
+                    <Icon name="play" size={40} />
+                    <span>暂无视频封面</span>
+                  </div>
+                )}
+                {/^https?:\/\//i.test(video.url) && (
+                  <a
+                    href={video.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="source-play"
+                    aria-label="在原平台播放视频"
+                  >
+                    <Icon name="play" size={32} />
+                  </a>
+                )}
+                <span className="duration">
+                  {timecode(video.metadata.duration)}
                 </span>
-                <Icon name="download" size={17} />
-              </button>
-            ))}
-            {!video.metadata.download_options.length && (
-              <p className="muted">该视频暂无可下载的档位。</p>
-            )}
-            {taskCard("download")}
-            <div className="audio-section">
-              <span className="mini-heading">只想听声音？</span>
-              <button
-                className="button secondary full"
-                disabled={busy("audio_extraction")}
-                onClick={() => void create("audio_extraction", "纯音频 MP3")}
-              >
-                <Icon name="download" size={16} />
-                提取纯音频 MP3
-              </button>
+              </div>
+              <div className="video-meta">
+                <div className="video-title">
+                  <h2>{video.metadata.title}</h2>
+                  <p>{video.metadata.uploader || "公开资源"}</p>
+                </div>
+                {/^https?:\/\//i.test(video.url) && (
+                  <a
+                    className="source-link"
+                    href={video.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    查看原视频
+                    <Icon name="external" size={17} />
+                  </a>
+                )}
+              </div>
+              {video.partial && (
+                <button
+                  className="button secondary full"
+                  disabled={refreshingMetadata}
+                  onClick={refreshMetadata}
+                >
+                  {refreshingMetadata
+                    ? "正在更新档位…"
+                    : "重新解析可用下载档位"}
+                </button>
+              )}
+            </div>
+            <div className="download-settings-column">
+              <DownloadSettings
+                options={video.metadata.download_options}
+                downloading={busy("download")}
+                extracting={busy("audio_extraction")}
+                onCreate={(kind, label, presetId) =>
+                  void create(kind, label, presetId)
+                }
+              />
+              {taskCard("download")}
               {taskCard("audio_extraction")}
             </div>
-            <p className="panel-footnote">
-              仅处理公开免登录资源。
-              <br />
-              请尊重创作者与内容版权。
-            </p>
           </div>
-        </aside>
+        </section>
         <section
-          className={
-            "workspace-panel content-panel" +
-            (tab === "content" ? " mobile-active" : "")
-          }
+          className="workspace-panel content-panel"
+          role="tabpanel"
+          id="panel-content"
+          aria-labelledby="tab-content"
+          hidden={tab !== "content"}
         >
           <div className="panel-heading">
-            <span className="panel-number">02</span>
+            <Icon name="text" size={23} />
             <h2>文稿与总结</h2>
-            <Icon name="text" size={18} />
           </div>
           <div className="content-actions">
             <button
@@ -236,10 +266,57 @@ export default function VideoWorkspaceView() {
                     : "基于语音转写"}
                 </span>
                 {summary && (
-                  <span className="model-label">
-                    {summary.llm_provider === "heuristic"
-                      ? "本地摘录模式"
-                      : summary.llm_model}
+                  <span className="summary-copy">
+                    <button
+                      className="model-copy-button"
+                      title="复制完整总结"
+                      disabled={copying}
+                      onClick={async () => {
+                        const c = summary.content_json;
+                        const lines: string[] = [];
+                        lines.push(c.overview || "");
+                        if (
+                          Array.isArray(c.key_points) &&
+                          c.key_points.length
+                        ) {
+                          lines.push("", "【要点】");
+                          c.key_points.forEach((p: string, i: number) =>
+                            lines.push(`${i + 1}. ${p}`),
+                          );
+                        }
+                        if (Array.isArray(c.chapters) && c.chapters.length) {
+                          lines.push("", "【章节】");
+                          c.chapters.forEach(
+                            (ch: {
+                              title: string;
+                              summary: string;
+                              start_seconds: number;
+                            }) =>
+                              lines.push(
+                                `[${timecode(ch.start_seconds)}] ${ch.title}\n${ch.summary}`,
+                              ),
+                          );
+                        }
+                        setCopying(true);
+                        setCopyFeedback(null);
+                        try {
+                          await navigator.clipboard.writeText(lines.join("\n"));
+                          setCopyFeedback({ message: "复制成功" });
+                        } catch {
+                          setCopyFeedback({ message: "复制失败，请重试" });
+                        } finally {
+                          setCopying(false);
+                        }
+                      }}
+                    >
+                      <Icon name="copy" size={12} />
+                      复制总结
+                    </button>
+                    {copyFeedback && (
+                      <span className="copy-feedback" role="status">
+                        {copyFeedback.message}
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
@@ -339,26 +416,17 @@ export default function VideoWorkspaceView() {
           )}
         </section>
         <section
-          className={
-            "workspace-panel map-panel" +
-            (tab === "mindmap" ? " mobile-active" : "")
-          }
+          className="workspace-panel map-panel"
+          role="tabpanel"
+          id="panel-mindmap"
+          aria-labelledby="tab-mindmap"
+          hidden={tab !== "mindmap"}
         >
           <div className="panel-heading">
-            <span className="panel-number">03</span>
+            <Icon name="map" size={23} />
             <h2>思维导图</h2>
-            <button
-              className="icon-button collapse-map"
-              aria-label={collapsed ? "展开思维导图" : "折叠思维导图"}
-              onClick={() => setCollapsed(!collapsed)}
-            >
-              <Icon name={collapsed ? "plus" : "minus"} size={17} />
-            </button>
           </div>
-          <div
-            className="map-content"
-            style={{ display: collapsed ? "none" : undefined }}
-          >
+          <div className="map-content">
             <div className="map-intro">
               <p>把内容连成一张知识地图。</p>
               <button

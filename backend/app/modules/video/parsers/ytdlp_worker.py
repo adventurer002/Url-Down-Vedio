@@ -7,7 +7,6 @@ The socket patch lives only in this dedicated process, never in FastAPI.
 from contextlib import contextmanager, redirect_stdout
 from dataclasses import asdict
 import json
-import os
 import socket
 import sys
 import urllib.request
@@ -17,6 +16,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.networking._urllib import RedirectHandler, UrllibRH
 
 from app.core.exceptions import AppException
+from app.modules.video.parsers.runtime import server_proxy
 from app.core.security import check_dns_results, normalize_url
 from app.modules.video.parsers.ytdlp import extraction_options, map_extraction_error, metadata_from_info
 
@@ -148,7 +148,7 @@ def extract_metadata(url: str, proxy: str | None = None) -> dict:
 def main():
     try:
         with redirect_stdout(sys.stderr):
-            result = extract_metadata(sys.argv[1], os.environ.get("YTDLP_PROXY"))
+            result = extract_metadata(sys.argv[1], server_proxy())
     except Exception as exc:
         result = {"error": map_extraction_error(exc).code}
     # Extractor diagnostic output must never corrupt the protocol or reach clients.

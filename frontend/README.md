@@ -133,3 +133,101 @@ Markmap 解析器与渲染器分包，仅在导图生成后加载。
 
 启动和验证命令沿用上文。后端运行时可通过 `curl --max-time 2 http://127.0.0.1:8000/api/v1/health/live`
 验证存活，在 `http://127.0.0.1:8000/docs` 检查 API；打开 `http://127.0.0.1:5173` 按浏览器交互验收逐项验证。
+
+## 首页视觉调整：第一步
+
+页面、导航和功能卡片使用纯白背景，功能卡片边框为 `#E5E7EB`。
+主标题保持原有响应式字号，两部分均为深黑；副标题 18px / `#4B5563`，
+功能说明 15px，解析按钮文字桌面 15px、手机 14px。
+
+- 任务历史为顶部主要入口；登录后的昵称、关注状态和退出操作位于头像菜单。
+- 空输入解析会提示“请先粘贴视频链接”并聚焦输入框。
+- 缓存清理移至 `/settings`；`/admin` 仅向管理员展示原有健康检查面板。
+  这是页面层的显示控制，原有后端健康接口的公开语义保持不变。
+- 页脚提供 `/help`、`/privacy` 和 `/settings` 的有效入口，普通页面不再轮询服务状态。
+- 本步未添加结果示例，也没有提交真实视频执行下载、转写或 AI 处理。
+
+修改文件：`src/App.tsx`、`src/style.css`、`src/components/{AppHeader,AppFooter,TaskHistory,Icon}.tsx`、
+`src/views/HomeView.tsx`、`src/tests/reactApp.test.tsx`、本 README。
+新增 `src/views/{SettingsView,AdminView,InfoView}.tsx`。
+
+在 `frontend/` 启动和检查：
+
+```sh
+pnpm run dev
+pnpm run type-check
+pnpm run build
+pnpm run test:unit
+```
+
+浏览器验收：首页空输入点击解析、打开任务历史、登录后打开头像菜单、从页脚进入设置/帮助/隐私。
+管理页只有管理员账户展示服务状态。375px / 320px 宽度已检查无横向溢出。
+后端接口未修改；从 `backend/` 使用测试默认配置执行回归（不覆盖本机 `.env`）：
+
+```sh
+AUTH_REQUIRED=False WECHAT_MP_STATIC_QR_URL= uv run pytest
+```
+
+API 和 Worker 启动及 Swagger / curl 流程沿用 [后端交付说明](../backend/STAGE9.md)。
+
+本次检查：前端类型检查、生产构建通过，45 项前端测试通过；后端默认测试配置下 210 项通过。
+
+## 首页平台标识滚动带
+
+首页解析区与功能卡片之间接入用户提供的 [React Bits LogoLoop](https://reactbits.dev/animations/logo-loop)
+TypeScript + Tailwind 源码。品牌图标使用 `react-icons/si`，按需打包，不请求外部图片。
+
+- 直线布局、黑白配色、速度 30 px/s、标识高度 28px、间距 48px、两端渐隐。
+- 悬停暂停；首页不展示手动暂停按钮。
+- 开启 `prefers-reduced-motion: reduce` 时替换为完整的静态列表；重复动画副本不进入无障碍树。
+- 页面卸载时销毁动画引擎、监听器与观察器。
+- YouTube、bilibili、Vimeo、Dailymotion、TikTok 均对应已安装 yt-dlp 的命名提取器。
+  本次为前端集成与离线能力核对，没有对各平台真实视频逐个联调；单个资源仍以实际解析结果为准。
+
+本次文件：新增 `src/components/{LogoLoop,PlatformLogos}.tsx`、`src/tests/logoLoop.test.tsx`；
+修改 `src/views/HomeView.tsx`、`src/style.css`、`package.json`、`pnpm-lock.yaml` 和本 README。
+
+使用上文 `pnpm run dev` 启动：首页可直接查看滚动带；鼠标移入观察暂停，移出继续，
+系统启用“减少动态效果”后应显示静态平台列表。
+后端接口与 Swagger / curl 验证流程保持不变。
+
+本次集成验收：类型检查与生产构建通过，47 项前端测试通过，后端默认配置下 210 项通过。
+浏览器已检查桌面循环/悬停暂停及 375px 手机宽度无横向溢出。
+
+## 首页 AeroShards 背景
+
+首屏采用用户提供的 React Bits AeroShards：400 片浅灰玻璃碎片、低速流动、两侧遮罩留白，关闭鼠标聚拢与点击脉冲，不展示暂停按钮。`HeroBackground.tsx` 负责按需加载、手机（<=767px）和减少动态效果模式下不挂载、WebGPU 初始化失败时回退纯白。
+
+`AeroShards.tsx` 使用 vgpu 0.6；原内联着色器拆至 `components/aero-shards/*.wgsl`，由 `@vgpu/wgsl/loader-vite` 在构建期生成类型化着色器，避免在浏览器解析反射信息。页面不可见时停止渲染，组件卸载释放 GPU 资源。依赖中的 Node GPU 适配器安装脚本无需启用，浏览器使用原生 WebGPU。
+
+本次文件：`HomeView.tsx`、`HeroBackground.tsx`、`AeroShards.tsx`、`components/aero-shards/*.wgsl`、`src/wgsl.d.ts`、`style.css`、`vite.config.ts`、`package.json`、`pnpm-lock.yaml`、`tests/heroBackground.test.tsx` 和本说明。
+
+验证：`pnpm type-check`、`pnpm build`、`pnpm test:unit`（51 项通过）；浏览器检查桌面背景、空输入聚焦与提示，以及 390px 手机端纯白降级。启动仍使用 `pnpm dev`，访问 <http://127.0.0.1:5173>；本次为前端展示修改，无新增 HTTP 接口。
+
+首页在 LogoLoop 后结束，不展示功能卡片、底部标语和页脚；其他页面继续保留帮助与设置页脚入口。
+
+## 视频工作台参考图改版
+
+工作台默认打开“视频下载”，三个标签在桌面和手机端均可切换，支持方向键、Home/End。下载面板使用左侧封面/来源信息、右侧下载设置的布局，手机端转为单栏。封面播放入口打开原平台页面，不伪装站内播放器。
+
+清晰度和容器仅取自解析接口的真实 `download_options`；选择档位不创建任务，点击“下载视频”才提交所选 `preset_id`。格式下拉框统一选择视频容器或 MP3 音频，MP3 使用既有 `audio_extraction` 流程并隐藏清晰度。没有视频档位时禁用视频下载；未知文件大小明确显示“大小待计算”。任务进度、取消、结果保存、字幕、总结和导图逻辑沿用原接口。
+
+修改文件：`src/views/VideoWorkspaceView.tsx`、`src/components/DownloadSettings.tsx`、`AppHeader.tsx`、`AppFooter.tsx`、`Icon.tsx`、`src/style.css`、`src/tests/reactApp.test.tsx`、`src/tests/downloadSettings.test.tsx` 与本说明。
+
+启动：在 `frontend/` 执行 `pnpm dev`，从首页解析公开视频进入 `/video/:id`，检查清晰度选择、格式切换、视频/MP3 音频任务及三个标签。API/Worker 启动命令见前文；Swagger `/docs` 可验证现有 `/api/v1/videos/parse`、`/downloads`、`/tasks/{id}`，本次无新增接口。
+
+验证：类型检查、构建及 53 项前端测试通过，浏览器检查桌面双栏、390px 手机单栏无横向溢出、标签键盘切换与音频模式。布局截图使用独立临时预览数据，未写入产品记录，也不代表真实视频下载已经验收。
+
+工作台已压缩标题与标签导航，删除副标题、来源图标和底部跨标签提示；下载格式使用紧凑下拉框，不再展示独立的视频/仅音频切换或音频介绍卡片。
+
+格式下拉箭头向内缩进 10px，保留原生下拉框的键盘操作。总结复制成功后在按钮上方显示约 2 秒的“复制成功”提示；剪贴板写入失败显示“复制失败，请重试”。提示通过 `role=status` 宣告，计时器在组件卸载时清理。类型检查、构建和 53 项前端测试通过，已有工作台测试覆盖复制 Promise 完成前不误报成功及复制失败反馈。
+
+任务历史支持每条记录“删除”和“一键清除”。操作仅影响当前用户历史可见性，不取消任务或删除文件；清除覆盖服务器全部分页。按钮在请求期间禁用，失败显示错误并保留列表；持久化本地隐藏状态并丢弃过期刷新响应，运行任务继续跟踪。后端需先执行 Alembic 0005 迁移。前端类型、构建及 56 项测试通过。
+
+## 首页登录拦截与 StarBorder 登录入口
+
+未登录、未关注或账户停用时，点击首页视频输入框、开始解析、任务历史均打开同一个公众号登录卡片；键盘输入、粘贴和表单提交也经过相同入口检查。输入框在登录前只读，已关注并登录后正常输入解析。关闭卡片恢复焦点时不会再次自动弹出。后端报告取关或凭证失效时，清除当前凭证并重新打开登录卡片；账户恢复探测失败不会在页面首次打开时强制弹窗。
+
+顶栏将“关注公众号登录”改为“登录”，使用用户提供的 React Bits `StarBorder.tsx`（浅色、黑色流光、4 秒一圈），保留现有二维码与口令登录流程。动画在标签页隐藏时暂停，减少动态效果模式使用静态边框；旧浏览器缺少 Canvas/Observer 时仍保留可点击登录按钮。
+
+修改：`StarBorder.tsx`、`AppHeader.tsx`、`TaskHistory.tsx`、`HomeView.tsx`、`App.tsx`、`stores/auth.ts`、`api/client.ts`、`style.css`、对应前端测试和本说明。启动仍为 `pnpm dev`；无新增接口，在首页分别点击三个入口验证卡片，再登录验证正常解析与历史访问。

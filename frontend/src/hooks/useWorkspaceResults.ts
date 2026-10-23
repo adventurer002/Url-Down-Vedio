@@ -1,3 +1,4 @@
+import { useAuth } from "../stores/auth";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { ApiError, normalizeError } from "../api/client";
@@ -11,6 +12,8 @@ import { useWorkspace } from "./useWorkspace";
 
 export function useWorkspaceResults(videoKey: string) {
   const store = useWorkspace();
+  const auth = useAuth();
+  const identity = auth.user?.id || "";
   const cache = useRef(new Map<string, AIResult | TranscriptResult>());
   const [summary, setSummary] = useState<SummaryResult>();
   const [transcript, setTranscript] = useState<TranscriptResult>();
@@ -24,6 +27,13 @@ export function useWorkspaceResults(videoKey: string) {
         `${task.id}:${task.event.status}:${task.snapshot?.result_payload?.result_id || task.snapshot?.result_payload?.transcript_id || ""}`,
     )
     .join("|");
+  useEffect(() => {
+    cache.current.clear();
+    setSummary(undefined);
+    setTranscript(undefined);
+    setMindmap(undefined);
+    setError(null);
+  }, [identity]);
   useEffect(() => {
     let disposed = false;
     const controller = new AbortController();
@@ -83,7 +93,7 @@ export function useWorkspaceResults(videoKey: string) {
       disposed = true;
       controller.abort();
     };
-  }, [store, videoKey, signature, attempt]);
+  }, [store, videoKey, signature, attempt, identity]);
   return {
     summary,
     transcript,

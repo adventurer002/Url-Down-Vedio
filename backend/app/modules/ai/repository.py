@@ -52,6 +52,10 @@ class AIRepository:
             item = session.scalar(select(AIResult).where(*self.key(content_hash, result_type, model, version, language)))
             return record(item) if item else None
 
+    def ids_for_transcript(self, transcript_id: UUID) -> list[UUID]:
+        with self.sessions() as session:
+            return list(session.scalars(select(AIResult.id).where(AIResult.transcript_id == transcript_id)))
+
     def get(self, result_id: UUID) -> AIRecord:
         with self.sessions() as session:
             item = session.get(AIResult, result_id)

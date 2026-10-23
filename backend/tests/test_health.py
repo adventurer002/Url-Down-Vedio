@@ -142,3 +142,26 @@ async def test_frontend_cors_allows_local_vite_origin():
         assert "access-control-allow-origin" not in response.headers
         response = await client.get("/api/v1/unknown", headers={"Origin": "http://127.0.0.1:5173"})
         assert response.status_code == 404 and response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
+@pytest.mark.parametrize("origin", ["http://localhost:5173", "http://127.0.0.1:5173"])
+@pytest.mark.parametrize("path", ["/api/v1/tasks/history", "/api/v1/tasks/history/00000000-0000-0000-0000-000000000001"])
+async def test_history_delete_cors_preflight_and_auth_errors(origin, path):
+    from httpx import ASGITransport, AsyncClient
+    from app.main import create_app
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as client:
+        response = await client.options(path, headers={
+            "Origin": origin, "Access-Control-Request-Method": "DELETE",
+            "Access-Control-Request-Headers": "authorization,content-type"})
+        assert response.status_code == 200
+        assert "DELETE" in response.headers["access-control-allow-methods"]
+        assert response.headers["access-control-allow-origin"] == origin
+        assert response.headers["access-control-allow-credentials"] == "true"
+        denied = await client.delete(path, headers={"Origin": origin})
+        assert denied.status_code == 401
+        assert denied.json()["error"]["code"] == "AUTH_REQUIRED"
+        assert denied.headers["access-control-allow-origin"] == origin
+        rejected = await client.options(path, headers={
+            "Origin": "https://untrusted.example", "Access-Control-Request-Method": "DELETE"})
+        assert rejected.status_code == 400
+        assert "access-control-allow-origin" not in rejected.headers

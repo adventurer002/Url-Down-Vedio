@@ -1,3 +1,4 @@
+import { authApi, authStore } from "../stores/auth";
 // @vitest-environment jsdom
 import { StrictMode } from "react";
 import {
@@ -7,6 +8,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -92,6 +94,11 @@ class FakeSource {
   }
 }
 beforeEach(() => {
+  authStore.clear();
+  authStore.close();
+  vi.spyOn(authStore, "restore").mockResolvedValue();
+  // Existing workspace tests isolate their behavior from the login gate.
+  vi.spyOn(authStore, "hasAccess").mockReturnValue(true);
   const data = new Map<string, string>();
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => data.get(key) ?? null,
@@ -159,7 +166,7 @@ it("parses a URL, navigates to the React workspace and retains metadata after re
   expect(
     await screen.findByRole("heading", { name: metadata.title }),
   ).toBeTruthy();
-  expect(screen.getByRole("button", { name: /720P MP4/ })).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /720P/ })).toBeTruthy();
   cleanup();
   mount("/video/demo_one");
   expect(
@@ -195,7 +202,8 @@ it("reacts to SSE progress, fetches the completed result and exposes the control
   });
   vi.spyOn(api, "task").mockResolvedValue(snapshot("completed"));
   mount("/video/demo_one", savedStore());
-  fireEvent.click(await screen.findByRole("button", { name: /720P MP4/ }));
+  await screen.findByRole("radio", { name: /720P/ });
+  fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
   await waitFor(() => expect(FakeSource.instances.length).toBe(1));
   act(() => FakeSource.instances[0]!.emit(snapshot("running", 2)));
   expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
@@ -218,7 +226,8 @@ it("cancels an active task through the store and updates the React task card", a
   });
   vi.spyOn(api, "cancel").mockResolvedValue(snapshot("cancelled"));
   mount("/video/demo_one", savedStore());
-  fireEvent.click(await screen.findByRole("button", { name: /720P MP4/ }));
+  await screen.findByRole("radio", { name: /720P/ });
+  fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
   fireEvent.click(await screen.findByRole("button", { name: "取消任务" }));
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "取消任务" })).toBeNull(),
@@ -227,7 +236,7 @@ it("cancels an active task through the store and updates the React task card", a
   expect(api.cancel).toHaveBeenCalledWith("job-1");
 });
 
-it("restores a summary and transcript and switches mobile tabs", async () => {
+it("restores a summary and transcript and switches workspace tabs", async () => {
   const store = savedStore();
   vi.spyOn(api, "create").mockResolvedValue({
     task_id: "job-1",
@@ -243,18 +252,42 @@ it("restores a summary and transcript and switches mobile tabs", async () => {
     result_payload: { result_id: "summary-1" },
   };
   mount("/video/demo_one", store);
+  fireEvent.click(await screen.findByRole("tab", { name: "文稿与总结" }));
   expect(await screen.findByText("测试视频概述")).toBeTruthy();
   expect(screen.getByText("[01:33]")).toBeTruthy();
+  let finishCopy!: () => void;
+  const writeText = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishCopy = resolve;
+      }),
+  );
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  fireEvent.click(screen.getByRole("button", { name: "复制总结" }));
+  expect(screen.queryByText("复制成功")).toBeNull();
+  await act(async () => {
+    finishCopy();
+  });
+  expect(await screen.findByText("复制成功")).toBeTruthy();
+  expect(writeText).toHaveBeenCalledWith(
+    expect.stringContaining("测试视频概述"),
+  );
+  writeText.mockRejectedValueOnce(new Error("permission denied"));
+  fireEvent.click(screen.getByRole("button", { name: "复制总结" }));
+  expect(await screen.findByText("复制失败，请重试")).toBeTruthy();
+  expect(screen.queryByText("复制成功")).toBeNull();
   expect(screen.queryByText("测试字幕内容")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /查看原始文稿/ }));
   expect(screen.getByText("测试字幕内容")).toBeTruthy();
-  const tab = screen.getByRole("button", { name: "视频与下载" });
+  const tab = screen.getByRole("tab", { name: "视频下载" });
   fireEvent.click(tab);
-  expect(tab.getAttribute("aria-pressed")).toBe("true");
-  expect(document.querySelector(".media-panel.mobile-active")).toBeTruthy();
+  expect(tab.getAttribute("aria-selected")).toBe("true");
+  expect(document.querySelector(".media-panel")?.hasAttribute("hidden")).toBe(
+    false,
+  );
 });
 
-it("opens task history, cleans expired files and returns focus on Escape", async () => {
+it("opens focused task history without storage controls and returns focus on Escape", async () => {
   vi.spyOn(api, "cleanup").mockResolvedValue({
     files: 1,
     orphan_files: 0,
@@ -267,8 +300,8 @@ it("opens task history, cleans expired files and returns focus on Escape", async
   trigger.focus();
   fireEvent.click(trigger);
   const dialog = await screen.findByRole("dialog");
-  fireEvent.click(screen.getByRole("button", { name: "清理过期缓存文件" }));
-  expect(await screen.findByText(/已释放 2.0 KB/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "清理过期缓存文件" })).toBeNull();
+  expect(api.cleanup).not.toHaveBeenCalled();
   fireEvent(dialog, new Event("cancel", { bubbles: false, cancelable: true }));
   expect(dialog.hasAttribute("open")).toBe(false);
   expect(document.activeElement).toBe(trigger);
@@ -356,4 +389,227 @@ it("aborts pending result requests when leaving a workspace and ignores late res
   });
   expect(screen.queryByText("测试视频概述")).toBeNull();
   expect(getTranscript).not.toHaveBeenCalled();
+});
+
+it("prompts and focuses an empty video link without calling the parse API", async () => {
+  const parse = vi.spyOn(api, "parse");
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "开始解析" }));
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    expect.stringContaining("请先粘贴视频链接"),
+  );
+  expect(document.activeElement).toBe(screen.getByLabelText("视频链接"));
+  expect(parse).not.toHaveBeenCalled();
+});
+
+it("moves cache cleanup to settings and removes infrastructure status from the homepage", async () => {
+  vi.spyOn(api, "cleanup").mockResolvedValue({
+    files: 1,
+    orphan_files: 0,
+    temporary_directories: 1,
+    freed_bytes: 2048,
+    used_bytes: 0,
+  });
+  const home = mount();
+  expect(screen.queryByText("PostgreSQL")).toBeNull();
+  expect(screen.queryByRole("contentinfo")).toBeNull();
+  expect(api.ready).not.toHaveBeenCalled();
+  home.unmount();
+  mount("/settings");
+  const clean = await screen.findByRole("button", { name: "清理过期缓存文件" });
+  fireEvent.click(clean);
+  expect(await screen.findByText(/已释放 2.0 KB/)).toBeTruthy();
+});
+
+it("groups account actions behind an avatar and closes the menu on Escape", async () => {
+  authStore.accept({
+    status: "authenticated",
+    access_token: "test-token",
+    user: {
+      id: "test-user",
+      nickname: "微信用户_1234",
+      is_subscribed: true,
+      role: "user",
+      status: "active",
+    },
+  });
+  mount();
+  const trigger = screen.getByRole("button", { name: "账户菜单" });
+  expect(screen.queryByText("微信用户_1234")).toBeNull();
+  expect(screen.queryByRole("button", { name: "退出登录" })).toBeNull();
+  fireEvent.click(trigger);
+  expect(screen.getByText("微信用户_1234")).toBeTruthy();
+  expect(screen.getByText("已关注")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "退出登录" })).toBeTruthy();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("keeps service health in the administrator page", async () => {
+  authStore.accept({
+    status: "authenticated",
+    access_token: "admin-token",
+    user: {
+      id: "admin-user",
+      nickname: "管理员",
+      is_subscribed: true,
+      role: "admin",
+      status: "active",
+    },
+  });
+  mount("/admin");
+  expect(await screen.findByRole("heading", { name: "服务状态" })).toBeTruthy();
+  expect(await screen.findByText("PostgreSQL")).toBeTruthy();
+  await waitFor(() => expect(api.ready).toHaveBeenCalled());
+});
+
+it("does not poll service health for non-admin visitors", async () => {
+  mount("/admin");
+  expect(
+    await screen.findByText("此页面仅供管理员查看服务运行状态。"),
+  ).toBeTruthy();
+  expect(api.ready).not.toHaveBeenCalled();
+});
+
+it("deletes a history item and clears the remaining records without cancelling jobs", async () => {
+  let items = ["单条记录", "剩余记录"].map((title, index) => ({
+    ...snapshot("completed"),
+    task_id: `history-${index}`,
+    task_type: "download",
+    created_at: "2026-10-23T10:00:00Z",
+    video: null,
+    video_title: title,
+    download_available: false,
+    result_payload: null,
+  })) as unknown as import("../types/api").TaskHistoryItem[];
+  vi.mocked(api.history).mockImplementation(async () => ({
+    items: [...items],
+    total: items.length,
+    offset: 0,
+    limit: 20,
+  }));
+  const remove = vi
+    .spyOn(api, "deleteHistory")
+    .mockImplementation(async (id) => {
+      items = items.filter((item) => item.task_id !== id);
+      return { deleted_count: 1 };
+    });
+  const clear = vi.spyOn(api, "clearHistory").mockImplementation(async () => {
+    const count = items.length;
+    items = [];
+    return { deleted_count: count };
+  });
+  const cancel = vi.spyOn(api, "cancel");
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "任务历史" }));
+  const dialog = await screen.findByRole("dialog");
+  await within(dialog).findByText("单条记录");
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "删除任务记录：单条记录" }),
+  );
+  await waitFor(() =>
+    expect(within(dialog).queryByText("单条记录")).toBeNull(),
+  );
+  expect(remove).toHaveBeenCalledWith("history-0");
+  fireEvent.click(within(dialog).getByRole("button", { name: "一键清除" }));
+  expect(await within(dialog).findByText("一切从一个链接开始")).toBeTruthy();
+  expect(clear).toHaveBeenCalledOnce();
+  expect(cancel).not.toHaveBeenCalled();
+});
+
+it.each(["input", "parse", "history", "login"])(
+  "opens the login card from %s without sending business requests",
+  async (entry) => {
+    vi.mocked(authStore.hasAccess).mockRestore();
+    vi.spyOn(authApi, "create").mockResolvedValue({
+      scene_id: "login-gate",
+      mode: "verify_code",
+      qr_url: "/wechat_qr.png",
+      verify_code: "123456",
+      expires_in: 300,
+    });
+    const parse = vi.spyOn(api, "parse");
+    mount();
+    if (entry === "input") fireEvent.click(screen.getByLabelText("视频链接"));
+    if (entry === "parse")
+      fireEvent.click(screen.getByRole("button", { name: "开始解析" }));
+    if (entry === "history")
+      fireEvent.click(screen.getByRole("button", { name: "任务历史" }));
+    if (entry === "login")
+      fireEvent.click(screen.getByRole("button", { name: "登录" }));
+    const modal = await screen.findByRole("dialog", {
+      name: "关注，即刻开始。",
+    });
+    expect(await within(modal).findByLabelText("六位登录口令")).toHaveProperty(
+      "textContent",
+      "123456",
+    );
+    expect(parse).not.toHaveBeenCalled();
+    expect(api.history).not.toHaveBeenCalled();
+    expect(screen.queryByText("请先粘贴视频链接")).toBeNull();
+    fireEvent.click(
+      within(modal).getByRole("button", { name: "关闭登录弹窗" }),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "关注，即刻开始。" }),
+    ).toBeNull();
+  },
+);
+
+it("requires a new login for an unsubscribed account and blocks pasted input", async () => {
+  vi.mocked(authStore.hasAccess).mockRestore();
+  authStore.accept({
+    status: "authenticated",
+    access_token: "unsubscribed-token",
+    user: {
+      id: "unsubscribed",
+      nickname: "用户",
+      is_subscribed: false,
+      role: "user",
+      status: "active",
+    },
+  });
+  vi.spyOn(authApi, "create").mockResolvedValue({
+    scene_id: "login-gate",
+    mode: "verify_code",
+    qr_url: "/wechat_qr.png",
+    verify_code: "123456",
+    expires_in: 300,
+  });
+  const parse = vi.spyOn(api, "parse");
+  mount();
+  const input = screen.getByLabelText("视频链接");
+  expect((input as HTMLInputElement).readOnly).toBe(true);
+  fireEvent.paste(input);
+  await screen.findByRole("dialog", { name: "关注，即刻开始。" });
+  expect(parse).not.toHaveBeenCalled();
+  expect(api.history).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "账户菜单" })).toBeNull();
+});
+
+it("lets a subscribed signed-in user paste and parse normally", async () => {
+  vi.mocked(authStore.hasAccess).mockRestore();
+  authStore.accept({
+    status: "authenticated",
+    access_token: "signed-in-token",
+    user: {
+      id: "signed-in",
+      nickname: "已登录用户",
+      is_subscribed: true,
+      role: "user",
+      status: "active",
+    },
+  });
+  const parse = vi.spyOn(api, "parse").mockResolvedValue(metadata);
+  mount();
+  const input = screen.getByLabelText("视频链接");
+  fireEvent.click(input);
+  expect((input as HTMLInputElement).readOnly).toBe(false);
+  expect(screen.queryByRole("dialog", { name: "关注，即刻开始。" })).toBeNull();
+  fireEvent.change(input, { target: { value: "https://example.com/video" } });
+  fireEvent.click(screen.getByRole("button", { name: "开始解析" }));
+  await screen.findByRole("heading", { name: metadata.title });
+  expect(parse).toHaveBeenCalledWith("https://example.com/video");
 });

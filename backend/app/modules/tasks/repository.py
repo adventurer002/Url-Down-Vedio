@@ -30,6 +30,7 @@ class TaskRecord:
     started_at: datetime | None
     finished_at: datetime | None
     expires_at: datetime | None
+    user_id: UUID | None = None
 
 
 def record(task: Task) -> TaskRecord:
@@ -42,18 +43,45 @@ class TaskRepository:
         self.sessions = sessions
 
     def create(self, task_type: str, video_id: UUID | None = None, input_payload: dict | None = None,
-               expires_at: datetime | None = None) -> TaskRecord:
+               expires_at: datetime | None = None, user_id: UUID | None = None) -> TaskRecord:
         with self.sessions.begin() as session:
-            task = Task(task_type=task_type, video_id=video_id, input_payload=input_payload or {}, expires_at=expires_at)
+            task = Task(user_id=user_id, task_type=task_type, video_id=video_id, input_payload=input_payload or {}, expires_at=expires_at)
             session.add(task)
             session.flush()
             return record(task)
 
-    def list_recent(self, limit: int = 20, offset: int = 0) -> tuple[list[TaskRecord], int]:
+    def list_recent(self, limit: int = 20, offset: int = 0, user_id: UUID | None = None) -> tuple[list[TaskRecord], int]:
         with self.sessions() as session:
-            total = session.scalar(select(func.count()).select_from(Task))
-            items = session.scalars(select(Task).order_by(Task.created_at.desc(), Task.id.desc()).limit(limit).offset(offset))
+            condition = [Task.history_hidden.is_(False)]
+            if user_id is not None:
+                condition.append(Task.user_id == user_id)
+            total = session.scalar(select(func.count()).select_from(Task).where(*condition))
+            items = session.scalars(select(Task).where(*condition).order_by(Task.created_at.desc(), Task.id.desc()).limit(limit).offset(offset))
             return [record(item) for item in items], total
+
+    def hide_history(self, user_id: UUID, task_id: UUID | None = None) -> int:
+        # History is presentation state. Keep task rows, live work and result grants intact.
+        with self.sessions.begin() as session:
+            conditions = [Task.user_id == user_id, Task.history_hidden.is_(False)]
+            if task_id is not None:
+                owned = session.scalar(select(Task.id).where(Task.id == task_id, Task.user_id == user_id))
+                if owned is None:
+                    raise AppException("TASK_NOT_FOUND", "任务记录不存在", 404)
+                conditions.append(Task.id == task_id)
+            return session.execute(update(Task).where(*conditions).values(history_hidden=True)).rowcount
+
+    def has_result_grant(self, field: str, result_ids: list[UUID], user_id: UUID | None) -> bool:
+        if field not in {"file_id", "transcript_id", "result_id"}:
+            raise ValueError("unsupported result reference")
+        from sqlalchemy import or_
+        with self.sessions() as session:
+            owners = [Task.user_id.is_(None)]
+            if user_id is not None:
+                owners.append(Task.user_id == user_id)
+            return session.scalar(select(Task.id).where(
+                Task.status == TaskStatus.completed,
+                Task.result_payload[field].as_string().in_([str(item) for item in result_ids]), or_(*owners)
+            ).limit(1)) is not None
 
     def get(self, task_id: UUID) -> TaskRecord:
         with self.sessions() as session:

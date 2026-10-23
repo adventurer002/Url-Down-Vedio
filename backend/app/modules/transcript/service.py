@@ -2,6 +2,7 @@ from dataclasses import asdict
 from uuid import UUID
 
 from app.core.config import settings
+from app.core.exceptions import AppException
 from app.modules.tasks.service import TaskService, database_call
 from app.modules.transcript.repository import TranscriptRepository
 from app.modules.video.resolver import VideoResolver
@@ -17,8 +18,19 @@ class TranscriptService:
                                        {**payload, "language": language.lower() if language else None,
                                         "content_version": settings.TRANSCRIPT_CONTENT_VERSION, "preset_id": "audio_mp3"})
 
-    async def get(self, transcript_id: UUID):
-        return asdict(await database_call(self.transcripts.get, transcript_id))
+    async def get(self, transcript_id: UUID, user=None):
+        transcript = await database_call(self.transcripts.get, transcript_id)
+        try:
+            await self.tasks.authorize_artifact("transcript_id", transcript_id, transcript.task_id, user)
+        except AppException as error:
+            if error.code != "FORBIDDEN":
+                raise
+            # A completed AI task also grants access to the exact source transcript of its cached result.
+            from app.modules.ai.repository import AIRepository
+            ids = await database_call(AIRepository(self.transcripts.sessions).ids_for_transcript, transcript_id)
+            if not await self.tasks.can_read_results("result_id", ids, user):
+                raise
+        return asdict(transcript)
 
 
 class TranscriptionPipeline:

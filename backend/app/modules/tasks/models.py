@@ -32,6 +32,7 @@ class Task(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     video_id: Mapped[UUID | None] = mapped_column(ForeignKey("videos.id"), index=True)
     task_type: Mapped[str] = mapped_column(String(64))
     status: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus, name="task_status", validate_strings=True), default=TaskStatus.queued, server_default="queued", index=True)
@@ -40,6 +41,7 @@ class Task(Base):
     result_payload: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"))
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
+    history_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

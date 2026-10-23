@@ -34,7 +34,9 @@ class TaskService:
                      input_payload: dict | None = None) -> TaskRecord:
         if task_type not in {"simulate_progress", "download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap"} or self.dispatcher is None:
             raise AppException("UNSUPPORTED_TASK_TYPE", "不支持该任务类型", 422)
-        task = await database_call(self.repository.create, task_type, video_id, input_payload, utcnow() + timedelta(hours=24))
+        from app.modules.auth.dependencies import task_user_id
+        task = await database_call(self.repository.create, task_type, video_id, input_payload,
+                                   utcnow() + timedelta(hours=24), user_id=task_user_id.get())
         try:
             await self.bus.publish(task.id, "queued", 0)
             async with asyncio.timeout(15):
@@ -48,6 +50,27 @@ class TaskService:
                 pass
             raise AppException("TASK_DISPATCH_FAILED", "任务入队失败，请稍后重试", 503) from None
         return task
+
+    async def authorize(self, task_id: UUID, user):
+        from app.modules.auth.dependencies import check_owner
+        task = await database_call(self.repository.get, task_id)
+        check_owner(task.user_id, user)
+
+    async def can_read_results(self, field: str, result_ids: list[UUID], user) -> bool:
+        return await database_call(self.repository.has_result_grant, field, result_ids, user.id if user else None)
+
+    async def authorize_artifact(self, field: str, result_id: UUID, source_task_id: UUID | None, user):
+        if source_task_id is None:
+            return  # Legacy/imported cache entries have no owning user.
+        task = await database_call(self.repository.get, source_task_id)
+        if task.user_id is None or (user and task.user_id == user.id):
+            return
+        if await self.can_read_results(field, [result_id], user):
+            return
+        raise AppException("FORBIDDEN", "无权读取其他用户的任务结果", 403)
+
+    async def authorize_file(self, file_id: UUID, source_task_id: UUID, user):
+        await self.authorize_artifact("file_id", file_id, source_task_id, user)
 
     async def get(self, task_id: UUID) -> dict:
         task = await database_call(self.repository.get, task_id)
@@ -102,14 +125,18 @@ class TaskService:
     def event(data: dict) -> dict:
         return {key: data[key] for key in ("task_id", "status", "progress", "seq", "stage", "error_code", "updated_at")}
 
-    async def events(self, task_id: UUID, subscription: ProgressSubscription, initial: dict):
+    async def events(self, task_id: UUID, subscription: ProgressSubscription, initial: dict, check_access=None):
         last_seq = initial["seq"]
         last_refresh = last_heartbeat = started = time.monotonic()
         try:
+            if check_access:
+                await check_access()
             yield initial
             if initial["status"] in TERMINAL:
                 return
             while time.monotonic() - started < 300:
+                if check_access:
+                    await check_access()
                 event = await subscription.receive()
                 now = time.monotonic()
                 if event is None and now - last_refresh >= 1:

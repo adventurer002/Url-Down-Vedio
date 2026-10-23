@@ -16,16 +16,59 @@ def parse_json_content(value) -> dict:
         return value
     if not isinstance(value, str):
         raise AppException("LLM_INVALID_RESPONSE", "模型未返回有效 JSON 对象", 502)
-    value = value.strip()
-    if value.startswith("```"):
-        value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.IGNORECASE).strip()
+    text = value.strip()
+    # 去除 markdown 代码块包裹
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE).strip()
+    # 尝试直接解析
     try:
-        parsed = json.loads(value)
+        parsed = json.loads(text)
     except ValueError:
+        # 尝试去除尾随逗号
         try:
-            parsed = json.loads(re.sub(r",\s*([}\]])", r"\1", value))
+            parsed = json.loads(re.sub(r",\s*([}\]])", r"\1", text))
         except ValueError:
-            raise AppException("LLM_INVALID_RESPONSE", "模型返回的 JSON 无法解析", 502) from None
+            # 尝试从文本中提取第一个完整的 JSON 对象（{...}）
+            start = text.find("{")
+            if start >= 0:
+                # 用括号匹配找到对应的结束 }
+                depth = 0
+                end = -1
+                in_string = False
+                escape = False
+                for i in range(start, len(text)):
+                    ch = text[i]
+                    if escape:
+                        escape = False
+                        continue
+                    if ch == "\\":
+                        escape = True
+                        continue
+                    if ch == '"':
+                        in_string = not in_string
+                        continue
+                    if in_string:
+                        continue
+                    if ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                if end > start:
+                    candidate = text[start:end]
+                    try:
+                        parsed = json.loads(candidate)
+                    except ValueError:
+                        try:
+                            parsed = json.loads(re.sub(r",\s*([}\]])", r"\1", candidate))
+                        except ValueError:
+                            raise AppException("LLM_INVALID_RESPONSE", "模型返回的 JSON 无法解析", 502) from None
+                else:
+                    raise AppException("LLM_INVALID_RESPONSE", "模型返回的 JSON 无法解析", 502) from None
+            else:
+                raise AppException("LLM_INVALID_RESPONSE", "模型返回的 JSON 无法解析", 502) from None
     if not isinstance(parsed, dict):
         raise AppException("LLM_INVALID_RESPONSE", "模型返回的 JSON 必须为对象", 502)
     return parsed

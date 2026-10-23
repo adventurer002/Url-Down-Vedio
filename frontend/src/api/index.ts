@@ -1,4 +1,4 @@
-import { get, post } from "./client";
+import { get, post, del } from "./client";
 import type {
   AIResult,
   TaskHistoryPage,
@@ -11,6 +11,9 @@ import type {
   VideoParseResult,
 } from "../types/api";
 export const api = {
+  deleteHistory: (id: string) =>
+    del<{ deleted_count: number }>(`/tasks/history/${encodeURIComponent(id)}`),
+  clearHistory: () => del<{ deleted_count: number }>("/tasks/history"),
   history: (limit = 20, offset = 0, signal?: AbortSignal) =>
     get<TaskHistoryPage>(`/tasks?limit=${limit}&offset=${offset}`, signal),
   cleanup: () => post<CleanupResult>("/system/cleanup"),
