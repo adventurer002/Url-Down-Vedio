@@ -114,3 +114,49 @@ jobs:
         run: pnpm test:unit
       - name: Build
         run: pnpm build
+      - name: Validate release packaging
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: >-
+          python3 backend/deploy/build_release.py
+          --commit "$RELEASE_COMMIT"
+          --frontend-dist frontend/dist
+          --output-dir "$RUNNER_TEMP/release-smoke-check"
+        working-directory: .
+      - name: Save tested frontend build
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-${{ github.sha }}
+          path: frontend/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  release-package:
+    name: Package tested release
+    needs: [backend, frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download this run's frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build-${{ github.sha }}
+          path: frontend/dist
+      - name: Package committed backend and tested frontend
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: >-
+          python3 backend/deploy/build_release.py
+          --commit "$RELEASE_COMMIT"
+          --frontend-dist frontend/dist
+          --output-dir release-output
+      - name: Save release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: videohub-release-${{ github.sha }}
+          path: release-output/
+          if-no-files-found: error
+          retention-days: 14
