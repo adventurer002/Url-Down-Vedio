@@ -42,7 +42,10 @@ it("normalizes backend errors, including request ID", () => {
 it("uses safe opaque file IDs rather than server-supplied paths", () => {
   vi.stubGlobal("window", { location: { origin: "http://localhost:5173" } });
   expect(fileDownloadUrl("abc")).toBe(
-    "http://localhost:8000/api/v1/files/abc/download",
+    new URL(
+      `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/files/abc/download`,
+      "http://localhost:5173",
+    ).href,
   );
   expect(fileDownloadUrl("../secret")).toContain("..%2Fsecret");
 });

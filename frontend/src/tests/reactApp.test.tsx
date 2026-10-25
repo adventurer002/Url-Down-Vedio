@@ -226,7 +226,10 @@ it("reacts to SSE progress, fetches the completed result and exposes the control
     await screen.findByRole("link", { name: "保存到本地" }),
   ).toHaveProperty(
     "href",
-    "http://localhost:8000/api/v1/files/file-1/download",
+    new URL(
+      `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/files/file-1/download`,
+      window.location.origin,
+    ).href,
   );
   expect(FakeSource.instances[0]!.close).toHaveBeenCalled();
 });
