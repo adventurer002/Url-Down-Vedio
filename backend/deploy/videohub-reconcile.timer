@@ -1,0 +1,9 @@
+[Unit]
+Description=VideoHub reconcile timer
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+
+[Install]
+WantedBy=timers.target

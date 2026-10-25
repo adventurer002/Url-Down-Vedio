@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests and migrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: videohub_ci
+          POSTGRES_USER: videohub_ci
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U videohub_ci -d videohub_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      APP_ENV: development
+      AUTH_REQUIRED: 'False'
+      ALLOWANCES_ENABLED: 'False'
+      DATABASE_URL: postgresql+psycopg://videohub_ci:ci_only_password@127.0.0.1:5432/videohub_ci
+      REDIS_URL: redis://127.0.0.1:6379/0
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/1
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/2
+      TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      WECHAT_MP_MODE: mock
+      ASR_PROVIDER: mock
+      ASR_API_KEY: ''
+      LLM_PROVIDER: heuristic
+      LLM_API_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.5'
+          python-version: '3.14'
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install locked dependencies
+        run: uv sync --frozen
+      - name: Apply and verify migrations
+        run: |
+          uv run --frozen alembic upgrade head
+          uv run --frozen alembic check
+      - name: Run backend tests
+        run: uv run --frozen pytest -q --junitxml=test-results.xml
+      - name: Require integration tests to run
+        run: |
+          uv run --frozen python - <<'PY'
+          from xml.etree import ElementTree
+          suites = ElementTree.parse('test-results.xml').getroot().iter('testsuite')
+          skipped = sum(int(suite.attrib.get('skipped', 0)) for suite in suites)
+          if skipped:
+              raise SystemExit(f'{skipped} tests skipped; check CI service dependencies')
+          PY
+
+  frontend:
+    name: Frontend tests and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_BASE_URL: /api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm type-check
+      - name: Unit tests
+        run: pnpm test:unit
+      - name: Build
+        run: pnpm build

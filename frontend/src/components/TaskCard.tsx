@@ -4,6 +4,9 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { terminal } from "../lib/taskTracker";
 import { fileDownloadUrl, normalizeError } from "../api/client";
 import Icon from "./Icon";
+import { Link } from "react-router-dom";
+import { api } from "../api";
+import { billingStore } from "../stores/billing";
 const labels = {
   queued: "等待执行",
   running: "执行中",
@@ -14,6 +17,11 @@ const labels = {
   expired: "已过期",
 };
 const stages: Record<string, string> = {
+  waiting_for_allowance: "等待补充额度",
+  waiting_for_entitlement: "等待有效权益",
+  waiting_for_capacity: "等待执行空位",
+  waiting_for_daily_downloads: "今日免费下载次数已用完",
+  waiting_for_quote_required: "需要重新确认额度",
   queued: "等待 Worker",
   download: "下载媒体",
   downloading: "下载媒体",
@@ -22,6 +30,7 @@ const stages: Record<string, string> = {
   audio: "准备纯音频",
   asr: "语音转写",
   summary: "提炼章节要点",
+  question: "检索文稿并回答",
   mindmap: "构建思维导图",
   ai: "整理内容",
   running: "正在执行",
@@ -48,7 +57,10 @@ export default function TaskCard({ task }: { task: LocalTask }) {
       <div className="task-line">
         <span>{task.label}</span>
         <span className="task-status" data-status={task.event.status}>
-          {labels[task.event.status]} <b>{task.event.progress}%</b>
+          {task.event.stage.startsWith("waiting_for_")
+            ? stages[task.event.stage] || "等待执行"
+            : labels[task.event.status]}{" "}
+          {task.event.status !== "queued" && <b>{task.event.progress}%</b>}
         </span>
       </div>
       <div
@@ -66,6 +78,34 @@ export default function TaskCard({ task }: { task: LocalTask }) {
           {stages[task.event.stage] || labels[task.event.status]}
           {task.snapshot?.result_payload?.cache_hit && <span> · 来自缓存</span>}
         </small>
+        {task.event.stage.startsWith("waiting_for_") && (
+          <Link className="task-allowance-link" to="/subscription">
+            查看额度
+            <Icon name="arrow" size={12} />
+          </Link>
+        )}
+        {["waiting_for_allowance", "waiting_for_entitlement"].includes(
+          task.event.stage,
+        ) && (
+          <button
+            className="text-button task-resume"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                await api.resumeQueued();
+                await billingStore.refresh();
+              } catch (cause) {
+                setError(normalizeError(cause).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            重新检查
+          </button>
+        )}
         {!terminal(task.event.status) && (
           <button
             className="text-button"

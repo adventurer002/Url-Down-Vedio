@@ -1,3 +1,4 @@
+from app.modules.auth.dependencies import creation_user
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
@@ -29,6 +30,6 @@ def get_audio_service():
 
 
 @router.post("/extractions", status_code=202)
-async def create_extraction(body: AudioRequest, service: AudioExtractionService = Depends(get_audio_service)):
+async def create_extraction(body: AudioRequest, service: AudioExtractionService = Depends(get_audio_service), user=Depends(creation_user)):
     task = await service.create(body.url)
     return success_response({"task_id": str(task.id), "status": task.status})

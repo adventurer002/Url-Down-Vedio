@@ -4,6 +4,8 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
 import "./style.css";
+import "./subscription.css";
+import "./knowledge.css";
 
 createRoot(document.getElementById("app")!).render(
   <StrictMode>

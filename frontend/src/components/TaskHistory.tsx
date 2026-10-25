@@ -1,25 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { api } from "../api";
+import { authStore, useAuth } from "../stores/auth";
 import { ApiError, normalizeError } from "../api/client";
-import type { CleanupResult } from "../types/api";
 import Icon from "./Icon";
 import TaskCard from "./TaskCard";
 import ErrorNotice from "./ErrorNotice";
-function bytes(value: number) {
-  return value < 1024
-    ? `${value} B`
-    : value < 1024 ** 2
-      ? `${(value / 1024).toFixed(1)} KB`
-      : `${(value / 1024 ** 2).toFixed(2)} MB`;
-}
 export default function TaskHistory() {
+  const auth = useAuth();
   const store = useWorkspace(),
     dialog = useRef<HTMLDialogElement>(null);
-  const [error, setError] = useState<ApiError | null>(null),
-    [cleaning, setCleaning] = useState(false),
-    [cleanup, setCleanup] = useState<CleanupResult>();
+  const [error, setError] = useState<ApiError | null>(null);
   const refresh = useCallback(
     async (reset = true) => {
       setError(null);
@@ -31,9 +22,21 @@ export default function TaskHistory() {
     },
     [store],
   );
+  async function remove(taskId?: string) {
+    setError(null);
+    try {
+      await store.deleteHistory(taskId);
+    } catch (e) {
+      setError(normalizeError(e));
+    }
+  }
   const close = () => store.setHistoryOpen(false);
   useEffect(() => {
     if (!store.historyOpen) return;
+    if (!authStore.requireLogin()) {
+      store.setHistoryOpen(false);
+      return;
+    }
     const previousFocus = document.activeElement as HTMLElement | null;
     const element = dialog.current;
     let disposed = false,
@@ -51,21 +54,7 @@ export default function TaskHistory() {
       element?.close();
       previousFocus?.focus();
     };
-  }, [store, store.historyOpen, refresh]);
-  async function clean() {
-    if (cleaning) return;
-    setCleaning(true);
-    setError(null);
-    setCleanup(undefined);
-    try {
-      setCleanup(await api.cleanup());
-      await refresh();
-    } catch (e) {
-      setError(normalizeError(e));
-    } finally {
-      setCleaning(false);
-    }
-  }
+  }, [store, store.historyOpen, refresh, auth.user]);
   return (
     <dialog
       ref={dialog}
@@ -94,17 +83,32 @@ export default function TaskHistory() {
           </button>
         </div>
         <div className="history-summary">
-          <p className="muted history-hint">
-            来自本地服务器 · {store.historyTotal} 个任务
-          </p>
-          <button
-            className="text-button"
-            disabled={store.historyLoading}
-            onClick={() => void refresh()}
-          >
-            刷新列表
-          </button>
+          <p className="muted history-hint">共 {store.historyTotal} 个任务</p>
+          <div className="history-toolbar">
+            <button
+              className="history-delete"
+              disabled={
+                store.historyLoading ||
+                store.historyMutating ||
+                !store.historyTotal
+              }
+              onClick={() => void remove()}
+            >
+              <Icon name="trash" size={15} />
+              {store.historyMutating ? "正在删除…" : "一键清除"}
+            </button>
+            <button
+              className="text-button"
+              disabled={store.historyLoading || store.historyMutating}
+              onClick={() => void refresh()}
+            >
+              刷新列表
+            </button>
+          </div>
         </div>
+        <p className="history-delete-hint">
+          删除仅移除历史记录，不取消任务或删除文件。
+        </p>
         <ErrorNotice error={error} />
         {store.historyLoading && !store.historyLoaded && (
           <p className="muted" role="status">
@@ -120,16 +124,40 @@ export default function TaskHistory() {
         )}
         {store.historyTasks.map((task) => (
           <article key={task.id} className="history-item">
-            {task.videoAvailable !== false ? (
-              <Link
-                to={"/video/" + encodeURIComponent(task.videoKey)}
-                onClick={close}
+            <div className="history-item-heading">
+              {task.videoAvailable !== false ? (
+                <Link
+                  to={
+                    "/video/" +
+                    encodeURIComponent(task.videoKey) +
+                    (task.kind === "ai_question"
+                      ? "?" +
+                        new URLSearchParams({
+                          tab: "questions",
+                          transcript:
+                            task.snapshot?.result_payload?.transcript_id || "",
+                          answer:
+                            task.snapshot?.result_payload?.answer_id || "",
+                        })
+                      : "")
+                  }
+                  onClick={close}
+                >
+                  {task.title}
+                </Link>
+              ) : (
+                <strong>{task.title}</strong>
+              )}
+              <button
+                className="history-delete"
+                aria-label={`删除任务记录：${task.title}`}
+                disabled={store.historyLoading || store.historyMutating}
+                onClick={() => void remove(task.id)}
               >
-                {task.title}
-              </Link>
-            ) : (
-              <strong>{task.title}</strong>
-            )}
+                <Icon name="trash" size={15} />
+                删除
+              </button>
+            </div>
             <time className="history-date">
               {new Date(task.createdAt).toLocaleString("zh-CN")}
             </time>
@@ -140,10 +168,25 @@ export default function TaskHistory() {
                 task.snapshot?.result_payload?.transcript_id) && (
                 <Link
                   className="history-result-link"
-                  to={"/video/" + encodeURIComponent(task.videoKey)}
+                  to={
+                    "/video/" +
+                    encodeURIComponent(task.videoKey) +
+                    (task.kind === "ai_question"
+                      ? "?" +
+                        new URLSearchParams({
+                          tab: "questions",
+                          transcript:
+                            task.snapshot?.result_payload?.transcript_id || "",
+                          answer:
+                            task.snapshot?.result_payload?.answer_id || "",
+                        })
+                      : "")
+                  }
                   onClick={close}
                 >
-                  查看文稿 / AI 结果 ↗
+                  {task.kind === "ai_question"
+                    ? "查看问答与原文 ↗"
+                    : "查看文稿 / AI 结果 ↗"}
                 </Link>
               )}
           </article>
@@ -151,32 +194,12 @@ export default function TaskHistory() {
         {store.historyOffset < store.historyTotal && (
           <button
             className="button secondary full"
-            disabled={store.historyLoading}
+            disabled={store.historyLoading || store.historyMutating}
             onClick={() => void refresh(false)}
           >
             {store.historyLoading ? "正在读取…" : "加载更多任务"}
           </button>
         )}
-        <div className="cleanup-section">
-          <span className="eyebrow">KEEP YOUR SPACE CLEAR</span>
-          <p>
-            仅清理已过期文件与安全可移除的临时文件，保留当前有效结果和运行中的任务。
-          </p>
-          <button
-            className="button secondary full"
-            disabled={cleaning}
-            onClick={clean}
-          >
-            {cleaning ? "正在释放空间…" : "清理过期缓存文件"}
-          </button>
-          {cleanup && (
-            <p className="cleanup-result" role="status">
-              已释放 {bytes(cleanup.freed_bytes)} ·{" "}
-              {cleanup.files + cleanup.orphan_files} 个文件 /{" "}
-              {cleanup.temporary_directories} 个临时目录
-            </p>
-          )}
-        </div>
       </div>
     </dialog>
   );

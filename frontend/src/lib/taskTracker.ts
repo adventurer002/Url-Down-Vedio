@@ -1,5 +1,5 @@
 import { api } from "../api";
-import { apiUrl, normalizeError } from "../api/client";
+import { authenticatedUrl, normalizeError } from "../api/client";
 import type { TaskEvent, TaskSnapshot, TaskStatus } from "../types/api";
 export const terminal = (status: TaskStatus) =>
   ["completed", "failed", "cancelled", "expired"].includes(status);
@@ -75,7 +75,7 @@ export function createTaskTracker(taskId: string, options: TrackerOptions) {
     } catch (error) {
       if (stopped) return;
       options.onError?.(error);
-      if (normalizeError(error).status === 404) {
+      if ([401, 403, 404].includes(normalizeError(error).status || 0)) {
         stop();
         return;
       }
@@ -94,9 +94,10 @@ export function createTaskTracker(taskId: string, options: TrackerOptions) {
     }, 1500);
   }
   try {
-    source = (options.eventSource || ((url) => new EventSource(url)))(
-      apiUrl(`/tasks/${encodeURIComponent(taskId)}/events`),
-    );
+    source = (
+      options.eventSource ||
+      ((url) => new EventSource(url, { withCredentials: true }))
+    )(authenticatedUrl(`/tasks/${encodeURIComponent(taskId)}/events`));
     options.onMode?.("sse");
     source.addEventListener("progress", (event) => {
       if (stopped || finishing) return;

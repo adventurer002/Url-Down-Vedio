@@ -2,17 +2,20 @@
 
 from contextlib import contextmanager, redirect_stdout
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
 
+from yt_dlp.utils import DownloadError
+
 from app.core.config import settings
+
 from app.core.exceptions import AppException
+from app.modules.video.parsers.runtime import server_proxy
 from app.modules.download.presets import select_streams
-from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info
+from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info, map_extraction_error
 from app.modules.video.parsers.ytdlp_worker import NetworkGuard, guarded_downloader
 
 
@@ -61,16 +64,21 @@ def download(payload: dict, directory: Path, emit) -> None:
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         raise AppException("FFMPEG_UNAVAILABLE", "服务端缺少 FFmpeg", 503)
-    guard = NetworkGuard(os.environ.get("YTDLP_PROXY"))
+    proxy = server_proxy()
+    guard = NetworkGuard(proxy)
     last_emit = 0.0
     with guard.installed(), native_network_only():
         guard.check_url(payload["url"])
-        options = extraction_options(os.environ.get("YTDLP_PROXY"))
+        options = extraction_options(proxy)
         with guarded_downloader(guard, options) as parser:
             info = parser.extract_info(payload["url"], download=False)
         if guard.violation:
             raise guard.violation
         video = metadata_from_info(info)
+        if "allowance" in payload:
+            from app.modules.billing.policy import seconds
+            if seconds(video.duration) > payload["allowance"]["limits"]["video_seconds"]:
+                raise AppException("VIDEO_TOO_LONG", "实际视频时长超过任务限制", 422)
         if (video.platform, video.platform_video_id) != (payload["platform"], payload["platform_video_id"]):
             raise AppException("VIDEO_ID_CHANGED", "视频身份发生变化", 422)
         if payload.get("_audio_only"):
@@ -136,7 +144,14 @@ def main():
         with redirect_stdout(sys.stderr):
             download(json.loads(sys.argv[1]), Path(sys.argv[2]), emit)
     except Exception as exc:
-        code = exc.code if isinstance(exc, AppException) else "DOWNLOAD_TIMEOUT" if isinstance(exc, subprocess.TimeoutExpired) else "DOWNLOAD_FAILED"
+        if isinstance(exc, AppException):
+            code = exc.code
+        elif isinstance(exc, subprocess.TimeoutExpired):
+            code = "DOWNLOAD_TIMEOUT"
+        elif isinstance(exc, DownloadError):
+            code = map_extraction_error(exc).code
+        else:
+            code = "DOWNLOAD_FAILED"
         emit({"error_code": code})
         raise SystemExit(1)
 

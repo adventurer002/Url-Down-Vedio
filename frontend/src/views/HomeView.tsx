@@ -1,45 +1,34 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { authStore, useAuth } from "../stores/auth";
 import { ApiError, normalizeError } from "../api/client";
 import { useWorkspace } from "../hooks/useWorkspace";
 import ErrorNotice from "../components/ErrorNotice";
 import Icon from "../components/Icon";
-const features = [
-  {
-    n: "01",
-    icon: "download",
-    title: "视频下载",
-    description: "选择合适的清晰度，让精彩随时可看。",
-    note: "原生档位 · 本地保存",
-  },
-  {
-    n: "02",
-    icon: "text",
-    title: "音频与文稿",
-    description: "留下声音与文字，换一种方式吸收内容。",
-    note: "纯音频提取 · 字幕优先",
-  },
-  {
-    n: "03",
-    icon: "map",
-    title: "AI 总结与导图",
-    description: "从长视频中提炼重点，让知识脉络清晰可见。",
-    note: "章节摘要 · 交互导图",
-  },
-];
+import PlatformLogos from "../components/PlatformLogos";
+import HeroBackground from "../components/HeroBackground";
 export default function HomeView() {
+  useAuth();
+  const signedIn = authStore.hasAccess();
   const [url, setUrl] = useState(""),
     [loading, setLoading] = useState(false),
     [error, setError] = useState<ApiError | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const pending = useRef(false),
     navigate = useNavigate(),
     store = useWorkspace();
   async function parse(event?: FormEvent) {
     event?.preventDefault();
+    if (!authStore.requireLogin()) return;
     if (pending.current) return;
     setError(null);
     const input = url.trim();
+    if (!input) {
+      setError(new ApiError("VIDEO_URL_REQUIRED", "请先粘贴视频链接"));
+      inputRef.current?.focus();
+      return;
+    }
     try {
       const parsed = new URL(input);
       if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
@@ -64,86 +53,104 @@ export default function HomeView() {
   return (
     <div className="home-page">
       <section className="hero">
-        <div className="hero-kicker">
-          <span className="tiny-square" /> YOUR VIDEO. YOUR KNOWLEDGE.
-        </div>
-        <h1>
-          下载视频，
-          <br className="mobile-break" />
-          <span>理解内容。</span>
-        </h1>
-        <p className="hero-description">
-          一个链接，连接视频、文稿与灵感。
-          <br className="mobile-break" />
-          让每一次观看，都有所收获。
-        </p>
-        <form className="parse-form" onSubmit={parse} aria-busy={loading}>
-          <label className="sr-only" htmlFor="video-url">
-            视频链接
-          </label>
-          <div className="url-field">
-            <Icon name="link" size={22} />
-            <input
-              id="video-url"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              type="url"
-              required
-              maxLength={8192}
-              placeholder="粘贴公开的视频链接…"
-              disabled={loading}
-              autoComplete="url"
-              aria-invalid={!!error}
-            />
-            <button className="button primary" disabled={loading} type="submit">
-              {loading && <span className="spinner" />}
-              {loading ? "正在解析" : "开始解析"}
-              {!loading && <Icon name="arrow" size={18} />}
-            </button>
+        <HeroBackground />
+        <div className="hero-content">
+          <div className="hero-kicker">
+            <span className="tiny-square" /> YOUR VIDEO. YOUR KNOWLEDGE.
           </div>
-          <ErrorNotice error={error}>
-            <button
-              className="text-button"
-              type="button"
-              disabled={loading}
-              onClick={() => void parse()}
-            >
-              保留链接，重新尝试 ↗
-            </button>
-          </ErrorNotice>
-        </form>
-        <div className="hero-footnote">
-          <span className="mini-dot" />
-          仅支持公开免登录资源<span className="footnote-separator">/</span>
-          所有操作，尽在一个工作台
+          <h1>
+            下载视频，
+            <br className="mobile-break" />
+            <span>理解内容。</span>
+          </h1>
+          <p className="hero-description">
+            粘贴视频链接，下载视频、提取文稿，生成 AI 总结与思维导图。
+            <br className="mobile-break" />
+            让每一次观看，都有所收获。
+          </p>
+          <form
+            className="parse-form"
+            onSubmit={parse}
+            aria-busy={loading}
+            noValidate
+          >
+            <label className="sr-only" htmlFor="video-url">
+              视频链接
+            </label>
+            <div className="url-field">
+              <Icon name="link" size={22} />
+              <input
+                ref={inputRef}
+                id="video-url"
+                value={url}
+                readOnly={!signedIn}
+                onClick={() => {
+                  authStore.requireLogin();
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    !signedIn &&
+                    (event.key.length === 1 || event.key === "Enter")
+                  ) {
+                    event.preventDefault();
+                    authStore.requireLogin();
+                  }
+                }}
+                onPaste={(event) => {
+                  if (!authStore.requireLogin()) event.preventDefault();
+                }}
+                onChange={(event) => {
+                  if (!authStore.requireLogin()) return;
+                  setUrl(event.target.value);
+                  if (error) setError(null);
+                }}
+                type="url"
+                required
+                maxLength={8192}
+                placeholder="粘贴公开的视频链接…"
+                disabled={loading}
+                autoComplete="url"
+                aria-invalid={!!error}
+                aria-describedby={error ? "video-url-error" : undefined}
+              />
+              <button
+                className="button primary"
+                disabled={loading}
+                type="submit"
+              >
+                {loading && <span className="spinner" />}
+                {loading ? "正在解析" : "开始解析"}
+                {!loading && <Icon name="arrow" size={18} />}
+              </button>
+            </div>
+            <div id="video-url-error">
+              <ErrorNotice
+                error={error?.code === "VIDEO_URL_REQUIRED" ? null : error}
+              >
+                <button
+                  className="text-button"
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void parse()}
+                >
+                  保留链接，重新尝试 ↗
+                </button>
+              </ErrorNotice>
+              {error?.code === "VIDEO_URL_REQUIRED" && (
+                <p className="input-hint" role="alert">
+                  请先粘贴视频链接
+                </p>
+              )}
+            </div>
+          </form>
+          <div className="hero-footnote">
+            <span className="mini-dot" />
+            仅支持公开免登录资源<span className="footnote-separator">/</span>
+            所有操作，尽在一个工作台
+          </div>
         </div>
       </section>
-      <section className="feature-section" aria-label="功能介绍">
-        <div className="section-caption">
-          <span>更少操作，更多收获</span>
-          <span>THREE WAYS TO GO FURTHER</span>
-        </div>
-        <div className="feature-grid">
-          {features.map((feature) => (
-            <article key={feature.n} className="feature-card">
-              <div className="feature-top">
-                <Icon name={feature.icon} size={26} />
-                <span>{feature.n}</span>
-              </div>
-              <h2>{feature.title}</h2>
-              <p>{feature.description}</p>
-              <div className="feature-note">
-                {feature.note}
-                <Icon name="arrow" size={16} />
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-      <div className="home-bottom">
-        <span>为专注而设计。</span>
-        <span>从第一帧，到最后一个想法。</span>
-      </div>
+      <PlatformLogos />
     </div>
   );
 }

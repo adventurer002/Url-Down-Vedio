@@ -59,17 +59,38 @@ async def execute_ai(task_id, service, results, pipeline, provider):
         await database_call(tasks.mark_processing, task_id)
         async with asyncio.timeout(settings.AI_TASK_TIMEOUT_SECONDS):
             transcript = await pipeline.acquire(task_id, lambda event: advance(int(event["progress"] * .4), event.get("stage")))
+            if "allowance" in task.input_payload:
+                from app.modules.ai.providers.bounded import BoundedLLMProvider
+                limits = task.input_payload["allowance"]["ai_limits"]
+                if len(transcript.content_text) > limits["text_chars"]:
+                    raise AppException("TRANSCRIPT_TOO_LONG", "首版单次文稿最多 60000 字符", 413)
+                if provider.name == "openai_compatible":
+                    provider.model = task.input_payload["allowance"]["llm_model"]
+                provider = BoundedLLMProvider(provider, limits)
             language = task.input_payload["output_language"]
             kind = task.task_type.removeprefix("ai_")
             summary_version = settings.SUMMARY_PROMPT_VERSION
             version = summary_version if kind == "summary" else settings.MINDMAP_PROMPT_VERSION + ":" + settings.MINDMAP_SCHEMA_VERSION
+            if "allowance" in task.input_payload:
+                summary_version = task.input_payload["allowance"]["summary_version"]
+                version = summary_version if kind == "summary" else task.input_payload["allowance"]["mindmap_version"]
+
+            def delivered(item, cache_hit=False, summary_id=None):
+                value = {**result(item, cache_hit), "transcript_id": str(transcript.id)}
+                if summary_id:
+                    value["summary_result_id"] = str(summary_id)
+                return value
+
             cached = await database_call(results.find_cache, transcript.content_hash, kind, provider.model, version, language)
             if cached:
-                task = await database_call(tasks.complete_with, task_id, result(cached, True), lambda session: None)
+                summary_cached = await database_call(results.find_cache, transcript.content_hash, "summary", provider.model, summary_version, language)
+                task = await database_call(tasks.complete_with, task_id, delivered(cached, True,
+                    summary_cached.id if kind == "mindmap" and summary_cached else None), lambda session: None)
             else:
                 summary_cache = await database_call(results.find_cache, transcript.content_hash, "summary", provider.model, summary_version, language)
                 if summary_cache:
                     summary = VideoSummarySchema.model_validate(summary_cache.content_json)
+                    summary_id = summary_cache.id
                 else:
                     generated = await Summarizer(provider).summarize(transcript, language, cancelled=cancelled,
                         on_progress=lambda value: advance(40 + int(value * .45), "summary"))
@@ -78,17 +99,18 @@ async def execute_ai(task_id, service, results, pipeline, provider):
                         return results.store(session, task_id, transcript, "summary", provider.name, provider.model,
                             summary_version, language, summary.model_dump(), generated.usage)
                     if kind == "summary":
-                        task = await database_call(tasks.complete_with, task_id, {}, lambda session: result(store_summary(session)))
+                        task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(store_summary(session)))
                     else:
-                        await database_call(tasks.perform_if_active, task_id, store_summary)
+                        summary_record = await database_call(tasks.perform_if_active, task_id, store_summary)
+                        summary_id = summary_record.id
                 if kind == "summary" and summary_cache:
-                    task = await database_call(tasks.complete_with, task_id, result(summary_cache, True), lambda session: None)
+                    task = await database_call(tasks.complete_with, task_id, delivered(summary_cache, True), lambda session: None)
                 elif kind == "mindmap":
                     await advance(90, "mindmap")
                     mapped = await MindMapGenerator(provider).generate(summary, language, cancelled=cancelled)
-                    task = await database_call(tasks.complete_with, task_id, {}, lambda session: result(results.store(
+                    task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(results.store(
                         session, task_id, transcript, "mindmap", provider.name, provider.model, version, language,
-                        mapped.content.model_dump(), mapped.usage, mapped.markdown)))
+                        mapped.content.model_dump(), mapped.usage, mapped.markdown), summary_id=summary_id))
     except Exception as exc:
         code = exc.code if isinstance(exc, AppException) else "AI_TIMEOUT" if isinstance(exc, TimeoutError) else "AI_GENERATION_FAILED"
         message = exc.message if isinstance(exc, AppException) else "AI 任务超时" if isinstance(exc, TimeoutError) else "AI 生成失败"

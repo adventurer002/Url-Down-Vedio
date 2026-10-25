@@ -84,6 +84,15 @@ def install_log_redaction():
             return record
         factory._videohub_redaction = True
         logging.setLogRecordFactory(factory)
+    # Ensure application loggers (app.*) emit at INFO; uvicorn only wires its own loggers.
+    root = logging.getLogger()
+    if root.level == logging.NOTSET or root.level > logging.INFO:
+        root.setLevel(logging.INFO)
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+        handler.addFilter(_filter)
+        root.addHandler(handler)
     for logger in [logging.getLogger(), *(item for item in logging.Logger.manager.loggerDict.values() if isinstance(item, logging.Logger))]:
         for handler in logger.handlers:
             if not any(isinstance(item, SensitiveURLFilter) for item in handler.filters):

@@ -1,0 +1,16 @@
+[Unit]
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=videohub
+Group=videohub
+WorkingDirectory=/opt/videohub/backend
+EnvironmentFile=/etc/videohub/backend.env
+Environment=PYTHONUNBUFFERED=1
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+Type=oneshot
+ExecStart=/opt/videohub/backend/.venv/bin/python -m app.modules.billing.manage reconcile
+TimeoutStartSec=120

@@ -135,9 +135,10 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
             <Icon name="fit" size={17} />
           </button>
         </div>
-        <div>
+        <div className="map-export-group">
           <button
-            className="small-button"
+            className="export-button"
+            title="下载 Markdown 文件"
             onClick={() =>
               downloadText(
                 markdown,
@@ -146,14 +147,17 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
               )
             }
           >
-            .md ↓
+            <Icon name="text" size={15} />
+            <span>Markdown</span>
           </button>
           <button
-            className="small-button"
+            className="export-button"
+            title="下载 SVG 矢量图"
             disabled={loading || !!error}
             onClick={exportSvg}
           >
-            .svg ↓
+            <Icon name="download" size={15} />
+            <span>SVG</span>
           </button>
         </div>
       </div>

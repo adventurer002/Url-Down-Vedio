@@ -453,6 +453,7 @@ async def test_qwen_asr_sends_data_uri_and_extracts_text(tmp_path):
         body = json.loads(request.content)
         assert request.url.path == "/compatible-mode/v1/chat/completions"
         assert body["model"] == "qwen3-asr-flash"
+        assert body["messages"][0]["content"][0]["input_audio"]["format"] == "mp3"
         assert body["messages"][0]["content"][0]["input_audio"]["data"] == "data:audio/mpeg;base64," + base64.b64encode(b"test audio").decode()
         return httpx.Response(200, json={"choices": [{"message": {"content": "真实转写测试"}}]})
 
@@ -479,7 +480,8 @@ async def test_qwen_asr_actionable_errors(tmp_path, status, body, code):
     assert "private upstream details" not in exc.value.message
 
 
-async def test_qwen_splits_long_audio_with_real_ranges_and_cleans(tmp_path):
+@pytest.mark.parametrize("upload_mb, expected_chunks", [(25, 2), (1, 4)])
+async def test_qwen_splits_long_audio_with_real_ranges_and_cleans(tmp_path, upload_mb, expected_chunks):
     import wave
     from app.modules.transcript.providers import QwenASRProvider
     audio = tmp_path / "long.wav"
@@ -495,16 +497,63 @@ async def test_qwen_splits_long_audio_with_real_ranges_and_cleans(tmp_path):
         body = json.loads(request.content)
         uri = body["messages"][0]["content"][0]["input_audio"]["data"]
         assert uri.startswith("data:audio/wav;base64,")
-        calls.append(base64.b64decode(uri.split(",", 1)[1]))
+        assert body["messages"][0]["content"][0]["input_audio"]["format"] == "wav"
+        chunk = base64.b64decode(uri.split(",", 1)[1])
+        assert len(chunk) <= upload_mb * 1024 * 1024
+        calls.append(chunk)
         return httpx.Response(200, json={"choices": [{"message": {"content": f"分段 {len(calls)}", "annotations": [{"language": "zh"}]}}]})
 
-    provider = QwenASRProvider("https://example.com/v1", "test", "qwen3-asr-flash", transport=httpx.MockTransport(handle))
+    provider = QwenASRProvider("https://example.com/v1", "test", "qwen3-asr-flash", max_upload_mb=upload_mb, transport=httpx.MockTransport(handle))
     data = await provider.transcribe(audio, None)
-    assert len(calls) == 2
-    assert len(data.segments) == 2
+    assert len(calls) == expected_chunks
+    assert len(data.segments) == expected_chunks
     assert data.segments[0]["start"] == 0
-    assert data.segments[0]["end"] == pytest.approx(120, abs=.1)
-    assert data.segments[1]["end"] == pytest.approx(125, abs=.1)
+    assert data.segments[-1]["end"] == pytest.approx(125, abs=.1)
+    for previous, current in zip(data.segments, data.segments[1:]):
+        assert current["start"] == pytest.approx(previous["end"])
     assert data.language == "zh"
     assert not list(tmp_path.glob("asr-chunks-*"))
     assert audio.exists()
+
+
+@pytest.mark.parametrize("failure", ["cancel", "upstream"])
+async def test_qwen_chunk_failure_cleans_temporary_files_and_preserves_source(tmp_path, monkeypatch, failure):
+    import asyncio
+    import wave
+    from app.modules.transcript import providers
+
+    source = tmp_path / "original.mp3"
+    source.write_bytes(b"original audio")
+
+    async def split(runner, command, directory, **kwargs):
+        for index in range(2):
+            with wave.open(str(directory / f"chunk-{index:05d}.wav"), "wb") as output:
+                output.setnchannels(1)
+                output.setsampwidth(2)
+                output.setframerate(16000)
+                output.writeframes(b"\x00\x00" * 16000)
+        if failure == "cancel":
+            raise asyncio.CancelledError
+        return {}
+
+    monkeypatch.setattr(providers.shutil, "which", lambda _: "/opt/ffmpeg")
+    monkeypatch.setattr(providers.ProcessRunner, "run", split)
+    provider = providers.QwenASRProvider("https://example.com/v1", "key", "qwen3-asr-flash")
+    provider._transcribe_chunk = AsyncMock(side_effect=AppException("ASR_API_ERROR", "upstream failed", 502))
+    with pytest.raises(asyncio.CancelledError if failure == "cancel" else AppException):
+        await provider.transcribe(source, "zh")
+    assert provider._transcribe_chunk.await_count == (0 if failure == "cancel" else 1)
+    assert source.read_bytes() == b"original audio"
+    assert not list(tmp_path.glob("asr-chunks-*"))
+
+
+async def test_qwen_reports_upstream_audio_format_error(tmp_path):
+    from app.modules.transcript.providers import QwenASRProvider
+    audio = tmp_path / "audio.wav"
+    audio.write_bytes(b"test")
+    provider = QwenASRProvider("https://example.com/v1", "key", "qwen3-asr-flash", transport=httpx.MockTransport(
+        lambda request: httpx.Response(400, json={"error": {"code": "UNSUPPORTED_FORMAT", "message": "private upstream details"}})))
+    with pytest.raises(AppException) as error:
+        await provider._transcribe_chunk(audio, None)
+    assert error.value.code == "ASR_AUDIO_FORMAT_UNSUPPORTED"
+    assert "private upstream details" not in error.value.message

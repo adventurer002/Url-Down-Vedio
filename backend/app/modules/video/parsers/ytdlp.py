@@ -10,6 +10,7 @@ import sys
 
 from app.core.exceptions import AppException
 from app.modules.video.parsers.base import ParsedVideo
+from app.modules.video.parsers.runtime import javascript_runtime_options
 
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 PARSE_TIMEOUT = 30.0
@@ -51,7 +52,7 @@ def extraction_options(proxy: str | None) -> dict:
         "allowed_extractors": ["default", "-generic"],
         "check_formats": False, "writesubtitles": False, "writeautomaticsub": False,
         "writethumbnail": False, "writeinfojson": False,
-        "js_runtimes": {}, "remote_components": [],
+        "js_runtimes": javascript_runtime_options(), "remote_components": [],
     }
 
 
@@ -62,6 +63,14 @@ def map_extraction_error(exc: Exception) -> AppException:
     detail = str(exc).lower()
     if isinstance(exc, TimeoutError) or "timed out" in detail or "timeout" in detail:
         return AppException("PARSE_TIMEOUT", "视频元数据解析超时，请稍后重试", 504)
+    if any(text in detail for text in ("confirm you're not a bot", "confirm you’re not a bot", "http error 403", "captcha")):
+        return AppException("SOURCE_ACCESS_RESTRICTED", "视频平台要求额外验证或限制了服务器访问，请稍后重试", 502)
+    if any(text in detail for text in ("http error 429", "too many requests", "rate limit")):
+        return AppException("SOURCE_RATE_LIMITED", "视频平台请求频率受限，请稍后重试", 503)
+    if any(text in detail for text in ("no supported javascript runtime", "challenge solving failed", "signature extraction failed")):
+        return AppException("YTDLP_RUNTIME_UNAVAILABLE", "服务器视频解析运行时不可用，请联系管理员", 503)
+    if any(text in detail for text in ("connection refused", "network is unreachable", "proxy error", "getaddrinfo failed")):
+        return AppException("SOURCE_NETWORK_UNAVAILABLE", "服务器暂时无法连接视频平台，请稍后重试", 502)
     if any(text in detail for text in ("unsupported url", "no suitable extractor", "no video", "playlist", "sign in", "login", "private video", "not available", "video unavailable", "not a valid url")):
         return AppException("UNSUPPORTED_URL", "链接不受支持或不是公开免登录视频", 422)
     return AppException("PARSE_FAILED", "无法解析视频元数据，请稍后重试", 502)
@@ -126,6 +135,11 @@ class YtDlpParser:
                         "UNSUPPORTED_URL": ("链接不受支持或不是公开免登录视频", 422),
                         "PARSE_TIMEOUT": ("视频元数据解析超时，请稍后重试", 504),
                         "PARSE_FAILED": ("无法解析视频元数据，请稍后重试", 502),
+                        "YTDLP_PROXY_INVALID": ("服务器视频网络出口配置无效，请联系管理员", 503),
+                        "YTDLP_RUNTIME_UNAVAILABLE": ("服务器视频解析运行时不可用，请联系管理员", 503),
+                        "SOURCE_ACCESS_RESTRICTED": ("视频平台要求额外验证或限制了服务器访问，请稍后重试", 502),
+                        "SOURCE_RATE_LIMITED": ("视频平台请求频率受限，请稍后重试", 503),
+                        "SOURCE_NETWORK_UNAVAILABLE": ("服务器暂时无法连接视频平台，请稍后重试", 502),
                     }
                     code = result["error"]
                     if code not in errors:

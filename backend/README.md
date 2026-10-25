@@ -1,5 +1,13 @@
 # VideoHub AI backend
 
+视频问答、引用与个人知识库：[KNOWLEDGE_V1.md](KNOWLEDGE_V1.md)。
+
+额度制首版：会员、转写分钟包、AI 次数包、报价确认与核销，见 [ALLOWANCES_V1.md](ALLOWANCES_V1.md)。
+默认开启额度限制；新任务通过 `/api/v1/billing/quotes` → `/api/v1/billing/tasks` 创建。
+本阶段提供服务端人工发放命令，没有真实支付。前端现已接入订阅展示、额度查询与报价确认流程，见 [前端交付说明](../frontend/README.md#订阅与额度2026-10-24)。
+
+生产 YouTube 下载部署、服务端出口配置与验收：[YOUTUBE_PRODUCTION.md](YOUTUBE_PRODUCTION.md)。
+
 Python 3.14，依赖通过本目录的 `pyproject.toml` / `uv.lock` 管理。
 完整配置、启动、Celery 验证与接口说明见 [根目录 README](../README.md)。
 
@@ -491,3 +499,36 @@ uv run pytest
 - 修改 `app/modules/tasks/repository.py`、`service.py`，新增受取消保护的中间写入契约与 AI 任务类型。
 - 修改 `app/modules/transcript/service.py`、`worker.py`、`providers.py`，复用转写流水线及共用受保护 HTTP 传输。
 - 修改本 `README.md`。本阶段无新增依赖，无前端变更。
+
+## 阶段 9：微信公众号口令登录
+
+新增个人公众号 6 位动态口令登录、mock 联调、取关拦截、JWT Header/Cookie 鉴权及用户任务隔离。
+完整配置、启动命令、curl / Swagger 验收、迁移与文件清单见 [阶段 9 交付说明](STAGE9.md)。
+
+### 千问 ASR 长音频大小限制修复
+
+`ASR_MAX_UPLOAD_MB` 限制每个云端请求的音频大小。千问适配器先将源音频转换为单声道 16kHz PCM，并按最多 120 秒分段；配置更小的上传上限时，自动按 32,000 字节/秒及 WAV/分段边界余量缩短切片。源音频不再因超过单次上传上限而在分段前失败，仍受 `MAX_FILE_SIZE_MB` 的任务文件上限与原有转换输出体积监控约束。每个切片上传前仍检查大小。
+
+修改：`app/modules/transcript/providers.py`、`tests/test_media_and_transcript.py` 和本说明。完整回归：`AUTH_REQUIRED=False WECHAT_MP_STATIC_QR_URL= uv run pytest -q`，236 项通过，包含真实 FFmpeg 分片、时间轴连续性、取消/上游失败后的清理与源文件保留。
+
+启动仍使用项目根目录 `python3 scripts/dev.py --skip-install`（或前文 API / Celery 独立启动命令）。重启 Worker 后，在工作台对原视频重新点击“获取字幕 / 转写”，或在 Swagger `/docs` 调用现有转写创建接口再查询任务状态。已失败的历史任务不会自动改为成功。本次未调用真实云端 ASR 重试该用户视频；超长音频仍可能触发独立的 `ASR_TIMEOUT`，应按服务能力配置有限的总超时。
+
+### 千问模型与请求格式兼容性验证
+
+本地配置原使用 `qwen-audio-3.0-asr-flash`，真实接口返回 HTTP 400 / `UNSUPPORTED_FORMAT` / `format is empty`。相同接口、密钥及一秒生成静音的请求改用 `qwen3-asr-flash` 后返回 HTTP 200，本地 `.env` 已切换为该模型（凭据未修改）。请求显式提供 `input_audio.format`；上游 `UNSUPPORTED_FORMAT` 映射为 `ASR_AUDIO_FORMAT_UNSUPPORTED`，避免只显示泛化 API 错误。
+
+修改：本地 `.env` 的 `ASR_MODEL`、`app/modules/transcript/providers.py`、`tests/test_media_and_transcript.py` 与本说明。完整后端回归 237 项通过。重启开发服务后，在工作台重新提交转写；静音探测仅验证请求被接受，不代表用户完整视频转写已成功。
+
+### 任务历史删除与清除
+
+单条删除：`DELETE /api/v1/tasks/history/{task_id}`；一键清除：`DELETE /api/v1/tasks/history`。均要求登录，成功返回 `{"data":{"deleted_count":1}}`，一键清除覆盖当前用户全部分页。其他用户或不存在的记录返回 `TASK_NOT_FOUND`，未登录返回 `AUTH_REQUIRED`。重复删除成功且计数为 0。
+
+使用迁移 `0005_task_history_visibility.py` 增加 `tasks.history_hidden`，历史列表与计数排除已删除记录。只更新当前用户的历史可见性，不删除任务、媒体、转写/总结结果，不取消后台任务，也不撤销已有结果访问权限。前端保留任务跟踪并持久化本地历史隐藏标记，避免刷新响应或 SSE 让记录重新出现。
+
+修改：上述迁移、`modules/tasks/{models,repository,history,router}.py`、`tests/test_history_and_security.py`；前端 `TaskHistory.tsx`、`Icon.tsx`、`stores/workspace.ts`、`api/{client,index}.ts`、`style.css` 及对应工作台/状态测试。
+
+部署：`cd backend` 后执行 `uv run alembic upgrade head`，然后按前文启动 API/Worker，前端执行 `pnpm dev`；亦可从项目根目录执行 `python3 scripts/dev.py --skip-install`。Swagger `/docs` 登录授权后，先查询 `GET /api/v1/tasks`，删除单条再查询，最后测试清除全部及重复清除。使用自己的测试记录，历史清除不会清理磁盘文件。
+
+验证：完整后端 238 项、前端 56 项通过；前端类型检查与生产构建通过。覆盖越权、未登录、分页清除、重复删除、运行任务保留、结果授权保留、删除失败保留记录及过期刷新响应防回流。
+
+历史删除跨域修复：CORS 的 `allow_methods` 已加入 `DELETE`。此前浏览器对单条删除/清除历史发起的 OPTIONS 预检返回 400，Axios 因而显示 `NETWORK_ERROR`；接口本身的单元测试未覆盖该浏览器前置步骤。现新增 localhost/127.0.0.1 两个来源、两个删除路径的预检与认证错误响应测试，仍拒绝未授权来源。后端完整回归 242 项通过。重启 API 后可用 `curl -i -X OPTIONS http://127.0.0.1:8000/api/v1/tasks/history -H 'Origin: http://127.0.0.1:5173' -H 'Access-Control-Request-Method: DELETE' -H 'Access-Control-Request-Headers: authorization,content-type'` 检查预期 HTTP 200 与允许 DELETE 的响应头。

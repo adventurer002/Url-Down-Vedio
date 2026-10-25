@@ -1,5 +1,6 @@
 import { api } from "../api";
 import { ApiError, normalizeError } from "../api/client";
+import { billingStore } from "./billing";
 import { createTaskTracker, terminal } from "../lib/taskTracker";
 import type {
   JobKind,
@@ -24,6 +25,7 @@ export interface LocalTask {
   snapshot?: TaskSnapshot;
   trackingError?: string;
   videoAvailable?: boolean;
+  historyHidden?: boolean;
 }
 function read<T>(key: string, fallback: T): T {
   try {
@@ -42,6 +44,9 @@ function write(key: string, value: unknown) {
 export function createWorkspace() {
   let version = 0;
   let trackingEnabled = true;
+  let identity = "";
+  let identityVersion = 0;
+  let historyRevision = 0;
   const listeners = new Set<() => void>();
   function notify() {
     version++;
@@ -66,6 +71,7 @@ export function createWorkspace() {
     historyTotal: 0,
     historyOffset: 0,
     historyLoading: false,
+    historyMutating: false,
     historyLoaded: false,
   };
   const jobLabels: Record<string, string> = {
@@ -74,14 +80,22 @@ export function createWorkspace() {
     transcription: "字幕 / 语音转写",
     ai_summary: "AI 结构化总结",
     ai_mindmap: "AI 思维导图",
+    ai_question: "视频问答",
     simulate_progress: "系统演示任务",
   };
   async function loadHistory(reset = true) {
-    if (state.historyLoading) return;
+    if (state.historyLoading || state.historyMutating) return;
+    const expectedIdentity = identityVersion;
+    const expectedHistory = historyRevision;
     state.historyLoading = true;
     notify();
     try {
       const page = await api.history(20, reset ? 0 : state.historyOffset);
+      if (
+        expectedIdentity !== identityVersion ||
+        expectedHistory !== historyRevision
+      )
+        return;
       const pageIds: string[] = [];
       for (const snapshot of page.items) {
         const v = snapshot.video;
@@ -120,6 +134,7 @@ export function createWorkspace() {
           id: snapshot.task_id,
           videoKey,
           videoAvailable: !!v,
+          historyHidden: false,
           title: snapshot.video_title || "系统任务",
           kind: snapshot.task_type,
           label: jobLabels[snapshot.task_type] || snapshot.task_type,
@@ -145,20 +160,60 @@ export function createWorkspace() {
       state.historyLoaded = true;
       persist();
     } finally {
-      state.historyLoading = false;
-      notify();
+      if (expectedIdentity === identityVersion) {
+        state.historyLoading = false;
+        notify();
+      }
+    }
+  }
+  async function deleteHistory(taskId?: string) {
+    if (state.historyMutating) return;
+    const expectedIdentity = identityVersion;
+    const affected = new Set(
+      taskId ? [taskId] : state.tasks.map((task) => task.id),
+    );
+    const previousIds = new Set(state.historyIds);
+    state.historyMutating = true;
+    historyRevision++;
+    notify();
+    try {
+      const result = taskId
+        ? await api.deleteHistory(taskId)
+        : await api.clearHistory();
+      if (expectedIdentity !== identityVersion) return;
+      for (const task of state.tasks)
+        if (affected.has(task.id)) task.historyHidden = true;
+      state.historyIds = state.historyIds.filter((id) => !affected.has(id));
+      const removedLoaded = [...previousIds].filter((id) =>
+        affected.has(id),
+      ).length;
+      state.historyTotal = Math.max(
+        0,
+        state.historyTotal - result.deleted_count,
+      );
+      state.historyOffset = taskId
+        ? Math.max(0, state.historyOffset - removedLoaded)
+        : 0;
+      state.historyLoaded = true;
+      persist();
+    } finally {
+      if (expectedIdentity === identityVersion) {
+        historyRevision++;
+        state.historyMutating = false;
+        notify();
+      }
     }
   }
   const trackers = new Map<string, ReturnType<typeof createTaskTracker>>();
   function persist() {
-    write("videohub.videos.v1", state.videos);
-    write("videohub.tasks.v1", state.tasks);
+    write("videohub.videos.v1" + identity, state.videos);
+    write("videohub.tasks.v1" + identity, state.tasks);
     notify();
   }
-  function remember(url: string, metadata: VideoParseResult) {
+  function remember(url: string, metadata: VideoParseResult, partial = false) {
     const key = `${metadata.platform}_${metadata.platform_video_id}`;
     state.videos = [
-      { key, url, metadata },
+      { key, url, metadata, partial },
       ...state.videos.filter((v) => v.key !== key),
     ].slice(0, 30);
     persist();
@@ -183,6 +238,7 @@ export function createWorkspace() {
             target.event = { ...snapshot, seq: target.event.seq };
           target.trackingError = undefined;
           persist();
+          if (terminal(snapshot.status)) void billingStore.refresh();
         }
       },
       onError(error) {
@@ -203,6 +259,7 @@ export function createWorkspace() {
     kind: JobKind,
     label: string,
     presetId?: string,
+    quoteId?: string,
   ) {
     const key = `${video.key}:${kind}`;
     if (
@@ -220,8 +277,13 @@ export function createWorkspace() {
       );
     state.submitting.push(key);
     notify();
+    const expectedIdentity = identityVersion;
     try {
-      const created = await api.create(kind, video.url, presetId);
+      const created = quoteId
+        ? await api.confirmQuote(quoteId)
+        : await api.create(kind, video.url, presetId);
+      if (expectedIdentity !== identityVersion)
+        throw new ApiError("AUTH_CHANGED", "登录用户已变更，请刷新任务历史。");
       const item: LocalTask = {
         id: created.task_id,
         videoKey: video.key,
@@ -265,6 +327,7 @@ export function createWorkspace() {
       else if (snapshot.seq === 0 && terminal(snapshot.status))
         item.event = { ...snapshot, seq: item.event.seq };
       persist();
+      void billingStore.refresh();
     }
   }
   function restore() {
@@ -300,7 +363,7 @@ export function createWorkspace() {
         ? state.historyIds
             .map((id) => state.tasks.find((task) => task.id === id))
             .filter((task): task is LocalTask => !!task)
-        : state.tasks;
+        : state.tasks.filter((task) => !task.historyHidden);
     },
     get historyTotal() {
       return state.historyTotal;
@@ -311,6 +374,10 @@ export function createWorkspace() {
     get historyLoading() {
       return state.historyLoading;
     },
+    get historyMutating() {
+      return state.historyMutating;
+    },
+    deleteHistory,
     get historyLoaded() {
       return state.historyLoaded;
     },
@@ -324,6 +391,23 @@ export function createWorkspace() {
       };
     },
     getVersion: () => version,
+    switchUser(userId: string | null) {
+      const next = userId ? ":" + userId : "";
+      if (next === identity) return;
+      stopAll();
+      identity = next;
+      identityVersion++;
+      historyRevision++;
+      state.historyMutating = false;
+      state.tasks = [];
+      state.videos = [];
+      state.historyIds = [];
+      state.historyTotal = state.historyOffset = 0;
+      state.historyLoaded = state.historyLoading = false;
+      state.submitting = [];
+      persist();
+      restore();
+    },
     loadHistory,
     remember,
     create,

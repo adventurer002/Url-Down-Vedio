@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.exceptions import AppException
 from app.core.response import success_response
+from app.modules.auth.dependencies import required_admin
 from app.infrastructure.storage.cleanup import cleanup_expired_files
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -22,6 +23,6 @@ def get_cleanup_service():
     return CleanupService()
 
 
-@router.post("/cleanup")
+@router.post("/cleanup", dependencies=[Depends(required_admin)])
 def cleanup(service=Depends(get_cleanup_service)):
     return success_response(service.run())

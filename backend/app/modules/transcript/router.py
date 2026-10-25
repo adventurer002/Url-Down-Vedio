@@ -1,3 +1,4 @@
+from app.modules.auth.dependencies import creation_user, optional_user
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -32,11 +33,11 @@ def get_transcript_service():
 
 
 @router.post("", status_code=202)
-async def create_transcription(body: TranscriptionRequest, service: TranscriptService = Depends(get_transcript_service)):
+async def create_transcription(body: TranscriptionRequest, service: TranscriptService = Depends(get_transcript_service), user=Depends(creation_user)):
     task = await service.create(body.url, body.language)
     return success_response({"task_id": str(task.id), "status": task.status})
 
 
 @router.get("/{transcript_id}")
-async def get_transcription(transcript_id: UUID, service: TranscriptService = Depends(get_transcript_service)):
-    return success_response(await service.get(transcript_id))
+async def get_transcription(transcript_id: UUID, service: TranscriptService = Depends(get_transcript_service), user=Depends(optional_user)):
+    return success_response(await service.get(transcript_id, user))

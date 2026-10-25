@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
+from app.modules.auth.dependencies import optional_user, required_user, get_auth_service
 from app.core.exceptions import AppException
 from app.core.response import success_response
 from app.infrastructure.database.session import SessionLocal
@@ -29,27 +30,47 @@ def get_history_service():
 
 @router.get("")
 async def list_tasks(limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
-                     service=Depends(get_history_service)):
-    return success_response(await service.list(limit, offset))
+                     service=Depends(get_history_service), user=Depends(optional_user)):
+    if user is None:
+        return success_response({"items": [], "total": 0, "limit": limit, "offset": offset})
+    return success_response(await service.list(limit, offset, user_id=user.id))
+
+
+@router.delete("/history")
+async def clear_history(service=Depends(get_history_service), user=Depends(required_user)):
+    return success_response(await service.delete(user.id))
+
+
+@router.delete("/history/{task_id}")
+async def delete_history(task_id: UUID, service=Depends(get_history_service), user=Depends(required_user)):
+    return success_response(await service.delete(user.id, task_id))
 
 
 @router.get("/{task_id}")
-async def get_task(task_id: UUID, service: TaskService = Depends(get_task_service)):
+async def get_task(task_id: UUID, service: TaskService = Depends(get_task_service), user=Depends(optional_user)):
+    await service.authorize(task_id, user)
     return success_response(await service.get(task_id))
 
 
 @router.post("/{task_id}/cancel")
-async def cancel_task(task_id: UUID, service: TaskService = Depends(get_task_service)):
+async def cancel_task(task_id: UUID, service: TaskService = Depends(get_task_service), user=Depends(optional_user)):
+    await service.authorize(task_id, user)
     return success_response(await service.cancel(task_id))
 
 
 @router.get("/{task_id}/events")
-async def task_events(task_id: UUID, request: Request, service: TaskService = Depends(get_task_service)):
+async def task_events(task_id: UUID, request: Request, service: TaskService = Depends(get_task_service),
+                      user=Depends(optional_user), auth=Depends(get_auth_service)):
+    await service.authorize(task_id, user)
     subscription, initial = await service.open_events(task_id)
+
+    async def check_access():
+        if user is not None:
+            await auth.user(user.id)
 
     async def stream():
         try:
-            async for event in service.events(task_id, subscription, initial):
+            async for event in service.events(task_id, subscription, initial, check_access):
                 if event is None:
                     yield ": heartbeat\n\n"
                 else:

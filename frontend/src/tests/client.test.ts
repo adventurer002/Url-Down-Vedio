@@ -42,7 +42,10 @@ it("normalizes backend errors, including request ID", () => {
 it("uses safe opaque file IDs rather than server-supplied paths", () => {
   vi.stubGlobal("window", { location: { origin: "http://localhost:5173" } });
   expect(fileDownloadUrl("abc")).toBe(
-    "http://localhost:8000/api/v1/files/abc/download",
+    new URL(
+      `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/files/abc/download`,
+      "http://localhost:5173",
+    ).href,
   );
   expect(fileDownloadUrl("../secret")).toContain("..%2Fsecret");
 });
@@ -81,4 +84,24 @@ it("formats chapter timestamps and produces escaped Markdown hierarchy", () => {
       children: [{ title: "chapter", children: [] }],
     }),
   ).toBe("# \\<root\\>\n## chapter\n");
+});
+
+it("quotes an operation then confirms only its immutable quote ID", async () => {
+  const post = vi.spyOn(client, "post").mockResolvedValue({ data: {} });
+  const controller = new AbortController();
+  await api.quote(
+    "ai_mindmap",
+    "https://example.com/video",
+    undefined,
+    controller.signal,
+  );
+  expect(post).toHaveBeenLastCalledWith(
+    "/billing/quotes",
+    { action: "ai_mindmap", url: "https://example.com/video", language: "zh" },
+    { signal: controller.signal },
+  );
+  await api.confirmQuote("quote-1");
+  expect(post).toHaveBeenLastCalledWith("/billing/tasks", {
+    quote_id: "quote-1",
+  });
 });

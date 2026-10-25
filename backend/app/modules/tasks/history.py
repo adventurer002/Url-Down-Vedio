@@ -11,8 +11,12 @@ class TaskHistoryService:
     def __init__(self, tasks: TaskService, videos: VideoRepository, media: MediaService):
         self.tasks, self.videos, self.media = tasks, videos, media
 
-    async def list(self, limit: int, offset: int):
-        records, total = await database_call(self.tasks.repository.list_recent, limit, offset)
+    async def delete(self, user_id: UUID, task_id: UUID | None = None):
+        count = await database_call(self.tasks.repository.hide_history, user_id, task_id)
+        return {"deleted_count": count}
+
+    async def list(self, limit: int, offset: int, user_id: UUID | None = None):
+        records, total = await database_call(self.tasks.repository.list_recent, limit, offset, user_id=user_id)
         videos = await database_call(self.videos.history_metadata, [t.video_id for t in records if t.video_id])
         async def snapshot(task):
             try:
