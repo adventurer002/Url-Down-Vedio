@@ -5,13 +5,13 @@ Wants=network-online.target
 [Service]
 User=videohub
 Group=videohub
-WorkingDirectory=/opt/videohub/backend
+WorkingDirectory=/opt/videohub/current/backend
 EnvironmentFile=/etc/videohub/backend.env
 Environment=PYTHONUNBUFFERED=1
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
-ExecStart=/opt/videohub/backend/.venv/bin/celery -A app.infrastructure.queue.celery_app:celery_app worker --pool=solo -c 1 --loglevel=INFO
+ExecStart=/opt/videohub/current/backend/.venv/bin/celery -A app.infrastructure.queue.celery_app:celery_app worker --pool=solo -c 1 --loglevel=INFO
 Restart=on-failure
 RestartSec=5
 # Warm stop goes only to the Worker. Its watchdog controls child process groups.

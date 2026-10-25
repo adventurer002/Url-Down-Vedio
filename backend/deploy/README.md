@@ -1,5 +1,7 @@
 # Ubuntu 22.04 + 1Panel 首次部署准备
 
+自动发布现使用 current 版本目录。已完成手动数据库准备的实例请继续 [CD.md](CD.md)，不要重新复制配置模板或按旧步骤直接启动。下文保留基础环境说明。
+
 适用：4核8GB、x86_64，复用面板 PostgreSQL16 / Redis7 / OpenResty；API 与单个 Solo Worker 运行在宿主机。当前文件是部署模板，尚未执行远程部署。
 
 ## 先确认
