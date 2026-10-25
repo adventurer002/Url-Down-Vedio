@@ -1,0 +1,113 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Successful main CI run ID containing the release artifact'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: videohub-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy verified release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    environment: production
+    steps:
+      - name: Verify CI run and choose its exact artifact
+        id: release
+        uses: actions/github-script@v8
+        env:
+          REQUESTED_RUN_ID: ${{ inputs.run_id }}
+        with:
+          script: |
+            const input = process.env.REQUESTED_RUN_ID;
+            if (!/^[0-9]+$/.test(input)) throw new Error('run_id must be numeric');
+            const run_id = Number(input);
+            if (!Number.isSafeInteger(run_id)) throw new Error('Invalid run ID');
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id});
+            if (run.path !== '.github/workflows/ci.yml' || run.head_branch !== 'main' ||
+                run.status !== 'completed' || run.conclusion !== 'success' ||
+                !['push', 'workflow_dispatch'].includes(run.event) ||
+                run.head_repository.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              throw new Error('Select a successful main CI run from this repository');
+            }
+            if (!/^[0-9a-f]{40}$/.test(run.head_sha)) throw new Error('Invalid commit');
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
+              {...context.repo, run_id, per_page: 100});
+            const matches = artifacts.filter(a => a.name === `videohub-release-${run.head_sha}` && !a.expired);
+            if (matches.length !== 1) throw new Error('Exactly one unexpired release artifact is required');
+            core.setOutput('sha', run.head_sha);
+            core.setOutput('artifact_id', String(matches[0].id));
+            core.setOutput('run_id', String(run_id));
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.release.outputs.artifact_id }}
+          merge-multiple: true
+          run-id: ${{ steps.release.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: release
+      - name: Validate package checksum
+        id: checksum
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          root = Path('release')
+          name = f'videohub-{os.environ["RELEASE_SHA"]}.tar.gz'
+          package = root / name
+          assert {p.name for p in root.iterdir()} == {name, name + '.sha256'}, 'Unexpected artifact contents'
+          digest = hashlib.sha256(package.read_bytes()).hexdigest()
+          assert (root / (name + '.sha256')).read_text().strip() == f'{digest}  {name}', 'Checksum mismatch'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'digest={digest}\n')
+          PY
+      - name: Connect and deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          PACKAGE_SHA256: ${{ steps.checksum.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$SSH_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
+          [[ "$SSH_PORT" =~ ^[0-9]+$ ]] && (( SSH_PORT >= 1 && SSH_PORT <= 65535 ))
+          [[ "$SSH_USER" == videohub-deploy ]]
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PACKAGE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          umask 077
+          mkdir -p "$RUNNER_TEMP/deploy-ssh"
+          key="$RUNNER_TEMP/deploy-ssh/key"
+          known="$RUNNER_TEMP/deploy-ssh/known_hosts"
+          trap 'rm -rf "$RUNNER_TEMP/deploy-ssh"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$known"
+          options=(-i "$key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes
+            -o "UserKnownHostsFile=$known" -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
+          target="$SSH_USER@$SSH_HOST"
+          scp "${options[@]}" -P "$SSH_PORT" "release/videohub-$RELEASE_SHA.tar.gz" \
+            "$target:/home/videohub-deploy/incoming/videohub-$RELEASE_SHA.tar.gz"
+          ssh "${options[@]}" -p "$SSH_PORT" "$target" \
+            "sudo -n /usr/local/sbin/videohub-deploy $RELEASE_SHA $PACKAGE_SHA256"
+      - name: Record deployment
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          CI_RUN_ID: ${{ steps.release.outputs.run_id }}
+        run: |
+          printf 'Deployed commit: `%s`\n\nCI run: `%s`\n\nBackend checked; frontend staged pending website setup.\n' \
+            "$RELEASE_SHA" "$CI_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
