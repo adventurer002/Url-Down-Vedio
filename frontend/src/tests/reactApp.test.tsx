@@ -13,6 +13,7 @@ import {
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "../App";
+import { allowances, quote } from "./billingFixtures";
 import { api } from "../api";
 import { ApiError } from "../api/client";
 import { WorkspaceProvider } from "../hooks/useWorkspace";
@@ -60,6 +61,9 @@ const summary = {
     source_basis: "subtitle",
     overview: "测试视频概述",
     key_points: ["关键要点"],
+    conclusions: ["测试核心结论"],
+    audience: ["后端开发者"],
+    action_steps: ["检查事务边界"],
     chapters: [{ start_seconds: 93, title: "章节标题", summary: "章节摘要" }],
   },
 } as SummaryResult;
@@ -120,6 +124,12 @@ beforeEach(() => {
     value() {
       this.removeAttribute("open");
     },
+  });
+  vi.spyOn(api, "allowances").mockResolvedValue(allowances);
+  vi.spyOn(api, "quote").mockResolvedValue(quote);
+  vi.spyOn(api, "confirmQuote").mockResolvedValue({
+    task_id: "job-1",
+    status: "queued",
   });
   vi.spyOn(api, "ready").mockResolvedValue({
     status: "ready",
@@ -204,6 +214,8 @@ it("reacts to SSE progress, fetches the completed result and exposes the control
   mount("/video/demo_one", savedStore());
   await screen.findByRole("radio", { name: /720P/ });
   fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
+  expect(api.confirmQuote).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole("button", { name: "确认并开始" }));
   await waitFor(() => expect(FakeSource.instances.length).toBe(1));
   act(() => FakeSource.instances[0]!.emit(snapshot("running", 2)));
   expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
@@ -228,6 +240,7 @@ it("cancels an active task through the store and updates the React task card", a
   mount("/video/demo_one", savedStore());
   await screen.findByRole("radio", { name: /720P/ });
   fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认并开始" }));
   fireEvent.click(await screen.findByRole("button", { name: "取消任务" }));
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "取消任务" })).toBeNull(),
@@ -272,6 +285,10 @@ it("restores a summary and transcript and switches workspace tabs", async () => 
   expect(writeText).toHaveBeenCalledWith(
     expect.stringContaining("测试视频概述"),
   );
+  expect(writeText).toHaveBeenCalledWith(
+    expect.stringContaining("检查事务边界"),
+  );
+  expect(screen.getByRole("heading", { name: "核心结论" })).toBeTruthy();
   writeText.mockRejectedValueOnce(new Error("permission denied"));
   fireEvent.click(screen.getByRole("button", { name: "复制总结" }));
   expect(await screen.findByText("复制失败，请重试")).toBeTruthy();
@@ -558,7 +575,7 @@ it.each(["input", "parse", "history", "login"])(
   },
 );
 
-it("requires a new login for an unsubscribed account and blocks pasted input", async () => {
+it("preserves workspace access for an active unsubscribed account", async () => {
   vi.mocked(authStore.hasAccess).mockRestore();
   authStore.accept({
     status: "authenticated",
@@ -581,12 +598,10 @@ it("requires a new login for an unsubscribed account and blocks pasted input", a
   const parse = vi.spyOn(api, "parse");
   mount();
   const input = screen.getByLabelText("视频链接");
-  expect((input as HTMLInputElement).readOnly).toBe(true);
-  fireEvent.paste(input);
-  await screen.findByRole("dialog", { name: "关注，即刻开始。" });
+  expect((input as HTMLInputElement).readOnly).toBe(false);
+  expect(screen.queryByRole("dialog", { name: "关注，即刻开始。" })).toBeNull();
   expect(parse).not.toHaveBeenCalled();
-  expect(api.history).not.toHaveBeenCalled();
-  expect(screen.queryByRole("button", { name: "账户菜单" })).toBeNull();
+  expect(screen.getByRole("button", { name: "账户菜单" })).toBeTruthy();
 });
 
 it("lets a subscribed signed-in user paste and parse normally", async () => {
@@ -612,4 +627,32 @@ it("lets a subscribed signed-in user paste and parse normally", async () => {
   fireEvent.click(screen.getByRole("button", { name: "开始解析" }));
   await screen.findByRole("heading", { name: metadata.title });
   expect(parse).toHaveBeenCalledWith("https://example.com/video");
+});
+
+it("keeps the confirmed quote on a transient submission failure and sends it once on retry", async () => {
+  const confirm = vi
+    .mocked(api.confirmQuote)
+    .mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "提交暂时失败"))
+    .mockResolvedValueOnce({ task_id: "job-1", status: "queued" });
+  const legacy = vi.spyOn(api, "create");
+  mount("/video/demo_one", savedStore());
+  await screen.findByRole("radio", { name: /720P/ });
+  fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认并开始" }));
+  await screen.findByText("提交暂时失败");
+  fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
+  await waitFor(() => expect(FakeSource.instances).toHaveLength(1));
+  expect(confirm.mock.calls).toEqual([["quote-1"], ["quote-1"]]);
+  expect(api.quote).toHaveBeenCalledTimes(1);
+  expect(legacy).not.toHaveBeenCalled();
+});
+
+it("does not create a task when the user closes an allowance quote", async () => {
+  mount("/video/demo_one", savedStore());
+  await screen.findByRole("radio", { name: /720P/ });
+  fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
+  fireEvent.click(await screen.findByRole("button", { name: "暂不开始" }));
+  expect(screen.queryByRole("dialog", { name: "确认本次额度" })).toBeNull();
+  expect(api.confirmQuote).not.toHaveBeenCalled();
+  expect(FakeSource.instances).toHaveLength(0);
 });

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useParams, useLocation } from "react-router-dom";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceResults } from "../hooks/useWorkspaceResults";
 import { api } from "../api";
@@ -12,6 +12,14 @@ import ErrorNotice from "../components/ErrorNotice";
 import TaskCard from "../components/TaskCard";
 import MindMapViewer from "../components/MindMapViewer";
 import DownloadSettings from "../components/DownloadSettings";
+import AllowanceConfirm from "../components/AllowanceConfirm";
+import { authStore, useAuth } from "../stores/auth";
+import { billingStore, useBilling } from "../stores/billing";
+import type { AllowanceQuote } from "../types/billing";
+import { durationLabel } from "../utils/billing";
+import VideoQuestions, { originalLink } from "../components/VideoQuestions";
+import SaveToLibrary from "../components/SaveToLibrary";
+import type { Citation } from "../types/knowledge";
 
 export default function VideoWorkspaceView() {
   const store = useWorkspace(),
@@ -21,10 +29,63 @@ export default function VideoWorkspaceView() {
   const [tab, setTab] = useState("media"),
     [raw, setRaw] = useState(false),
     [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const { search } = useLocation();
+  const selectedTranscriptId = new URLSearchParams(search).get("transcript");
+  useEffect(() => {
+    if (new URLSearchParams(search).get("tab") === "questions")
+      setTab("questions");
+  }, [search]);
   const [error, setError] = useState<ApiError | null>(null),
     [refreshingMetadata, setRefreshingMetadata] = useState(false);
   const { summary, transcript, mindmap, resultError, reloadResults } =
     useWorkspaceResults(id);
+  const { user } = useAuth();
+  const billing = useBilling();
+  const [proposal, setProposal] = useState<{
+    quote: AllowanceQuote;
+    kind: JobKind;
+    label: string;
+    presetId?: string;
+    userId: string;
+  }>();
+  const [quoting, setQuoting] = useState<JobKind>();
+  const [confirming, setConfirming] = useState(false);
+  const [quoteError, setQuoteError] = useState<ApiError | null>(null);
+  const request = useRef<AbortController | null>(null);
+  const quoteGeneration = useRef(0);
+  const confirmingRef = useRef(false);
+  useEffect(() => {
+    setProposal(undefined);
+    setQuoting(undefined);
+    setQuoteError(null);
+    quoteGeneration.current++;
+    request.current?.abort();
+    return () => {
+      quoteGeneration.current++;
+      request.current?.abort();
+    };
+  }, [user?.id]);
+  const [citationFocus, setCitationFocus] = useState<Citation>();
+  function jumpToCitation(citation: Citation) {
+    setRaw(true);
+    setTab("content");
+    setCitationFocus(citation);
+  }
+  useEffect(() => {
+    if (!citationFocus || !transcript) return;
+    const index = transcript.segments.findIndex(
+      (segment) =>
+        (citationFocus.quote && segment.text.includes(citationFocus.quote)) ||
+        (segment.start <= citationFocus.start &&
+          segment.end >= citationFocus.start),
+    );
+    const frame = requestAnimationFrame(() =>
+      document
+        .getElementById(`transcript-segment-${index}`)
+        ?.scrollIntoView?.({ behavior: "smooth", block: "center" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [citationFocus, transcript]);
   const [copying, setCopying] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<{ message: string } | null>(
     null,
@@ -37,16 +98,66 @@ export default function VideoWorkspaceView() {
   function busy(kind: JobKind) {
     return (
       store.submitting.includes(`${video?.key}:${kind}`) ||
+      quoting === kind ||
       jobs.some((task) => task.kind === kind && !terminal(task.event.status))
     );
   }
   async function create(kind: JobKind, label: string, presetId?: string) {
-    if (!video) return;
+    if (!video || !authStore.requireLogin()) return;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const expected = ++quoteGeneration.current;
+    const userId = authStore.getState().user?.id || "";
     setError(null);
+    setProposal(undefined);
+    setQuoteError(null);
+    setQuoting(kind);
     try {
-      await store.create(video, kind, label, presetId);
+      const quote = await api.quote(
+        kind,
+        video.url,
+        presetId,
+        controller.signal,
+      );
+      if (
+        expected === quoteGeneration.current &&
+        !controller.signal.aborted &&
+        userId === (authStore.getState().user?.id || "")
+      )
+        setProposal({ quote, kind, label, presetId, userId });
     } catch (e) {
-      setError(normalizeError(e));
+      if (expected === quoteGeneration.current && !controller.signal.aborted)
+        setError(normalizeError(e));
+    } finally {
+      if (expected === quoteGeneration.current) setQuoting(undefined);
+    }
+  }
+  async function confirm() {
+    if (!proposal || !video || confirmingRef.current) return;
+    if (proposal.userId !== (authStore.getState().user?.id || "")) {
+      setProposal(undefined);
+      return;
+    }
+    confirmingRef.current = true;
+    setConfirming(true);
+    setQuoteError(null);
+    try {
+      await store.create(
+        video,
+        proposal.kind,
+        proposal.label,
+        proposal.presetId,
+        proposal.quote.quote_id,
+      );
+      setProposal(undefined);
+      void billingStore.refresh();
+    } catch (cause) {
+      if (proposal.userId === (authStore.getState().user?.id || ""))
+        setQuoteError(normalizeError(cause));
+    } finally {
+      confirmingRef.current = false;
+      setConfirming(false);
     }
   }
   async function refreshMetadata() {
@@ -94,6 +205,31 @@ export default function VideoWorkspaceView() {
         </Link>
       </div>
       <ErrorNotice error={error} />
+      {user && (
+        <div className="workspace-quota-bar">
+          <span>
+            <Icon name="sparkles" size={15} />
+            {billing.data ? (
+              <>
+                <b>
+                  转写{" "}
+                  {durationLabel(billing.data.balances.asr_seconds.available)}
+                </b>
+                <span>·</span>
+                <b>AI {billing.data.balances.ai_generations.available} 次</b>
+              </>
+            ) : billing.error ? (
+              "额度读取失败，可前往账户重试"
+            ) : (
+              "正在读取额度…"
+            )}
+          </span>
+          <Link to="/subscription">
+            订阅与额度
+            <Icon name="arrow" size={13} />
+          </Link>
+        </div>
+      )}
       <ErrorNotice error={resultError}>
         <button className="text-button" onClick={reloadResults}>
           重新加载结果
@@ -104,6 +240,7 @@ export default function VideoWorkspaceView() {
           { id: "media", label: "视频下载", icon: "download" },
           { id: "content", label: "文稿与总结", icon: "text" },
           { id: "mindmap", label: "思维导图", icon: "map" },
+          { id: "questions", label: "视频问答", icon: "chat" },
         ].map((item, index, items) => (
           <button
             key={item.id}
@@ -256,6 +393,14 @@ export default function VideoWorkspaceView() {
             {taskCard("transcription")}
             {taskCard("ai_summary")}
           </div>
+          {transcript && (
+            <div className="content-save-row">
+              <SaveToLibrary
+                transcriptId={transcript.id}
+                resultId={summary?.id}
+              />
+            </div>
+          )}
           {summary || transcript ? (
             <div className="reading-content">
               <div className="reading-heading">
@@ -275,6 +420,29 @@ export default function VideoWorkspaceView() {
                         const c = summary.content_json;
                         const lines: string[] = [];
                         lines.push(c.overview || "");
+                        for (const [heading, values] of [
+                          ["核心结论", c.conclusions],
+                          ["适合谁阅读", c.audience],
+                          ["行动步骤", c.action_steps],
+                        ] as const) {
+                          if (values?.length)
+                            lines.push(
+                              "",
+                              `【${heading}】`,
+                              ...values.map(
+                                (value, index) => `${index + 1}. ${value}`,
+                              ),
+                            );
+                        }
+                        if (c.evidence?.length)
+                          lines.push(
+                            "",
+                            "【原文依据】",
+                            ...c.evidence.map(
+                              (item) =>
+                                `[${c.source_basis === "asr" ? "约 " : ""}${timecode(item.start_seconds)}] ${item.quote}`,
+                            ),
+                          );
                         if (
                           Array.isArray(c.key_points) &&
                           c.key_points.length
@@ -329,6 +497,68 @@ export default function VideoWorkspaceView() {
                       {summary.content_json.overview}
                     </p>
                   </div>
+                  {(summary.content_json.conclusions?.length || 0) > 0 && (
+                    <div className="reading-section">
+                      <h3>核心结论</h3>
+                      <ul className="summary-insights">
+                        {summary.content_json.conclusions?.map(
+                          (value, index) => (
+                            <li key={index}>{value}</li>
+                          ),
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  {(summary.content_json.evidence?.length || 0) > 0 && (
+                    <div className="reading-section">
+                      <h3>原文依据</h3>
+                      {summary.content_json.evidence?.map((item, index) => (
+                        <blockquote className="summary-evidence" key={index}>
+                          <p>{item.quote}</p>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              jumpToCitation({
+                                id: index,
+                                start: item.start_seconds,
+                                end: item.end_seconds,
+                                quote: item.quote,
+                                approximate:
+                                  summary.content_json.source_basis === "asr",
+                              })
+                            }
+                          >
+                            {summary.content_json.source_basis === "asr"
+                              ? "约 "
+                              : ""}
+                            {timecode(item.start_seconds)} · 查看文稿
+                          </button>
+                        </blockquote>
+                      ))}
+                    </div>
+                  )}
+                  {(summary.content_json.audience?.length || 0) > 0 && (
+                    <div className="reading-section">
+                      <h3>适合谁阅读</h3>
+                      <ul className="summary-insights">
+                        {summary.content_json.audience?.map((value, index) => (
+                          <li key={index}>{value}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(summary.content_json.action_steps?.length || 0) > 0 && (
+                    <div className="reading-section">
+                      <h3>可以行动的步骤</h3>
+                      <ol className="summary-insights">
+                        {summary.content_json.action_steps?.map(
+                          (value, index) => (
+                            <li key={index}>{value}</li>
+                          ),
+                        )}
+                      </ol>
+                    </div>
+                  )}
                   <div className="reading-section">
                     <h3>值得记住的要点</h3>
                     <ol className="key-points">
@@ -344,9 +574,26 @@ export default function VideoWorkspaceView() {
                     <h3>沿着时间，理解内容</h3>
                     {summary.content_json.chapters.map((chapter, i) => (
                       <article key={i} className="chapter">
-                        <span className="timestamp">
-                          [{timecode(chapter.start_seconds)}]
-                        </span>
+                        <button
+                          className="timestamp text-button"
+                          aria-label={`查看 ${timecode(chapter.start_seconds)} 对应文稿`}
+                          onClick={() =>
+                            jumpToCitation({
+                              id: i,
+                              start: chapter.start_seconds,
+                              end: chapter.start_seconds,
+                              quote: "",
+                              approximate:
+                                summary.content_json.source_basis === "asr",
+                            })
+                          }
+                        >
+                          [
+                          {summary.content_json.source_basis === "asr"
+                            ? "约 "
+                            : ""}
+                          {timecode(chapter.start_seconds)}]
+                        </button>
                         <div>
                           <h4>{chapter.title}</h4>
                           <p>{chapter.summary}</p>
@@ -386,8 +633,29 @@ export default function VideoWorkspaceView() {
                   {(raw || !summary) && (
                     <div className="transcript-segments">
                       {transcript.segments.map((segment, i) => (
-                        <div key={i}>
-                          <time>{timecode(segment.start)}</time>
+                        <div
+                          key={i}
+                          id={`transcript-segment-${i}`}
+                          className={
+                            citationFocus &&
+                            ((citationFocus.quote &&
+                              segment.text.includes(citationFocus.quote)) ||
+                              (segment.start <= citationFocus.start &&
+                                segment.end >= citationFocus.start))
+                              ? "citation-highlight"
+                              : ""
+                          }
+                        >
+                          <a
+                            href={originalLink(video.url, segment.start)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <time>
+                              {transcript.source_type === "asr" ? "约 " : ""}
+                              {timecode(segment.start)}
+                            </time>
+                          </a>
                           <p>{segment.text}</p>
                         </div>
                       ))}
@@ -412,6 +680,41 @@ export default function VideoWorkspaceView() {
                 <div />
                 <div />
               </div>
+            </div>
+          )}
+        </section>
+        <section
+          className="workspace-panel questions-panel"
+          role="tabpanel"
+          id="panel-questions"
+          aria-labelledby="tab-questions"
+          hidden={tab !== "questions"}
+        >
+          <div className="panel-heading">
+            <Icon name="chat" size={23} />
+            <h2>视频问答</h2>
+          </div>
+          {transcript || selectedTranscriptId ? (
+            <VideoQuestions
+              video={video}
+              transcriptId={selectedTranscriptId || transcript!.id}
+              onJump={
+                !selectedTranscriptId || selectedTranscriptId === transcript?.id
+                  ? jumpToCitation
+                  : undefined
+              }
+            />
+          ) : (
+            <div className="empty-state">
+              <Icon name="chat" size={32} />
+              <h3>先有文稿，再聊深入一点。</h3>
+              <p>获取字幕或完成总结后，就可以针对这段视频提问。</p>
+              <button
+                className="button secondary"
+                onClick={() => setTab("content")}
+              >
+                前往获取文稿
+              </button>
             </div>
           )}
         </section>
@@ -466,6 +769,21 @@ export default function VideoWorkspaceView() {
           </div>
         </section>
       </div>
+      {proposal && (
+        <AllowanceConfirm
+          quote={proposal.quote}
+          label={proposal.label}
+          pending={confirming}
+          error={quoteError}
+          onConfirm={() => void confirm()}
+          onClose={() => {
+            if (!confirmingRef.current) setProposal(undefined);
+          }}
+          onRefresh={() =>
+            void create(proposal.kind, proposal.label, proposal.presetId)
+          }
+        />
+      )}
     </div>
   );
 }

@@ -100,6 +100,8 @@ class OpenAICompatibleLLMProvider:
                 "messages": [{"role": "system", "content": system},
                              {"role": "user", "content": json.dumps({"purpose": request.purpose, "source_basis": request.source_basis,
                                                                       "context": request.context}, ensure_ascii=False)}]}
+        if self.model.startswith("deepseek"):
+            body["thinking"] = {"type": "disabled"}
         try:
             async with asyncio.timeout(self.timeout):
                 async with httpx.AsyncClient(transport=self.transport or public_transport(), trust_env=False, follow_redirects=False,

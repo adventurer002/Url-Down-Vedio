@@ -231,3 +231,70 @@ TypeScript + Tailwind 源码。品牌图标使用 `react-icons/si`，按需打�
 顶栏将“关注公众号登录”改为“登录”，使用用户提供的 React Bits `StarBorder.tsx`（浅色、黑色流光、4 秒一圈），保留现有二维码与口令登录流程。动画在标签页隐藏时暂停，减少动态效果模式使用静态边框；旧浏览器缺少 Canvas/Observer 时仍保留可点击登录按钮。
 
 修改：`StarBorder.tsx`、`AppHeader.tsx`、`TaskHistory.tsx`、`HomeView.tsx`、`App.tsx`、`stores/auth.ts`、`api/client.ts`、`style.css`、对应前端测试和本说明。启动仍为 `pnpm dev`；无新增接口，在首页分别点击三个入口验证卡片，再登录验证正常解析与历史访问。
+
+## 订阅与额度（2026-10-24）
+
+订阅页入口为 `/subscription`，在顶栏、账户菜单和页脚均可进入。
+套餐卡片使用用户提供的 React Bits PixelCard，沿用当前黑白配色；支持键盘焦点、降低动态效果偏好、离屏 / 后台暂停。
+没有新增依赖。价格、分钟、次数及限制来自 `GET /api/v1/billing/catalog`，失败时显示错误与重试，不使用示例套餐代替接口。
+
+- 免费体验 30 分钟 / 5 次 AI；月会员 ¥19.90，300 分钟 / 100 次；加购包 ¥9.90，120 分钟或 100 次，均按后端策略展示。
+- 登录后显示可用及执行中占用额度、会员有效期、当日下载 / 流量、额度批次到期时间；退出或换账号立即隔离之前的数据。
+- 下载、音频提取、转写、总结、导图均先调用 `/billing/quotes` 展示最高消耗与资源限制，确认后仅提交 `quote_id` 到 `/billing/tasks`。
+- 报价过期需重新获取；取消确认不创建任务；网络失败保留原报价重试，后端保证同一报价幂等；提交中禁用按钮。
+- 额度不足可确认排队，排队不占额度；任务卡显示等待原因并提供额度入口。补充额度后可点击“重新检查”。终态和取消后刷新余额。
+- 总结与导图组合成功后同时加载两种结果；自己的已有结果、导图交互和导出免费。
+- 活跃账号取关后仍能访问已获得结果及付费额度；免费新下载由后端校验关注状态，权益不足不会强制退出登录。
+- 当前购买按钮仅说明“暂未开放在线购买”，没有支付请求、浏览器发放入口或模拟购买成功。权益发放仍按[服务端说明](../backend/ALLOWANCES_V1.md)。
+
+启动：已有旧 API / Worker 需先正常停止并重启，避免订阅接口 404 或 Worker 沿用旧规则。
+已有依赖无需重新安装，可在项目根目录运行 `./scripts/dev.sh --skip-install`；迁移由脚本执行。
+也可分别按本文开头命令运行 API、唯一一个 Solo Worker 与 Vite。
+
+验收：
+
+```sh
+curl --max-time 5 http://127.0.0.1:8000/api/v1/billing/catalog
+curl --max-time 5 http://127.0.0.1:8000/api/v1/health/ready
+cd frontend
+pnpm run type-check
+pnpm test:unit
+pnpm run build
+cd ../backend
+uv run pytest
+```
+
+浏览器访问 <http://127.0.0.1:5173/subscription>：检查三种套餐、加购切换、购买说明、登录后的余额与有效期。
+在视频工作台点击任一操作，应先显示“确认本次额度”；点“暂不开始”不创建任务，确认后可从历史继续查看。
+可在 Swagger `/docs` 依次核对 `billing/catalog`、`billing/allowances`、`billing/quotes`、`billing/tasks`；鉴权沿用公众号登录流程。
+不要为了验收随意确认真实视频的付费模型任务。
+
+本阶段验证：前端 **72 项通过**，类型检查和生产构建通过；后端 **273 项通过**。
+真实本地 API 已验证套餐响应；浏览器验证了 1440px 三列、390px / 375px 单列和页面无横向溢出，以及加购切换与购买说明。
+任务计费、取消与身份切换使用自动化测试；没有调用付费 ASR / LLM 或接入真实支付。
+
+修改文件清单（相对于 `frontend/`）：
+
+- 新增：`src/components/PixelCard.tsx`、`src/components/AllowanceConfirm.tsx`、`src/views/SubscriptionView.tsx`、
+  `src/stores/billing.ts`、`src/types/billing.ts`、`src/utils/billing.ts`、`src/subscription.css`、
+  `src/tests/billingFixtures.ts`、`src/tests/subscription.test.tsx`。
+- 更新：`src/App.tsx`、`src/main.tsx`、`src/api/index.ts`、`src/api/client.ts`、
+  `src/components/AppHeader.tsx`、`src/components/AppFooter.tsx`、`src/components/Icon.tsx`、`src/components/TaskCard.tsx`、
+  `src/views/VideoWorkspaceView.tsx`、`src/hooks/useWorkspaceResults.ts`、
+  `src/stores/auth.ts`、`src/stores/workspace.ts`、`src/types/api.ts`、
+  `src/tests/reactApp.test.tsx`、`src/tests/auth.test.tsx`、`src/tests/client.test.ts`、本文。
+
+
+## 视频问答与个人知识库（2026-10-24）
+
+工作台新增“视频问答”Tab：使用已经获得的文稿独立提问，先展示额度报价，再由 TaskService / Celery 执行。新问题成功消耗 1 次 AI，不重复扣转写分钟；无依据、失败或有效取消不扣次数。相同文稿、模型及版本的已有回答免费。
+
+回答附原文片段及时间范围；ASR 时间标记“约”。支持查看对应文稿、打开原视频；历史问答可从任务抽屉继续查看。
+文稿与总结可收藏并编辑标签；`/library` 支持自己的标题 / 内容 / 标签搜索、分页、阅读及提问。收藏与阅读免费，不依赖媒体文件是否过期。
+总结新增结论、适用人群、行动步骤与经过原文匹配的引用；旧结果兼容，有依据才填新字段。
+
+启动命令沿用本文；需先升级后端到 `0007` 并重启 API 与唯一的 Solo Worker。
+模块边界、接口、curl / Swagger 验收、修改清单与限制见 [知识工作台交付说明](../backend/KNOWLEDGE_V1.md)。
+浏览器成功数据使用独立 schema 的离线样本，未调用付费模型，样本不进入业务数据。
+
+本阶段最终验证：前端 **79 项通过**、后端 **284 项通过**，类型检查、生产构建与迁移一致性检查通过。独立离线浏览器样本已验证工作台引用跳转及 375px 无横向溢出；预览不代表真实云模型效果。

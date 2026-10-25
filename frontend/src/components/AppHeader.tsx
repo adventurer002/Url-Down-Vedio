@@ -6,9 +6,11 @@ import WeChatLoginModal from "./auth/WeChatLoginModal";
 import Icon from "./Icon";
 import StarBorder from "./StarBorder";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useBilling } from "../stores/billing";
 export default function AppHeader() {
   const store = useWorkspace();
   const auth = useAuth();
+  const billing = useBilling();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
@@ -67,14 +69,30 @@ export default function AppHeader() {
           VIDEOHUB<span className="brand-ai">AI</span>
         </Link>
         <div className="header-right">
+          <Link className="library-nav" to="/library" aria-label="我的知识库">
+            <Icon name="bookmark" size={17} />
+            <span>知识库</span>
+          </Link>
+          <Link
+            className={
+              "subscription-nav" +
+              (pathname === "/subscription" ? " current" : "")
+            }
+            to="/subscription"
+          >
+            <Icon name="sparkles" size={16} />
+            <span>订阅与额度</span>
+            {billing.data?.member && <small>会员</small>}
+          </Link>
           <button
             className="history-button"
+            aria-label="任务历史"
             onClick={() => {
               if (authStore.requireLogin()) store.setHistoryOpen(true);
             }}
           >
             <Icon name="history" size={18} />
-            任务历史
+            <span className="history-label">任务历史</span>
             {store.activeCount > 0 && (
               <span className="count">{store.activeCount}</span>
             )}
@@ -95,9 +113,13 @@ export default function AppHeader() {
                 <div id="account-options" className="account-popover">
                   <div className="account-identity">
                     <strong>{auth.user.nickname}</strong>
-                    <span className="subscribed-badge">已关注</span>
+                    <span className="subscribed-badge">
+                      {auth.user.is_subscribed ? "已关注" : "未关注"}
+                    </span>
                   </div>
                   <nav aria-label="账户选项">
+                    <Link to="/subscription">订阅与额度</Link>
+                    <Link to="/library">我的知识库</Link>
                     <Link to="/settings">设置</Link>
                     <Link to="/help">使用帮助</Link>
                     {auth.user.role === "admin" && (

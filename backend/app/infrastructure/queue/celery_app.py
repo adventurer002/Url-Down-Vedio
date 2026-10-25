@@ -12,7 +12,7 @@ from app.core.config import settings
 
 celery_app = Celery(
     "videohub", broker=settings.CELERY_BROKER_URL, backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.modules.tasks.worker", "app.modules.download.worker", "app.modules.media.worker", "app.modules.transcript.worker", "app.modules.ai.worker"],
+    include=["app.modules.tasks.worker", "app.modules.download.worker", "app.modules.media.worker", "app.modules.transcript.worker", "app.modules.ai.worker", "app.modules.billing.worker", "app.modules.knowledge.worker"],
 )
 celery_app.conf.update(
     task_serializer="json",

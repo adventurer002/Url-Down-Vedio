@@ -6,7 +6,7 @@ import math
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.ai.providers.base import LLMProvider, LLMRequest, Usage, generate
-from app.modules.ai.schemas import ChapterSummary, VideoSummarySchema, format_timestamp
+from app.modules.ai.schemas import ChapterSummary, VideoSummarySchema, SummaryEvidence, format_timestamp
 
 
 @dataclass(frozen=True)
@@ -89,8 +89,25 @@ def repair_summary(raw: dict, segments: list[dict], source_basis: str) -> VideoS
     points = list(dict.fromkeys(_text(item, "", 1000) for item in points if isinstance(item, str) and item.strip()))[:20]
     if not points:
         points = [chapter.summary[:1000] for chapter in chapters[:8]]
+    def strings(name, count, length):
+        values = raw.get(name)
+        if not isinstance(values, list):
+            return []
+        return list(dict.fromkeys(_text(item, "", length) for item in values if isinstance(item, str) and item.strip()))[:count]
+    evidence = []
+    for item in (raw.get("evidence") if isinstance(raw.get("evidence"), list) else [])[:8]:
+        quote = item.get("quote") if isinstance(item, dict) else None
+        if not isinstance(quote, str) or not quote.strip() or len(quote) > 700:
+            continue
+        # The server owns timestamps; invented or paraphrased quotes are discarded.
+        matching = next((segment for segment in segments if quote in segment["text"]), None)
+        if matching:
+            evidence.append(SummaryEvidence(quote=quote, start_seconds=float(matching["start"]),
+                end_seconds=float(matching.get("end", matching["start"]))))
     return VideoSummarySchema(overview=_text(raw.get("overview"), excerpt, 6000), key_points=points,
-                               chapters=sorted(chapters, key=lambda item: item.start_seconds), source_basis=source_basis)
+        chapters=sorted(chapters, key=lambda item: item.start_seconds), source_basis=source_basis,
+        conclusions=strings("conclusions", 8, 1000), audience=strings("audience", 6, 300),
+        action_steps=strings("action_steps", 10, 1000), evidence=evidence)
 
 
 def _compact(summary: VideoSummarySchema, limit: int) -> dict:
@@ -122,7 +139,8 @@ class Summarizer:
             raise AppException("TRANSCRIPT_TOO_LONG", "文稿超过最大分段数量，请调整服务端分段预算", 413)
         usage, mapped = Usage(), []
         for index, chunk in enumerate(chunks):
-            reply = await generate(self.provider, LLMRequest("summary" if len(chunks) == 1 else "map", {"segments": chunk},
+            reply = await generate(self.provider, LLMRequest("summary" if len(chunks) == 1 else "map", {"segments": chunk,
+                                    "instructions": "提炼核心结论、支撑依据、适合谁、可执行步骤。只填原文能支持的内容；未提及时返回空数组。evidence.quote 必须是逐字原文片段。"},
                                     VideoSummarySchema.model_json_schema(), language, transcript.source_type), cancelled)
             usage = usage.add(reply)
             mapped.append(repair_summary(reply.content, chunk, transcript.source_type))
@@ -147,7 +165,8 @@ class Summarizer:
                 raise AppException("LLM_CONTEXT_TOO_SMALL", "汇总上下文预算不足", 422)
             reduced = []
             for group in groups:
-                reply = await generate(self.provider, LLMRequest("reduce", {"summaries": group},
+                reply = await generate(self.provider, LLMRequest("reduce", {"summaries": group,
+                                        "instructions": "只汇总原材料支持的结论，不补充常识或虚构行动建议。"},
                                         VideoSummarySchema.model_json_schema(), language, transcript.source_type), cancelled)
                 usage = usage.add(reply)
                 evidence = [{"start": item["start_seconds"], "end": item["start_seconds"], "text": item["overview"]} for item in group]
@@ -155,6 +174,14 @@ class Summarizer:
             level = reduced
             if on_progress:
                 await on_progress(90)
-        final = level[0].model_copy(update={"chapters": sorted(chapters, key=lambda item: item.start_seconds)})
+        enrichments = {key: list(dict.fromkeys(value for item in mapped for value in getattr(item, key)))[:limit]
+            for key, limit in (("conclusions", 8), ("audience", 6), ("action_steps", 10))}
+        evidence = []
+        for item in mapped:
+            for citation in item.evidence:
+                if citation not in evidence:
+                    evidence.append(citation)
+        final = level[0].model_copy(update={"chapters": sorted(chapters, key=lambda item: item.start_seconds),
+            **enrichments, "evidence": evidence[:8]})
         final = VideoSummarySchema.model_validate(final.model_dump())
         return GeneratedSummary(final, usage)

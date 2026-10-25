@@ -53,6 +53,8 @@ export interface TaskResultPayload {
   cache_hit?: boolean;
   result_id?: string;
   result_type?: "summary" | "mindmap";
+  summary_result_id?: string;
+  answer_id?: string;
   reused?: boolean;
   [key: string]: unknown;
 }
@@ -102,6 +104,14 @@ export interface VideoSummarySchema {
   key_points: string[];
   chapters: ChapterSummary[];
   source_basis: "subtitle" | "asr";
+  conclusions?: string[];
+  audience?: string[];
+  action_steps?: string[];
+  evidence?: Array<{
+    quote: string;
+    start_seconds: number;
+    end_seconds: number;
+  }>;
 }
 export interface MindMapNode {
   title: string;
@@ -146,7 +156,8 @@ export type JobKind =
   | "audio_extraction"
   | "transcription"
   | "ai_summary"
-  | "ai_mindmap";
+  | "ai_mindmap"
+  | "ai_question";
 
 export interface HistoryVideo {
   id: string;

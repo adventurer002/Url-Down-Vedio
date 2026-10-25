@@ -10,6 +10,8 @@ export default function AppFooter() {
         <span>让内容成为你的知识。</span>
       </span>
       <nav className="footer-links" aria-label="帮助与偏好设置">
+        <Link to="/library">知识库</Link>
+        <Link to="/subscription">订阅与额度</Link>
         <Link to="/help">使用帮助</Link>
         <Link to="/privacy">隐私说明</Link>
         <Link to="/settings">设置</Link>

@@ -1,5 +1,6 @@
 import { api } from "../api";
 import { ApiError, normalizeError } from "../api/client";
+import { billingStore } from "./billing";
 import { createTaskTracker, terminal } from "../lib/taskTracker";
 import type {
   JobKind,
@@ -79,6 +80,7 @@ export function createWorkspace() {
     transcription: "字幕 / 语音转写",
     ai_summary: "AI 结构化总结",
     ai_mindmap: "AI 思维导图",
+    ai_question: "视频问答",
     simulate_progress: "系统演示任务",
   };
   async function loadHistory(reset = true) {
@@ -208,10 +210,10 @@ export function createWorkspace() {
     write("videohub.tasks.v1" + identity, state.tasks);
     notify();
   }
-  function remember(url: string, metadata: VideoParseResult) {
+  function remember(url: string, metadata: VideoParseResult, partial = false) {
     const key = `${metadata.platform}_${metadata.platform_video_id}`;
     state.videos = [
-      { key, url, metadata },
+      { key, url, metadata, partial },
       ...state.videos.filter((v) => v.key !== key),
     ].slice(0, 30);
     persist();
@@ -236,6 +238,7 @@ export function createWorkspace() {
             target.event = { ...snapshot, seq: target.event.seq };
           target.trackingError = undefined;
           persist();
+          if (terminal(snapshot.status)) void billingStore.refresh();
         }
       },
       onError(error) {
@@ -256,6 +259,7 @@ export function createWorkspace() {
     kind: JobKind,
     label: string,
     presetId?: string,
+    quoteId?: string,
   ) {
     const key = `${video.key}:${kind}`;
     if (
@@ -275,7 +279,9 @@ export function createWorkspace() {
     notify();
     const expectedIdentity = identityVersion;
     try {
-      const created = await api.create(kind, video.url, presetId);
+      const created = quoteId
+        ? await api.confirmQuote(quoteId)
+        : await api.create(kind, video.url, presetId);
       if (expectedIdentity !== identityVersion)
         throw new ApiError("AUTH_CHANGED", "登录用户已变更，请刷新任务历史。");
       const item: LocalTask = {
@@ -321,6 +327,7 @@ export function createWorkspace() {
       else if (snapshot.seq === 0 && terminal(snapshot.status))
         item.event = { ...snapshot, seq: item.event.seq };
       persist();
+      void billingStore.refresh();
     }
   }
   function restore() {

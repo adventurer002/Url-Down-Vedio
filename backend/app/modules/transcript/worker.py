@@ -57,6 +57,8 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
     if not intermediate and not await database_call(tasks.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(tasks.get, task_id)).status}
     task = await database_call(tasks.get, task_id)
+    if "allowance" in task.input_payload:
+        asr.model = task.input_payload["allowance"]["asr_model"]
     language = task.input_payload.get("language")
     version = task.input_payload["content_version"]
     progress, status = 0, "running"
@@ -112,8 +114,14 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
                 # A disabled provider reports configuration failure before any audio download.
                 if getattr(asr, "available", True) is False:
                     raise AppException("ASR_NOT_CONFIGURED", "无可用字幕且未配置 ASR；可配置云端密钥或显式启用 Mock", 503)
-                storage.check_capacity(settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+                if settings.APP_ENV != "development" and getattr(asr, "mock", False):
+                    raise AppException("ASR_NOT_CONFIGURED", "生产转写不能使用 Mock ASR", 503)
+                storage.check_capacity((2 if "allowance" in task.input_payload else 1) * settings.MAX_FILE_SIZE_MB * 1024 * 1024)
                 path = await audio.acquire(task.input_payload, directory, **controls)
+                if "allowance" in task.input_payload:
+                    from app.modules.media.probe import audio_seconds
+                    duration = await audio_seconds(path, directory, controls, settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+                    await database_call(tasks.record_asr, task_id, duration)
                 await on_progress({"stage": "asr", "progress": 90})
                 data = await cooperative_asr(asr, path, language, cancelled)
             data = make_transcript(language or data.language, data.segments)

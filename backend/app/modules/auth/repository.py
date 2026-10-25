@@ -29,6 +29,14 @@ class UserRepository:
             user = session.get(User, user_id)
             return record(user) if user else None
 
+    def billing_identity(self, session, user_id):
+        """Read-only identity contract participating in an allowance transaction."""
+        user = session.get(User, user_id)
+        if user is None:
+            return None
+        return {"openid": user.wechat_openid, "subscribed": user.is_subscribed,
+                "active": user.status == "active", "bound": user.last_login_at is not None}
+
     def subscription(self, openid: str, subscribed: bool, login: bool = False):
         with self.sessions.begin() as session:
             # Concurrent webhook deliveries must converge on one unique OpenID.

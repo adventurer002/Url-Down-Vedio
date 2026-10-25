@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from unittest.mock import Mock
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from httpx import ASGITransport, AsyncClient
@@ -173,6 +174,7 @@ async def test_cleanup_endpoint_returns_bytes_and_unified_busy_error():
     app = create_app()
     service = Mock(); service.run.return_value = {'files':1,'temporary_directories':0,'orphan_files':0,'freed_bytes':1024,'used_bytes':0}
     app.dependency_overrides[get_cleanup_service] = lambda: service
+    app.dependency_overrides[optional_user] = lambda: SimpleNamespace(role="admin")
     async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
         response = await client.post('/api/v1/system/cleanup')
         assert response.status_code == 200 and response.json()['data']['freed_bytes'] == 1024
@@ -225,3 +227,15 @@ async def test_history_delete_is_owned_persistent_and_keeps_jobs_and_grants(repo
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.delete("/api/v1/tasks/history")).status_code == 401
         assert (await client.delete(f"/api/v1/tasks/history/{foreign.id}")).status_code == 401
+
+
+@pytest.mark.parametrize("role,status", [(None,401),("user",403)])
+async def test_cleanup_rejects_non_admin_without_running_service(role,status):
+    app = create_app()
+    service = Mock()
+    app.dependency_overrides[get_cleanup_service] = lambda: service
+    app.dependency_overrides[optional_user] = lambda: SimpleNamespace(role=role) if role else None
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/system/cleanup")
+    assert response.status_code == status
+    service.run.assert_not_called()

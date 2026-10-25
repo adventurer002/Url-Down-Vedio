@@ -65,7 +65,7 @@ client.interceptors.response.use(
     const sentAuthorization = error.config?.headers?.Authorization || "";
     const currentAuthorization = current.token ? `Bearer ${current.token}` : "";
     if (
-      ["INVALID_TOKEN", "WECHAT_UNSUBSCRIBED"].includes(normalized.code) &&
+      normalized.code === "INVALID_TOKEN" &&
       sentAuthorization === currentAuthorization
     ) {
       authStore.clear(normalized.message);

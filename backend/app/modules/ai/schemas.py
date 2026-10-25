@@ -26,12 +26,23 @@ class ChapterSummary(BaseModel):
         return self
 
 
+class SummaryEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    quote: str = Field(min_length=1, max_length=700)
+    start_seconds: float = Field(ge=0, allow_inf_nan=False)
+    end_seconds: float = Field(ge=0, allow_inf_nan=False)
+
+
 class VideoSummarySchema(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     overview: str = Field(min_length=1, max_length=6000)
     key_points: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(min_length=1, max_length=20)
     chapters: list[ChapterSummary] = Field(min_length=1, max_length=1024)
     source_basis: Literal["subtitle", "asr"]
+    conclusions: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(default_factory=list, max_length=8)
+    audience: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(default_factory=list, max_length=6)
+    action_steps: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(default_factory=list, max_length=10)
+    evidence: list[SummaryEvidence] = Field(default_factory=list, max_length=8)
 
 
 class MindMapNode(BaseModel):

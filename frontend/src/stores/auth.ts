@@ -48,7 +48,7 @@ export const authStore = {
     };
   },
   hasAccess() {
-    return Boolean(state.user?.is_subscribed && state.user.status === "active");
+    return Boolean(state.user && state.user.status === "active");
   },
   requireLogin() {
     if (authStore.hasAccess()) return true;

@@ -127,7 +127,20 @@ export default function TaskHistory() {
             <div className="history-item-heading">
               {task.videoAvailable !== false ? (
                 <Link
-                  to={"/video/" + encodeURIComponent(task.videoKey)}
+                  to={
+                    "/video/" +
+                    encodeURIComponent(task.videoKey) +
+                    (task.kind === "ai_question"
+                      ? "?" +
+                        new URLSearchParams({
+                          tab: "questions",
+                          transcript:
+                            task.snapshot?.result_payload?.transcript_id || "",
+                          answer:
+                            task.snapshot?.result_payload?.answer_id || "",
+                        })
+                      : "")
+                  }
                   onClick={close}
                 >
                   {task.title}
@@ -155,10 +168,25 @@ export default function TaskHistory() {
                 task.snapshot?.result_payload?.transcript_id) && (
                 <Link
                   className="history-result-link"
-                  to={"/video/" + encodeURIComponent(task.videoKey)}
+                  to={
+                    "/video/" +
+                    encodeURIComponent(task.videoKey) +
+                    (task.kind === "ai_question"
+                      ? "?" +
+                        new URLSearchParams({
+                          tab: "questions",
+                          transcript:
+                            task.snapshot?.result_payload?.transcript_id || "",
+                          answer:
+                            task.snapshot?.result_payload?.answer_id || "",
+                        })
+                      : "")
+                  }
                   onClick={close}
                 >
-                  查看文稿 / AI 结果 ↗
+                  {task.kind === "ai_question"
+                    ? "查看问答与原文 ↗"
+                    : "查看文稿 / AI 结果 ↗"}
                 </Link>
               )}
           </article>

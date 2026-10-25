@@ -242,7 +242,7 @@ it("ignores a stale authentication failure from the previous account", async () 
   }
 });
 
-it("opens the login card when the server reports an unsubscribed account", async () => {
+it("keeps the session when free entitlement requires following again", async () => {
   authStore.accept(authenticated);
   const original = client.defaults.adapter;
   client.defaults.adapter = async (config) => {
@@ -262,8 +262,8 @@ it("opens the login card when the server reports an unsubscribed account", async
       "code",
       "WECHAT_UNSUBSCRIBED",
     );
-    expect(authStore.getState().user).toBeNull();
-    expect(authStore.getState().modalOpen).toBe(true);
+    expect(authStore.getState().user?.id).toBe(authenticated.user?.id);
+    expect(authStore.getState().modalOpen).toBe(false);
   } finally {
     client.defaults.adapter = original;
     authStore.close();

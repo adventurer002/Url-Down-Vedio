@@ -79,13 +79,16 @@ async def login(auth):
     return openid, result
 
 
-async def test_signature_plain_echo_and_rejection(auth):
+async def test_signature_plain_echo_and_rejection(auth, caplog):
+    caplog.set_level("INFO", logger="app.modules.auth.router")
     response = await auth.client.get('/api/v1/auth/wechat/webhook', params=signature(echostr='a<&中文'))
     assert response.status_code == 200 and response.text == 'a<&中文'
     assert response.headers['content-type'].startswith('text/plain')
     for params in [{}, signature(signature='bad')]:
         assert (await auth.client.get('/api/v1/auth/wechat/webhook', params=params)).status_code == 403
         assert (await auth.client.post('/api/v1/auth/wechat/webhook', params=params, content=b'<xml/>')).status_code == 403
+
+    assert settings.WECHAT_MP_TOKEN not in caplog.text
 
 
 async def test_unique_code_nx_ttl_and_pending_poll(auth, monkeypatch):

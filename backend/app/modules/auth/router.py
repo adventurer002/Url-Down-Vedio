@@ -33,14 +33,6 @@ def validate_signature(request):
     expected = hashlib.sha1(
         "".join(sorted([token, params["timestamp"], params["nonce"]])).encode()
     ).hexdigest()
-    logger.info(
-        "wechat webhook signature check: signature=%s timestamp=%s nonce=%s token=%s expected_sha1=%s",
-        params["signature"],
-        params["timestamp"],
-        params["nonce"],
-        token,
-        expected,
-    )
     if not hmac.compare_digest(expected, params["signature"]):
         raise AppException("WECHAT_SIGNATURE_INVALID", "微信签名校验失败", 403)
 
@@ -81,7 +73,7 @@ async def poll_session(
 
 @router.post("/wechat/sessions/{scene_id}/mock-confirm")
 async def mock_confirm(scene_id: UUID, service=Depends(get_auth_service)):
-    if settings.APP_ENV != "development" and settings.WECHAT_MP_MODE != "mock":
+    if settings.APP_ENV != "development" and (settings.ALLOWANCES_ENABLED or settings.WECHAT_MP_MODE != "mock"):
         raise AppException("FORBIDDEN", "生产环境禁止模拟登录", 403)
     return success_response(await service.mock_confirm(str(scene_id)))
 

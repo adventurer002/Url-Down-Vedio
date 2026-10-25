@@ -75,6 +75,10 @@ def download(payload: dict, directory: Path, emit) -> None:
         if guard.violation:
             raise guard.violation
         video = metadata_from_info(info)
+        if "allowance" in payload:
+            from app.modules.billing.policy import seconds
+            if seconds(video.duration) > payload["allowance"]["limits"]["video_seconds"]:
+                raise AppException("VIDEO_TOO_LONG", "实际视频时长超过任务限制", 422)
         if (video.platform, video.platform_video_id) != (payload["platform"], payload["platform_video_id"]):
             raise AppException("VIDEO_ID_CHANGED", "视频身份发生变化", 422)
         if payload.get("_audio_only"):

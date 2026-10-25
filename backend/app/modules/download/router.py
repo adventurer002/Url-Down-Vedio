@@ -1,7 +1,7 @@
 from app.modules.auth.dependencies import creation_user, optional_user
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -54,9 +54,19 @@ async def create_download(body: DownloadRequest, service: DownloadService = Depe
 
 
 @router.get("/files/{file_id}/download")
-async def download_file(file_id: UUID, service: MediaService = Depends(get_media_service),
+async def download_file(file_id: UUID, request: Request, service: MediaService = Depends(get_media_service),
                         tasks=Depends(get_file_task_service), user=Depends(optional_user)):
     record, path, filename = await service.download(file_id)
     await tasks.authorize_file(file_id, record.task_id, user)
+    if settings.ALLOWANCES_ENABLED:
+        from app.modules.billing.repository import AllowanceRepository
+        from app.modules.billing.transfer import AllowanceFileResponse, transfer_length
+        from app.modules.tasks.service import database_call
+        repository = AllowanceRepository(service.repository.sessions)
+        length = transfer_length(record.size_bytes, request.headers.get("range"), request.headers.get("if-range"))
+        transfer_id = await database_call(repository.reserve_transfer, user.id, length)
+        return AllowanceFileResponse(path, filename=filename, media_type=record.mime_type,
+            repository=repository, transfer_id=transfer_id,
+            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
     return FileResponse(path, filename=filename, media_type=record.mime_type,
                         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})

@@ -10,7 +10,7 @@ from app.core.exceptions import AppException
 
 @dataclass(frozen=True)
 class LLMRequest:
-    purpose: Literal["summary", "map", "reduce", "mindmap"]
+    purpose: Literal["summary", "map", "reduce", "mindmap", "question"]
     context: dict
     schema: dict
     output_language: str

@@ -70,7 +70,7 @@ class AuthService:
         user = await database_call(self.users.get, user_id)
         if user is None or user.status != "active":
             raise AppException("INVALID_TOKEN", "用户不存在或已停用", 401)
-        if not user.is_subscribed:
+        if not user.is_subscribed and not settings.ALLOWANCES_ENABLED:
             raise AppException("WECHAT_UNSUBSCRIBED", "请重新关注公众号后登录", 401)
         return user
 
@@ -86,6 +86,9 @@ class AuthService:
 
     async def subscription(self, openid, subscribed, login=False):
         user = await database_call(self.users.subscription, openid, subscribed, login)
+        if login and settings.ALLOWANCES_ENABLED:
+            from app.modules.billing.repository import AllowanceRepository
+            await database_call(AllowanceRepository(self.users.sessions).balance, user.id)
         key = f"user:unsubscribed:{user.id}"
         if subscribed:
             await redis_call(self.redis.delete, key)

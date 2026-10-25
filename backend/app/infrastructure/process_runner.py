@@ -100,7 +100,8 @@ class ProcessRunner:
                     continue
                 if "error_code" in event:
                     code = event["error_code"]
-                    messages = {"SSRF_BLOCKED": "禁止访问非公开网络地址", "INVALID_URL": "目标 URL 无效",
+                    messages = {"VIDEO_TOO_LONG": "实际视频时长超过任务限制", "DURATION_REQUIRED": "无法确认实际视频时长",
+                                "SSRF_BLOCKED": "禁止访问非公开网络地址", "INVALID_URL": "目标 URL 无效",
                                 "UNSUPPORTED_URL": "视频不受支持", "PRESET_UNAVAILABLE": "视频已不提供所选档位",
                                 "DOWNLOAD_TIMEOUT": "下载或转换超时", "FILE_TOO_LARGE": "文件超过任务体积上限",
                                 "FFMPEG_UNAVAILABLE": "服务端缺少 FFmpeg", "VIDEO_ID_CHANGED": "视频身份发生变化",

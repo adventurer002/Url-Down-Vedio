@@ -1,5 +1,11 @@
 # VideoHub AI backend
 
+视频问答、引用与个人知识库：[KNOWLEDGE_V1.md](KNOWLEDGE_V1.md)。
+
+额度制首版：会员、转写分钟包、AI 次数包、报价确认与核销，见 [ALLOWANCES_V1.md](ALLOWANCES_V1.md)。
+默认开启额度限制；新任务通过 `/api/v1/billing/quotes` → `/api/v1/billing/tasks` 创建。
+本阶段提供服务端人工发放命令，没有真实支付。前端现已接入订阅展示、额度查询与报价确认流程，见 [前端交付说明](../frontend/README.md#订阅与额度2026-10-24)。
+
 生产 YouTube 下载部署、服务端出口配置与验收：[YOUTUBE_PRODUCTION.md](YOUTUBE_PRODUCTION.md)。
 
 Python 3.14，依赖通过本目录的 `pyproject.toml` / `uv.lock` 管理。

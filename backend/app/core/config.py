@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     APP_ENV: str = "development"
     AUTH_REQUIRED: bool = False
+    ALLOWANCES_ENABLED: bool = True
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
     JWT_EXPIRE_MINUTES: int = Field(default=10080, gt=0)
     WECHAT_MP_MODE: Literal["mock", "verify_code", "parameterized_qr"] = "mock"
@@ -58,8 +59,8 @@ class Settings(BaseSettings):
     LLM_CHUNK_CHARS: int = Field(default=12000, ge=256)
     LLM_MAX_CHUNKS: int = Field(default=64, ge=1, le=256)
     LLM_MAX_OUTPUT_TOKENS: int = Field(default=4096, ge=128, le=16384)
-    SUMMARY_PROMPT_VERSION: str = Field(default="summary-v1", min_length=1, max_length=64)
-    MINDMAP_PROMPT_VERSION: str = Field(default="mindmap-v1", min_length=1, max_length=64)
+    SUMMARY_PROMPT_VERSION: str = Field(default="summary-v2", min_length=1, max_length=64)
+    MINDMAP_PROMPT_VERSION: str = Field(default="mindmap-v2", min_length=1, max_length=64)
     MINDMAP_SCHEMA_VERSION: str = Field(default="tree-v1", min_length=1, max_length=32)
     LLM_INPUT_COST_PER_MILLION: Decimal | None = Field(default=None, ge=0)
     LLM_OUTPUT_COST_PER_MILLION: Decimal | None = Field(default=None, ge=0)

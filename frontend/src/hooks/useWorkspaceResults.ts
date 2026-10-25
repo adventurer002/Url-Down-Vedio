@@ -83,6 +83,20 @@ export function useWorkspaceResults(videoKey: string) {
               setTranscript(nextTranscript);
             }
           }
+          if (payload.summary_result_id && !disposed) {
+            let result = cache.current.get(payload.summary_result_id) as
+              | AIResult
+              | undefined;
+            if (!result) {
+              result = await api.result(
+                payload.summary_result_id,
+                controller.signal,
+              );
+              if (disposed) return;
+              cache.current.set(payload.summary_result_id, result);
+            }
+            if (result.result_type === "summary") setSummary(result);
+          }
         }
       } catch (e) {
         if (!disposed) setError(normalizeError(e));

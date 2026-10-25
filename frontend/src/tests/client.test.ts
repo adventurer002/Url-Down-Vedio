@@ -82,3 +82,23 @@ it("formats chapter timestamps and produces escaped Markdown hierarchy", () => {
     }),
   ).toBe("# \\<root\\>\n## chapter\n");
 });
+
+it("quotes an operation then confirms only its immutable quote ID", async () => {
+  const post = vi.spyOn(client, "post").mockResolvedValue({ data: {} });
+  const controller = new AbortController();
+  await api.quote(
+    "ai_mindmap",
+    "https://example.com/video",
+    undefined,
+    controller.signal,
+  );
+  expect(post).toHaveBeenLastCalledWith(
+    "/billing/quotes",
+    { action: "ai_mindmap", url: "https://example.com/video", language: "zh" },
+    { signal: controller.signal },
+  );
+  await api.confirmQuote("quote-1");
+  expect(post).toHaveBeenLastCalledWith("/billing/tasks", {
+    quote_id: "quote-1",
+  });
+});

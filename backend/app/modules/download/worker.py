@@ -66,7 +66,9 @@ async def execute_download(task_id: UUID, service: TaskService, media: MediaRepo
                     task = await database_call(repository.complete_with, task_id, reused, lambda session: None)
                     await publish(task)
                     return {"task_id": str(task_id), "status": task.status}
-            storage.check_capacity(settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+            file_limit = task.input_payload.get("allowance", {}).get("limits", {}).get("file_bytes", settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+            # Input streams and merged output coexist. Keep the existing global lease.
+            storage.check_capacity((2 if "allowance" in task.input_payload else 1) * file_limit)
             if await cancelled():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)
             directory = storage.create_task_directory(task_id)
@@ -77,6 +79,8 @@ async def execute_download(task_id: UUID, service: TaskService, media: MediaRepo
             storage.check_capacity()
             extension = "mp3" if task.input_payload["preset_id"] == "audio_mp3" else "mp4"
             size = output.stat().st_size
+            if size > file_limit:
+                raise AppException("FILE_TOO_LARGE", "成品超过当前权益的单文件上限", 413)
             promoted_key = storage.promote(task_id, output, file_id, extension)
             expires_at = utcnow() + timedelta(hours=settings.STORAGE_FILE_TTL_HOURS)
             media_record = MediaRecord(file_id, task_id, task.video_id, task.input_payload["preset_id"], promoted_key,
