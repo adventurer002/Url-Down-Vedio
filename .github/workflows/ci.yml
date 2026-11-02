@@ -53,7 +53,6 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379/0
       CELERY_BROKER_URL: redis://127.0.0.1:6379/1
       CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/2
-      TEST_REDIS_URL: redis://127.0.0.1:6379/15
       WECHAT_MP_MODE: mock
       ASR_PROVIDER: mock
       ASR_API_KEY: ''
@@ -65,10 +64,12 @@ jobs:
         with:
           version: '0.13.5'
           python-version: '3.14'
-      - name: Install FFmpeg
+      - name: Install FFmpeg and isolated-test Redis
         run: |
+          # The service container owns port 6379. Tests start disposable Redis on Unix sockets.
+          sudo systemctl mask redis-server.service
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo apt-get install -y --no-install-recommends ffmpeg redis-server
       - name: Install locked dependencies
         run: uv sync --frozen
       - name: Apply and verify migrations
@@ -76,7 +77,7 @@ jobs:
           uv run --frozen alembic upgrade head
           uv run --frozen alembic check
       - name: Run backend tests
-        run: uv run --frozen pytest -q --junitxml=test-results.xml
+        run: uv run --frozen pytest -q -ra --junitxml=test-results.xml
       - name: Require integration tests to run
         run: |
           uv run --frozen python - <<'PY'
