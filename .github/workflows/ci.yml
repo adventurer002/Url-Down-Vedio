@@ -97,6 +97,7 @@ jobs:
         working-directory: frontend
     env:
       VITE_API_BASE_URL: /api/v1
+      VITE_CLIPS_ENABLED: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

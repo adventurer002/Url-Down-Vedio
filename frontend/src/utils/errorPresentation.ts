@@ -76,8 +76,8 @@ export function errorPresentation(error: Pick<ApiError, "code" | "message">) {
     };
   if (code === "SOURCE_ACCESS_RESTRICTED")
     return {
-      message: "暂时无法访问这个视频",
-      suggestion: "请确认原视频公开可访问，或换一个无需登录的视频链接。",
+      message: "视频平台暂时限制了服务器访问",
+      suggestion: "请稍后重试；也可以上传你有权使用的视频文件继续处理。",
     };
   if (
     [

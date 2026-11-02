@@ -79,6 +79,9 @@ def test_metadata_download_and_subtitle_share_server_owned_proxy(monkeypatch, tm
 @pytest.mark.parametrize('message,code', [
     ("Sign in to confirm you're not a bot secret", 'SOURCE_ACCESS_RESTRICTED'),
     ('HTTP Error 403 Forbidden secret','SOURCE_ACCESS_RESTRICTED'),
+    ('Unable to download webpage: HTTP Error 412: Precondition Failed secret','SOURCE_ACCESS_RESTRICTED'),
+    ('触发哔哩哔哩安全风控策略 secret','SOURCE_ACCESS_RESTRICTED'),
+    ('Request is blocked (-352) secret','SOURCE_ACCESS_RESTRICTED'),
     ('HTTP Error 429 Too Many Requests secret','SOURCE_RATE_LIMITED'),
     ('No supported JavaScript runtime could be found','YTDLP_RUNTIME_UNAVAILABLE'),
     ('signature extraction failed','YTDLP_RUNTIME_UNAVAILABLE'),
@@ -131,3 +134,20 @@ async def test_metadata_success_does_not_claim_download_verified(monkeypatch):
     assert result['passed'] and result['metadata_verified'] and result['download_verified'] is False
     assert 'video_480_mp4' in result['presets'] and result['egress'] == 'server_proxy'
     assert 'secret' not in json.dumps(result)
+
+
+@pytest.mark.parametrize('url,requires_deno', [
+    ('https://www.bilibili.com/video/BV1g2JX6nESP', False),
+    ('https://youtu.be/test', True),
+    ('https://www.youtube.com/watch?v=test', True),
+])
+async def test_preflight_only_requires_deno_for_youtube(monkeypatch, url, requires_deno):
+    monkeypatch.setattr(preflight, 'validate_url', AsyncMock(return_value=url))
+    monkeypatch.setattr(preflight, 'probe_version', lambda *args: '7.0')
+    monkeypatch.setattr(preflight.shutil, 'which', lambda _: '/opt/ffmpeg')
+    parser = Mock(parse=AsyncMock(side_effect=AppException('SOURCE_ACCESS_RESTRICTED', '平台限制访问', 502)))
+    result = await preflight.check(url, parser)
+    codes = {item['code'] for item in result['checks']}
+    assert ('YTDLP_RUNTIME_UNAVAILABLE' in codes) is requires_deno
+    assert ('SOURCE_ACCESS_RESTRICTED' in codes) is not requires_deno
+    assert parser.parse.await_count == (0 if requires_deno else 1)

@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import subprocess
+from urllib.parse import urlsplit
 
 from app.core.exceptions import AppException
 from app.core.security import validate_url
@@ -51,14 +52,19 @@ async def check(url: str | None = None, parser: VideoParser | None = None) -> di
 
     try:
         options = javascript_runtime_options()
-        if not options:
+        host = (urlsplit(url).hostname or "").lower() if url else ""
+        youtube = host in {"youtube.com", "youtu.be"} or host.endswith((".youtube.com", ".youtu.be"))
+        if not options and (not url or youtube):
             raise AppException("YTDLP_RUNTIME_UNAVAILABLE", "生产 YouTube 兼容性检查需要启用 Deno", 503)
-        runtime_version = await asyncio.to_thread(probe_version, options["deno"]["path"], True)
-        if not runtime_version:
-            raise AppException("YTDLP_RUNTIME_UNAVAILABLE", "Deno 无法运行或版本低于 2.3", 503)
-        result["deno_version"] = runtime_version
-        result["ejs_version"] = version("yt-dlp-ejs")
-        add("javascript_runtime", True, "OK", "本地 Deno / EJS 可用，远程组件保持关闭")
+        if options:
+            runtime_version = await asyncio.to_thread(probe_version, options["deno"]["path"], True)
+            if not runtime_version:
+                raise AppException("YTDLP_RUNTIME_UNAVAILABLE", "Deno 无法运行或版本低于 2.3", 503)
+            result["deno_version"] = runtime_version
+            result["ejs_version"] = version("yt-dlp-ejs")
+            add("javascript_runtime", True, "OK", "本地 Deno / EJS 可用，远程组件保持关闭")
+        else:
+            add("javascript_runtime", True, "NOT_REQUIRED", "该链接的检查不要求启用 YouTube 的 Deno 运行时")
     except AppException as error:
         add("javascript_runtime", False, error.code, error.message)
 

@@ -239,6 +239,63 @@ async def test_metadata_failure_not_cached_and_timeout_cleans_up(public_dns):
     assert error.value.code == "PARSE_TIMEOUT" and stopped.is_set() and not cache.flights
 
 
+@pytest.mark.parametrize("code", ["SOURCE_ACCESS_RESTRICTED", "SOURCE_RATE_LIMITED"])
+async def test_platform_cooldown_blocks_other_urls_but_revalidates_dns(public_dns, monkeypatch, code):
+    now = 0
+    public_resolution = public_dns.side_effect
+    monkeypatch.setattr(cached.time, "monotonic", lambda: now)
+    raw = SimpleNamespace(parse=AsyncMock(side_effect=[AppException(code, "平台暂时限制访问", 502), VIDEO, VIDEO]))
+    cache = cached.MetadataCache(120, 1, failure_cooldown=30)
+    parser = cached.CachedVideoParser(raw, cache=cache)
+    for url in ["https://example.com/first", "https://example.com/second"]:
+        with pytest.raises(AppException) as error:
+            await parser.parse(url)
+        assert error.value.code == code
+    assert raw.parse.await_count == 1
+    await parser.parse("https://other.example/video")
+    assert raw.parse.await_count == 2
+    public_dns.side_effect = AppException("SSRF_BLOCKED", "private DNS", 400)
+    with pytest.raises(AppException) as error:
+        await parser.parse("https://example.com/second")
+    assert error.value.code == "SSRF_BLOCKED"
+    public_dns.side_effect = public_resolution
+    now = 31
+    await parser.parse("https://example.com/second")
+    assert raw.parse.await_count == 3 and not cache.flights
+
+
+async def test_queued_metadata_observes_new_platform_cooldown(public_dns):
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def blocked(url):
+        started.set()
+        await release.wait()
+        raise AppException("SOURCE_ACCESS_RESTRICTED", "平台暂时限制访问", 502)
+
+    raw = SimpleNamespace(parse=AsyncMock(side_effect=blocked))
+    cache = cached.MetadataCache(120, 1)
+    parser = cached.CachedVideoParser(raw, cache=cache)
+    first = asyncio.create_task(parser.parse("https://example.com/first"))
+    await started.wait()
+    second = asyncio.create_task(parser.parse("https://example.com/second"))
+    await asyncio.sleep(0)
+    release.set()
+    errors = await asyncio.gather(first, second, return_exceptions=True)
+    assert all(isinstance(error, AppException) and error.code == "SOURCE_ACCESS_RESTRICTED" for error in errors)
+    assert raw.parse.await_count == 1 and not cache.flights
+
+
+def test_platform_cooldown_is_bounded_and_can_be_disabled():
+    cache = cached.MetadataCache(120, 1)
+    error = AppException("SOURCE_RATE_LIMITED", "稍后重试", 503)
+    for index in range(100):
+        cache.remember_failure(str(index), error)
+    assert len(cache.failures) == 64
+    cache = cached.MetadataCache(120, 1, failure_cooldown=0)
+    cache.remember_failure("example.com", error)
+    assert not cache.failures
+
+
 def test_metadata_ttl_entry_and_byte_limits(monkeypatch):
     now = 0
     monkeypatch.setattr(cached.time, "monotonic", lambda: now)

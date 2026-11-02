@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     YTDLP_DENO_PATH: str = ""
     VIDEO_PARSE_CACHE_TTL_SECONDS: int = Field(default=120, ge=0, le=600)
     VIDEO_PARSE_CONCURRENCY: int = Field(default=2, ge=1, le=4)
+    VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS: int = Field(default=30, ge=0, le=300)
     DOWNLOAD_TIMEOUT_SECONDS: int = Field(default=600, gt=0)
     MAX_FILE_SIZE_MB: int = Field(default=512, gt=0)
     STORAGE_MIN_FREE_MB: int = Field(default=256, ge=0)
