@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { normalizeError, type ApiError } from "../api/client";
 import { authStore, useAuth } from "../stores/auth";
-import { billingStore, useBilling } from "../stores/billing";
+import { useBilling } from "../stores/billing";
 import type { BillingCatalog, Product } from "../types/billing";
-import { dateLabel, durationLabel, priceLabel } from "../utils/billing";
+import { durationLabel, priceLabel } from "../utils/billing";
 import ErrorNotice from "../components/ErrorNotice";
 import Icon from "../components/Icon";
 import PixelCard from "../components/PixelCard";
@@ -75,24 +75,46 @@ function PurchaseNotice({
   );
 }
 
-export default function SubscriptionView() {
-  const { user } = useAuth();
+function publishedCatalog() {
+  if (typeof document === "undefined") return undefined;
+  try {
+    const content = document.getElementById("published-catalog")?.textContent;
+    return content ? (JSON.parse(content) as BillingCatalog) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+export default function SubscriptionView({
+  initialCatalog,
+}: { initialCatalog?: BillingCatalog } = {}) {
+  const auth = useAuth();
+  const { user } = auth;
+  const navigate = useNavigate();
   const billing = useBilling();
-  const [catalog, setCatalog] = useState<BillingCatalog>();
+  const [catalog, setCatalog] = useState<BillingCatalog | undefined>(
+    () => initialCatalog ?? publishedCatalog(),
+  );
   const [error, setError] = useState<ApiError | null>(null);
+  const [catalogCurrent, setCatalogCurrent] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [addon, setAddon] = useState<"asr_120" | "ai_100">("asr_120");
   const [purchase, setPurchase] = useState<Product>();
   useEffect(() => {
     const controller = new AbortController();
     setError(null);
+    setCatalogCurrent(false);
     void api
       .catalog(controller.signal)
       .then((value) => {
-        if (!controller.signal.aborted) setCatalog(value);
+        if (!controller.signal.aborted) {
+          setCatalog(value);
+          setCatalogCurrent(true);
+        }
       })
       .catch((cause) => {
-        if (!controller.signal.aborted) setError(normalizeError(cause));
+        if (!controller.signal.aborted) {
+          setError(normalizeError(cause));
+        }
       });
     return () => controller.abort();
   }, [attempt]);
@@ -106,26 +128,27 @@ export default function SubscriptionView() {
     glowColor: "#71717a",
     shape: "square" as const,
     origin: "center" as const,
-    gap: 5,
+    gap: 8,
     pixelSize: 2,
-    speed: 35,
+    speed: 18,
     revealDuration: 600,
-    spotlight: 0.5,
-    glow: 0.5,
-    opacity: 0.35,
+    spotlight: 0.15,
+    glow: 0.15,
+    opacity: 0.12,
     fade: 0.7,
     trigger: "hover" as const,
     radius: 24,
-    clickPulse: true,
-    intro: true,
+    clickPulse: false,
+    intro: false,
+    noFocus: true,
   };
 
   return (
     <div className="subscription-page">
       <div className="subscription-breadcrumb">
-        <Link to="/">首页</Link>
+        <a href="/">首页</a>
         <span>/</span>
-        <span>订阅与额度</span>
+        <span>订阅方案</span>
       </div>
       <section className="subscription-heading">
         <span className="membership-tag">
@@ -152,7 +175,35 @@ export default function SubscriptionView() {
         </div>
       </section>
 
-      <ErrorNotice error={error}>
+      {catalog && !catalogCurrent && (
+        <div className="subscription-read-notice" role="status">
+          <p>
+            {error
+              ? "暂时无法更新方案，以下为已发布的公开说明。实际权益以处理前确认为准。"
+              : "以下为已发布的公开说明，实际权益以处理前确认为准。"}
+          </p>
+          {error && (
+            <button
+              className="text-button"
+              onClick={() => setAttempt((value) => value + 1)}
+            >
+              重新加载套餐
+            </button>
+          )}
+        </div>
+      )}
+      {auth.restoreError && (
+        <div className="subscription-read-notice" role="status">
+          <p>登录状态暂时无法确认，你仍可阅读公开方案。</p>
+          <button
+            className="text-button"
+            onClick={() => void authStore.restore()}
+          >
+            重新连接账号
+          </button>
+        </div>
+      )}
+      <ErrorNotice error={catalog ? null : error}>
         <button
           className="text-button"
           onClick={() => setAttempt((value) => value + 1)}
@@ -190,13 +241,14 @@ export default function SubscriptionView() {
                 <p className="plan-price-note">关注公众号并绑定账号后获得</p>
                 <button
                   className="button secondary full plan-action"
+                  disabled={
+                    !catalogCurrent ||
+                    auth.restoring ||
+                    Boolean(auth.restoreError)
+                  }
                   onClick={() => {
                     if (!user) authStore.open();
-                    else
-                      document.getElementById("my-allowances")?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center",
-                      });
+                    else navigate("/account");
                   }}
                 >
                   {user ? "查看我的体验额度" : "免费开始体验"}
@@ -243,6 +295,7 @@ export default function SubscriptionView() {
                 <p className="plan-price-note">按开通日期计算账期 · 手动续费</p>
                 <button
                   className="button primary full plan-action"
+                  disabled={!catalogCurrent}
                   onClick={() => setPurchase(monthly)}
                 >
                   {member ? "续费说明" : "开通说明"}
@@ -304,6 +357,7 @@ export default function SubscriptionView() {
                 </div>
                 <button
                   className="button secondary full plan-action"
+                  disabled={!catalogCurrent}
                   onClick={() => setPurchase(extra)}
                 >
                   加购说明
@@ -329,137 +383,11 @@ export default function SubscriptionView() {
             </PixelCard>
           </section>
           <p className="subscription-sale-note">
-            暂未开放在线购买。你可以先领取体验额度，已获得的权益可在下方查看。
+            暂未开放在线购买。你可以先领取体验额度，已获得的权益可在
+            <Link to="/account">个人中心查看</Link>。
           </p>
         </>
       )}
-
-      <section
-        className="allowance-overview"
-        id="my-allowances"
-        aria-labelledby="allowance-title"
-      >
-        <div className="allowance-section-heading">
-          <div>
-            <span className="eyebrow">YOUR SPACE</span>
-            <h2 id="allowance-title">我的额度</h2>
-          </div>
-          {user && (
-            <button
-              className="text-button"
-              disabled={billing.loading}
-              onClick={() => void billingStore.refresh()}
-            >
-              <Icon name="refresh" size={15} />
-              {billing.loading ? "正在刷新…" : "刷新额度"}
-            </button>
-          )}
-        </div>
-        {!user ? (
-          <div className="allowance-guest">
-            <p>登录后，查看属于你的转写与 AI 额度。</p>
-            <button className="button secondary" onClick={authStore.open}>
-              登录查看
-              <Icon name="arrow" size={15} />
-            </button>
-          </div>
-        ) : (
-          <>
-            <ErrorNotice error={billing.error} />
-            {!billing.data && billing.loading && (
-              <p className="muted" role="status">
-                正在读取你的额度…
-              </p>
-            )}
-            {billing.data && (
-              <>
-                <div className="allowance-metrics">
-                  <div className="allowance-metric">
-                    <span>当前身份</span>
-                    <strong>{member ? "月度会员" : "免费用户"}</strong>
-                    <small>
-                      {member
-                        ? `有效至 ${dateLabel(billing.data.member_until)}`
-                        : "按自己的节奏，开始探索"}
-                    </small>
-                  </div>
-                  <div className="allowance-metric">
-                    <span>剩余转写额度</span>
-                    <strong>
-                      {durationLabel(
-                        billing.data.balances.asr_seconds.available,
-                      )}
-                    </strong>
-                    <small>
-                      执行中占用{" "}
-                      {durationLabel(billing.data.balances.asr_seconds.held)}
-                    </small>
-                  </div>
-                  <div className="allowance-metric">
-                    <span>剩余 AI 生成</span>
-                    <strong>
-                      {billing.data.balances.ai_generations.available}
-                      <em> 次</em>
-                    </strong>
-                    <small>
-                      执行中占用 {billing.data.balances.ai_generations.held} 次
-                    </small>
-                  </div>
-                </div>
-                <div className="allowance-footnote">
-                  <span>
-                    {member
-                      ? "今日下载不按次数计费"
-                      : `今日下载：已用 ${billing.data.daily.downloads_used} 次 / 占用 ${billing.data.daily.downloads_held} 次`}
-                  </span>
-                  <span>
-                    今日已用流量{" "}
-                    {(billing.data.daily.egress_used_bytes / 1024 ** 2).toFixed(
-                      1,
-                    )}{" "}
-                    MiB
-                  </span>
-                </div>
-                {!billing.data.subscribed && (
-                  <p className="allowance-subscribe-note">
-                    重新关注公众号后，可继续使用体验额度和免费新下载；有效的付费额度与已有结果仍可使用。
-                  </p>
-                )}
-                {billing.data.allowances.filter(
-                  (item) =>
-                    !item.expired &&
-                    new Date(item.starts_at).getTime() <= Date.now(),
-                ).length > 0 && (
-                  <details className="allowance-expiry">
-                    <summary>查看额度有效期</summary>
-                    <ul>
-                      {billing.data.allowances
-                        .filter(
-                          (item) =>
-                            !item.expired &&
-                            new Date(item.starts_at).getTime() <= Date.now(),
-                        )
-                        .map((item, index) => (
-                          <li key={`${item.kind}-${item.source}-${index}`}>
-                            <span>
-                              {item.source === "trial"
-                                ? "体验"
-                                : item.source === "monthly"
-                                  ? "会员"
-                                  : "加购"}
-                              {item.kind === "asr_seconds" ? "转写" : "AI"}额度
-                            </span>
-                            <span>{dateLabel(item.expires_at)} 到期</span>
-                          </li>
-                        ))}
-                    </ul>
-                  </details>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </section>
 
       <section className="subscription-faq" aria-label="订阅常见问题">
         <div>
@@ -545,7 +473,7 @@ export default function SubscriptionView() {
           </details>
         </div>
       </section>
-      <Link className="subscription-return" to="/">
+      <Link className="subscription-return" to="/app">
         回到工作台，开始一次新的探索
         <Icon name="arrow" size={17} />
       </Link>

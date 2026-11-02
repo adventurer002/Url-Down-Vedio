@@ -1,5 +1,16 @@
 # VideoHub AI backend
 
+智能切片修复：R1 的运行/清理安全见 [CLIPS_R1.md](CLIPS_R1.md)；R2 的匹配、频率、来源与媒体边界见 [CLIPS_R2.md](CLIPS_R2.md)；R3 的单片缓存、共享文件关联与迁移 0012 见 [CLIPS_R3.md](CLIPS_R3.md)。最终全量回归 522 项通过；启用新版前执行 `uv run alembic upgrade head`。
+
+智能切片阶段 A 后端：候选分析、精细定位、最多 5 条视频整批导出、权限/额度/清理，见 [CLIPS_V1.md](CLIPS_V1.md)。默认关闭，通过服务端 `CLIPS_ENABLED` 显式启用；精准导出需独立配置支持真实分段时间戳的模型，配置示例见 `clips.env.example`。
+
+清理分页、存储争用重试及凭文稿生成 AI 结果，见 [BACKEND_FOLLOWUPS.md](BACKEND_FOLLOWUPS.md)。
+
+本地视频与 MP3 后端闭环：上传、私有来源、ASR、总结、导图、问答与额度，见 [UPLOADS_V1.md](UPLOADS_V1.md)。包含迁移、启动命令、curl / Swagger 步骤和修改文件清单；前端待接入。
+
+管理后台后端 MVP：管理员初始化、用户状态与凭证失效、会员额度发放、全局任务、操作审计和概览，见 [ADMIN_BACKEND_MVP.md](ADMIN_BACKEND_MVP.md)。
+阶段 A 的历史交付说明保留在 [ADMIN_STAGE_A.md](ADMIN_STAGE_A.md)。前端管理页面尚未扩展，生产尚未部署本版。
+
 视频问答、引用与个人知识库：[KNOWLEDGE_V1.md](KNOWLEDGE_V1.md)。
 
 额度制首版：会员、转写分钟包、AI 次数包、报价确认与核销，见 [ALLOWANCES_V1.md](ALLOWANCES_V1.md)。
@@ -504,6 +515,8 @@ uv run pytest
 
 新增个人公众号 6 位动态口令登录、mock 联调、取关拦截、JWT Header/Cookie 鉴权及用户任务隔离。
 完整配置、启动命令、curl / Swagger 验收、迁移与文件清单见 [阶段 9 交付说明](STAGE9.md)。
+
+下载与任务进度的 URL 鉴权已升级为 120 秒、绑定资源和用途的短期凭证；完整登录 JWT 仅通过 Header/Cookie 使用。新增 `POST /files/{file_id}/download/access` 与 `POST /tasks/{task_id}/events/access`（均在 `/api/v1` 下）。前后端需一并更新，详见 [整体体验与短期凭证说明](../frontend/EXPERIENCE_RELIABILITY.md)。
 
 ### 千问 ASR 长音频大小限制修复
 

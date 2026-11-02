@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="4" failures="0" errors="0" time="0.40671175">
+    <testsuite name="src/tests/clipsF1AuditTemporary.test.tsx" timestamp="2026-11-02T03:43:23.654Z" hostname="bogon" tests="4" failures="0" errors="0" skipped="0" time="0.40671175">
+        <testcase classname="src/tests/clipsF1AuditTemporary.test.tsx" name="AUDIT A01 cached analysis older than the displayed artifact is silently ignored" time="0.122387875">
+        </testcase>
+        <testcase classname="src/tests/clipsF1AuditTemporary.test.tsx" name="AUDIT A02 an acknowledged background submission keeps an uncertain confirmation marker after leaving the page" time="0.173850958">
+        </testcase>
+        <testcase classname="src/tests/clipsF1AuditTemporary.test.tsx" name="AUDIT A03 a later export of an old plan masks a newer completed analysis" time="0.055675">
+        </testcase>
+        <testcase classname="src/tests/clipsF1AuditTemporary.test.tsx" name="AUDIT C01 control a genuinely newer analysis is offered when no export masks it" time="0.054164792">
+        </testcase>
+    </testsuite>
+</testsuites>

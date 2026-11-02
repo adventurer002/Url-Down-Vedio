@@ -1,0 +1,10 @@
+backend/CLIPS_FRONTEND_PLAN.md
+backend/reviews/clips-frontend/desktop-candidates.png
+backend/reviews/clips-frontend/desktop-results.png
+backend/reviews/clips-frontend/mobile-candidates.png
+backend/reviews/clips-frontend/mobile-review.png
+backend/reviews/clips-frontend/narrow-settings.png
+backend/reviews/clips-frontend/proposal.html
+backend/reviews/clips-frontend/render-checks.json
+backend/reviews/clips-frontend/verify_prototype.py
+backend/reviews/clips-frontend/files.txt

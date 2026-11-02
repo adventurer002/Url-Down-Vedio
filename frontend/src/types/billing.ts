@@ -65,6 +65,7 @@ export interface AllowanceQuote {
     asr_seconds: number;
     ai_generations: number;
     limits: ResourceLimits;
+    clip_limits?: { max_daily_exports: number; max_daily_plan_exports: number };
   };
   expires_at: string;
   note: string;

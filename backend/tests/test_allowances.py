@@ -262,6 +262,7 @@ async def test_api_catalog_quote_confirm_and_auth(billing):
 
 
 async def test_download_range_counts_bytes_not_downloads(billing, storage):
+    from app.modules.auth.dependencies import resource_user
     from app.modules.download.worker import execute_download
     from app.modules.download.router import get_media_service
     from app.modules.media.repository import MediaRepository
@@ -273,7 +274,7 @@ async def test_download_range_counts_bytes_not_downloads(billing, storage):
     assert completed.status == "completed"
     app = create_app()
     app.dependency_overrides[get_media_service] = lambda: MediaService(MediaRepository(b.tasks.sessions), storage)
-    app.dependency_overrides[optional_user] = lambda: b.user
+    app.dependency_overrides[resource_user] = lambda: b.user
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         url = completed.result_payload["download_url"]
         for _ in range(2):

@@ -1,5 +1,10 @@
 import { api } from "../api";
-import { authenticatedUrl, normalizeError } from "../api/client";
+import {
+  authenticatedUrl,
+  resourceAccessUrl,
+  normalizeError,
+} from "../api/client";
+import { authStore } from "../stores/auth";
 import type { TaskEvent, TaskSnapshot, TaskStatus } from "../types/api";
 export const terminal = (status: TaskStatus) =>
   ["completed", "failed", "cancelled", "expired"].includes(status);
@@ -93,43 +98,52 @@ export function createTaskTracker(taskId: string, options: TrackerOptions) {
       void load();
     }, 1500);
   }
-  try {
-    source = (
-      options.eventSource ||
-      ((url) => new EventSource(url, { withCredentials: true }))
-    )(authenticatedUrl(`/tasks/${encodeURIComponent(taskId)}/events`));
-    options.onMode?.("sse");
-    source.addEventListener("progress", (event) => {
-      if (stopped || finishing) return;
-      let value: unknown;
-      try {
-        value = JSON.parse(event.data);
-      } catch {
-        fallback();
-        return;
-      }
-      if (!validEvent(value, taskId)) {
-        fallback();
-        return;
-      }
-      if (value.seq <= lastSeq) return;
-      lastSeq = value.seq;
-      options.onEvent(value);
-      if (terminal(value.status)) {
-        finishing = true;
-        source?.close();
-        if (timer) {
-          clearTimeout(timer);
-          timer = undefined;
+  function connect(url: string) {
+    if (stopped) return;
+    try {
+      source = (
+        options.eventSource ||
+        ((url) => new EventSource(url, { withCredentials: true }))
+      )(url);
+      options.onMode?.("sse");
+      source.addEventListener("progress", (event) => {
+        if (stopped || finishing) return;
+        let value: unknown;
+        try {
+          value = JSON.parse(event.data);
+        } catch {
+          fallback();
+          return;
         }
-        void load(); // Resolve the full terminal payload, with retry if GET temporarily fails.
-      }
-    });
-    source.onerror = fallback;
-    source.addEventListener("error", fallback);
-  } catch {
-    fallback();
+        if (!validEvent(value, taskId)) {
+          fallback();
+          return;
+        }
+        if (value.seq <= lastSeq) return;
+        lastSeq = value.seq;
+        options.onEvent(value);
+        if (terminal(value.status)) {
+          finishing = true;
+          source?.close();
+          if (timer) {
+            clearTimeout(timer);
+            timer = undefined;
+          }
+          void load(); // Resolve the full terminal payload, with retry if GET temporarily fails.
+        }
+      });
+      source.onerror = fallback;
+      source.addEventListener("error", fallback);
+    } catch {
+      fallback();
+    }
   }
+  const path = `/tasks/${encodeURIComponent(taskId)}/events`;
+  if (authStore.getState().user) {
+    void resourceAccessUrl(path, controller.signal).then(connect, () => {
+      if (!stopped) fallback();
+    });
+  } else connect(authenticatedUrl(path));
   return {
     stop,
     get lastSeq() {

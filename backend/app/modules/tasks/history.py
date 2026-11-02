@@ -30,6 +30,11 @@ class TaskHistoryService:
             snapshots = [None] * len(records)
         ids = []
         for task in records:
+            for value in (task.result_payload or {}).get("file_ids", []):
+                try:
+                    ids.append(UUID(value))
+                except (ValueError, TypeError, AttributeError):
+                    pass
             try:
                 ids.append(UUID((task.result_payload or {}).get("file_id", "")))
             except (ValueError, TypeError, AttributeError):
@@ -41,7 +46,10 @@ class TaskHistoryService:
             video = videos.get(task.video_id)
             result = dict(item["result_payload"] or {})
             # A retained completed task does not imply its media file is still downloadable.
-            downloadable = item["status"] == "completed" and result.get("file_id") in available
+            batch_ids = [value for value in result.get("file_ids", []) if value in available]
+            downloadable = item["status"] == "completed" and (result.get("file_id") in available or bool(batch_ids))
+            if "file_ids" in result:
+                result["file_ids"] = batch_ids
             if not downloadable:
                 result.pop("file_id", None)
                 result.pop("download_url", None)

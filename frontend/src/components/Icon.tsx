@@ -1,4 +1,15 @@
 const paths: Record<string, string> = {
+  clips:
+    "M6 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6M6 22a3 3 0 1 1 0-6 3 3 0 0 1 0 6M8 7l13 13M8 17 21 4",
+  upload: "M12 16V4m-4 4 4-4 4 4M4 16v5h16v-5",
+  warning: "M12 3 2 21h20L12 3zM12 9v5M12 17h.01",
+  dashboard: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
+  menu: "M4 6h16M4 12h16M4 18h16",
+  server: "M3 3h18v7H3zM3 14h18v7H3zM7 6.5h.01M7 17.5h.01M15 6.5h3M15 17.5h3",
+  shield: "m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM9 12l2 2 4-4",
+  clock: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M12 7v5l3 2",
+  storage: "M5 3h14l3 12v6H2v-6zM2 15h20M6 18h.01M10 18h.01",
+  logout: "M10 4H4v16h6M9 12h12m-5-5 5 5-5 5",
   bookmark: "M6 3h12v18l-6-4-6 4z",
   chat: "M4 4h16v12H9l-5 4zM8 8h8M8 12h5",
   search: "M21 21l-6-6M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0",

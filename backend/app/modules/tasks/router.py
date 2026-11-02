@@ -2,10 +2,11 @@ import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
-from app.modules.auth.dependencies import optional_user, required_user, get_auth_service
+from app.modules.auth.dependencies import optional_user, required_user, resource_user, get_auth_service
+from app.modules.auth.tokens import issue_resource_access
 from app.core.exceptions import AppException
 from app.core.response import success_response
 from app.infrastructure.database.session import SessionLocal
@@ -60,13 +61,13 @@ async def cancel_task(task_id: UUID, service: TaskService = Depends(get_task_ser
 
 @router.get("/{task_id}/events")
 async def task_events(task_id: UUID, request: Request, service: TaskService = Depends(get_task_service),
-                      user=Depends(optional_user), auth=Depends(get_auth_service)):
+                      user=Depends(resource_user), auth=Depends(get_auth_service)):
     await service.authorize(task_id, user)
     subscription, initial = await service.open_events(task_id)
 
     async def check_access():
         if user is not None:
-            await auth.user(user.id)
+            await auth.user(user.id, user.auth_version)
 
     async def stream():
         try:
@@ -82,3 +83,11 @@ async def task_events(task_id: UUID, request: Request, service: TaskService = De
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
                              background=BackgroundTask(subscription.close))
+
+
+@router.post("/{task_id}/events/access")
+async def task_events_access(task_id: UUID, service: TaskService = Depends(get_task_service),
+                             user=Depends(required_user)):
+    await service.authorize(task_id, user)
+    return JSONResponse(success_response(issue_resource_access(user.id, user.auth_version, "task_events", task_id)),
+                        headers={"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer"})

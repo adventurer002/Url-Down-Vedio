@@ -17,10 +17,16 @@ from app.modules.ai.router import router as ai_router
 from app.modules.auth.router import router as auth_router
 
 router = APIRouter(prefix="/api/v1")
+from app.modules.admin.router import router as admin_router
+router.include_router(admin_router)
 from app.modules.billing.router import router as billing_router
 router.include_router(billing_router)
 from app.modules.knowledge.router import router as knowledge_router
 router.include_router(knowledge_router)
+from app.modules.uploads.router import router as uploads_router
+router.include_router(uploads_router)
+from app.modules.clips.router import router as clips_router
+router.include_router(clips_router)
 router.include_router(auth_router)
 router.include_router(ai_router)
 from app.modules.system.router import router as system_router

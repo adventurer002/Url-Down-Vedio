@@ -43,13 +43,18 @@ class AIRepository:
         self.sessions = sessions
 
     @staticmethod
-    def key(content_hash, result_type, model, version, language):
-        return (AIResult.source_content_hash == content_hash, AIResult.result_type == AIResultType(result_type),
+    def key(content_hash, result_type, model, version, language, cache_scope="public"):
+        return (AIResult.cache_scope == cache_scope, AIResult.source_content_hash == content_hash, AIResult.result_type == AIResultType(result_type),
                 AIResult.llm_model == model, AIResult.prompt_version == version, AIResult.output_language == language)
 
-    def find_cache(self, content_hash, result_type, model, version, language) -> AIRecord | None:
+    def find_cache(self, content_hash, result_type, model, version, language, cache_scope="public") -> AIRecord | None:
         with self.sessions() as session:
-            item = session.scalar(select(AIResult).where(*self.key(content_hash, result_type, model, version, language)))
+            item = session.scalar(select(AIResult).where(*self.key(content_hash, result_type, model, version, language, cache_scope)))
+            if item is None and cache_scope.startswith("transcript:"):
+                # Reuse an older public result only if it carries this exact original time axis.
+                identifier = UUID(cache_scope.removeprefix("transcript:"))
+                item = session.scalar(select(AIResult).where(*self.key(content_hash, result_type, model, version, language),
+                    AIResult.transcript_id == identifier))
             return record(item) if item else None
 
     def ids_for_transcript(self, transcript_id: UUID) -> list[UUID]:
@@ -64,15 +69,17 @@ class AIRepository:
             return record(item)
 
     def store(self, session: Session, task_id: UUID, transcript, result_type: str, provider: str,
-              model: str, version: str, language: str, content: dict, usage: Usage, markdown: str | None = None) -> AIRecord:
-        key = self.key(transcript.content_hash, result_type, model, version, language)
+              model: str, version: str, language: str, content: dict, usage: Usage, markdown: str | None = None, *, cache_scope: str | None = None) -> AIRecord:
+        from app.modules.video.repository import VideoRepository
+        scope = cache_scope or VideoRepository.cache_scope(session, transcript.video_id, transcript.id)
+        key = self.key(transcript.content_hash, result_type, model, version, language, scope)
         existing = session.scalar(select(AIResult).where(*key))
         if existing:
             return record(existing)
         try:
             with session.begin_nested():
                 item = AIResult(id=uuid4(), task_id=task_id, video_id=transcript.video_id, transcript_id=transcript.id,
-                                result_type=AIResultType(result_type), source_content_hash=transcript.content_hash,
+                                result_type=AIResultType(result_type), cache_scope=scope, source_content_hash=transcript.content_hash,
                                 llm_provider=provider, llm_model=model, prompt_version=version, output_language=language,
                                 content_json=content, markdown_export=markdown, input_tokens=usage.input_tokens,
                                 output_tokens=usage.output_tokens, duration_ms=usage.duration_ms,
@@ -86,3 +93,9 @@ class AIRepository:
             if existing is None:
                 raise
             return record(existing)
+
+    def scope_for(self, transcript, *, exact=False):
+        from app.modules.video.repository import VideoRepository
+        with self.sessions() as session:
+            scope = VideoRepository.cache_scope(session, transcript.video_id, transcript.id)
+            return f"transcript:{transcript.id}" if exact and scope == "public" else scope

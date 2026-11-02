@@ -1,0 +1,38 @@
+
+> videohub-web@0.1.0 build /Users/edgar/Desktop/项目/videohub_ai/frontend
+> vite build && node build/verify-public.mjs
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 1133 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.71 kB │ gzip:   0.49 kB
+dist/asset-manifest.json                       6.29 kB │ gzip:   0.99 kB
+dist/assets/VideoWorkspaceView-DgoXHYSD.css    9.23 kB │ gzip:   1.98 kB
+dist/assets/AdminView-ByCAJjeE.css            33.71 kB │ gzip:   7.06 kB
+dist/assets/marketing-BoqBd6vK.css            48.34 kB │ gzip:  10.24 kB
+dist/assets/workspace-client-CW2ERDbO.css    122.92 kB │ gzip:  24.85 kB
+dist/assets/ClientRoute-CqwUu8nE.js            0.27 kB │ gzip:   0.22 kB
+dist/assets/client-Dz8PBXHE.js                 0.46 kB │ gzip:   0.32 kB
+dist/assets/SettingsView-Cq8nfIcY.js           0.87 kB │ gzip:   0.56 kB
+dist/assets/index-BS7wuwiW.js                  2.70 kB │ gzip:   1.36 kB
+dist/assets/index-Ccxk0nbq.js                  4.87 kB │ gzip:   2.21 kB
+dist/assets/LibraryView-asZRxJm9.js            6.16 kB │ gzip:   2.49 kB
+dist/assets/AccountView-CFooIL08.js            7.48 kB │ gzip:   2.75 kB
+dist/assets/VideoQuestions-CuVNGcEW.js        11.79 kB │ gzip:   5.05 kB
+dist/assets/SubscriptionView-x9lNY0Hz.js      24.16 kB │ gzip:   9.19 kB
+dist/assets/ScrollTrigger-BrDuEirF.js         43.55 kB │ gzip:  18.05 kB
+dist/assets/marketing-D3L9tgNV.js             58.52 kB │ gzip:  20.64 kB
+dist/assets/VideoWorkspaceView-kDKlUVlb.js    66.65 kB │ gzip:  21.11 kB
+dist/assets/index-CgAXP8uT.js                 70.12 kB │ gzip:  27.48 kB
+dist/assets/mindmapRenderer-BaqG3r44.js       74.92 kB │ gzip:  25.21 kB
+dist/assets/AdminView-DsuFG9sM.js            207.92 kB │ gzip:  64.04 kB
+dist/assets/workspace-client-DYzUko5c.js     215.42 kB │ gzip:  79.06 kB
+dist/assets/content-CLEqw3TZ.js              227.14 kB │ gzip:  71.85 kB
+dist/assets/AeroShards-Do5qXtLb.js           267.35 kB │ gzip:  74.89 kB
+dist/assets/index-B7O-vSKW.js                602.69 kB │ gzip: 206.91 kB
+✓ built in 9.97s
+(node:17209) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Public output verified: 6 readable documents, metadata, styles, assets, source links, sitemap and private noindex shells.

@@ -11,7 +11,7 @@ from app.modules.media.worker import AudioDispatcher
 from app.modules.media.service import AudioExtractionService
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.service import TaskService
-from app.modules.video.parsers.ytdlp import YtDlpParser
+from app.modules.video.parsers.cached import get_video_parser
 from app.modules.video.repository import VideoRepository
 from app.modules.video.resolver import VideoResolver
 
@@ -25,7 +25,7 @@ class AudioRequest(BaseModel):
 
 
 def get_audio_service():
-    return AudioExtractionService(VideoResolver(YtDlpParser(), VideoRepository(SessionLocal)),
+    return AudioExtractionService(VideoResolver(get_video_parser(), VideoRepository(SessionLocal)),
                                   TaskService(TaskRepository(SessionLocal), ProgressBus(redis_client), AudioDispatcher()))
 
 

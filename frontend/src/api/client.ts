@@ -1,6 +1,12 @@
 import { authStore } from "../stores/auth";
 import axios from "axios";
 import type { ApiErrorBody } from "../types/api";
+declare module "axios" {
+  interface AxiosRequestConfig {
+    contentIdentity?: { userId: string; token: string };
+    adminIdentity?: { userId: string; token: string };
+  }
+}
 export class ApiError extends Error {
   constructor(
     public code: string,
@@ -50,7 +56,33 @@ export const client = axios.create({
   withCredentials: true,
 });
 client.interceptors.request.use((config) => {
-  const token = authStore.getState().token;
+  const current = authStore.getState();
+  const token = current.token;
+  if (
+    config.contentIdentity &&
+    (current.user?.id !== config.contentIdentity.userId ||
+      token !== config.contentIdentity.token)
+  )
+    throw new ApiError(
+      "SESSION_CHANGED",
+      "登录身份已变化，请重新选择文件",
+      "",
+      409,
+    );
+  if (
+    config.adminIdentity &&
+    (current.user?.id !== config.adminIdentity.userId ||
+      token !== config.adminIdentity.token ||
+      !token ||
+      current.user?.role !== "admin" ||
+      current.user.status !== "active")
+  )
+    throw new ApiError(
+      "ADMIN_SESSION_CHANGED",
+      "登录身份已变化，本次请求尚未发送。",
+      "",
+      409,
+    );
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -111,8 +143,37 @@ export function fileDownloadUrl(fileId: string): string {
 }
 
 export function authenticatedUrl(path: string): string {
+  return apiUrl(path);
+}
+
+/** Native downloads/EventSource receive a short-lived ticket scoped to one resource. */
+export async function resourceAccessUrl(
+  path: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const { user, token } = authStore.getState();
+  if (!user) return apiUrl(path);
+  if (!/^\/(tasks\/[^/]+\/events|files\/[^/]+\/download)$/.test(path))
+    throw new ApiError("INVALID_RESOURCE_PATH", "无法打开此资源");
+  const access = (
+    await client.post<{ access_token: string }>(`${path}/access`, undefined, {
+      signal,
+      timeout: 5000,
+    })
+  ).data;
+  const current = authStore.getState();
+  if (
+    signal?.aborted ||
+    current.user?.id !== user.id ||
+    current.token !== token
+  )
+    throw new ApiError("SESSION_CHANGED", "登录身份已变化，请重新打开资源");
+  if (!access.access_token || access.access_token === token)
+    throw new ApiError(
+      "INVALID_RESOURCE_ACCESS",
+      "暂时无法获取访问链接，请重试",
+    );
   const url = new URL(apiUrl(path));
-  const token = authStore.getState().token;
-  if (token) url.searchParams.set("token", token);
+  url.searchParams.set("access_token", access.access_token);
   return url.href;
 }

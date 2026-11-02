@@ -1,0 +1,331 @@
+.public-app .account-page {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 28px 28px 80px;
+  color: #27272a;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.account-heading {
+  margin: 34px 0 28px;
+}
+.account-heading h1 {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+}
+.account-heading p {
+  margin-top: 8px;
+  color: #62626b;
+}
+.account-profile {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 28px;
+  border: 1px solid #e5e5e9;
+  border-radius: 16px;
+  background: #fff;
+}
+.account-profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+.account-profile-identity > div {
+  min-width: 0;
+}
+.account-profile h2 {
+  font-size: 20px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.account-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #f4f4f5;
+}
+.account-profile-identity p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-profile p {
+  font-size: 14px;
+  color: #62626b;
+  margin-top: 4px;
+}
+.account-membership {
+  border-left: 1px solid #e5e5e9;
+  padding-left: 28px;
+}
+.account-membership strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.account-profile > .button {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  white-space: nowrap;
+}
+.account-allowances,
+.account-information {
+  margin-top: 32px;
+}
+.account-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.account-page h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.account-page .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  min-height: 40px;
+}
+.account-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.account-metrics article {
+  border: 1px solid #e5e5e9;
+  border-radius: 14px;
+  padding: 22px;
+  min-width: 0;
+  background: #fff;
+}
+.account-metrics h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #52525b;
+}
+.account-metrics article > p {
+  font-size: 14px;
+  color: #62626b;
+  overflow-wrap: anywhere;
+}
+.account-metrics article > .account-metric-value {
+  font-size: 28px;
+  font-weight: 500;
+  color: #18181b;
+  margin: 18px 0 10px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.account-metric-value span {
+  margin-left: 6px;
+  font-size: 15px;
+  font-weight: 400;
+  color: #62626b;
+}
+.account-metrics article > .account-member-download {
+  font-size: 23px;
+}
+.account-note {
+  margin-top: 12px;
+  color: #62626b;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.account-allowance-details {
+  margin-top: 18px;
+  border: 1px solid #e5e5e9;
+  border-radius: 12px;
+  padding: 0 22px;
+}
+.account-allowance-details summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 17px 0;
+  cursor: pointer;
+}
+.account-allowance-details summary::-webkit-details-marker {
+  display: none;
+}
+.account-allowance-details summary > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-allowance-details summary > span:last-child {
+  font-size: 14px;
+  color: #62626b;
+}
+.account-allowance-details[open] summary > span:last-child svg {
+  transform: rotate(45deg);
+}
+.account-allowance-details ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-allowance-details li {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  align-items: baseline;
+  gap: 12px;
+  border-top: 1px solid #ededf0;
+  padding: 16px 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.account-allowance-details li strong {
+  font-weight: 500;
+}
+.account-allowance-details li span {
+  color: #62626b;
+}
+.account-allowance-details > p {
+  padding-bottom: 18px;
+}
+.account-login-method {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px 0;
+  border-bottom: 1px solid #e5e5e9;
+}
+.account-login-method span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-login-method span:last-child {
+  font-size: 14px;
+  color: #62626b;
+}
+.account-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding-top: 12px;
+}
+.account-shortcuts :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  min-height: 44px;
+  font-size: 15px;
+}
+.account-shortcuts :is(a, button):hover {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+.account-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 18px;
+  padding: 48px 24px;
+  border: 1px solid #e5e5e9;
+  border-radius: 16px;
+}
+.account-empty p {
+  color: #62626b;
+}
+.subscription-sale-note a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+@media (max-width: 900px) {
+  .account-profile {
+    flex-wrap: wrap;
+  }
+  .account-profile-identity {
+    flex-basis: 100%;
+  }
+  .account-membership {
+    flex: 1 1 200px;
+    border: 0;
+    padding-left: 0;
+  }
+  .account-metrics article {
+    padding: 18px;
+  }
+}
+@media (max-width: 600px) {
+  .public-app .account-page {
+    padding: 18px 20px 48px;
+    font-size: 15px;
+  }
+  .account-heading {
+    margin-top: 24px;
+  }
+  .account-heading h1 {
+    font-size: 26px;
+  }
+  .account-profile {
+    padding: 22px;
+    gap: 20px;
+  }
+  .account-profile-identity {
+    flex-basis: 100%;
+  }
+  .account-membership {
+    border: 0;
+    padding: 0;
+    flex-basis: 100%;
+  }
+  .account-profile > .button {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+  .account-metrics {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .account-metrics article {
+    padding: 20px;
+  }
+  .account-metrics article > .account-metric-value {
+    margin: 12px 0 8px;
+  }
+  .account-allowance-details {
+    padding: 0 16px;
+  }
+  .account-allowance-details summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .account-allowance-details li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .account-shortcuts {
+    gap: 8px 24px;
+  }
+}
+
+.quote-warning a {
+  display: inline-block;
+  margin-inline-start: 8px;
+}

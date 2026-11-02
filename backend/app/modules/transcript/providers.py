@@ -1,12 +1,15 @@
+from contextvars import ContextVar
+
 import asyncio
 import base64
 from pathlib import Path
 import json
 import shutil
-import tempfile
 import wave
 
 from app.infrastructure.process_runner import ProcessRunner
+from app.infrastructure.process_control import guarded_temporary_directory
+from app.infrastructure.concurrency import ordered_map
 from typing import Protocol
 
 import httpx
@@ -16,6 +19,10 @@ from app.core.exceptions import AppException
 from app.core.security import normalize_url
 from app.infrastructure.http_client import PublicNetworkBackend, public_transport
 from app.modules.transcript.data import TranscriptData, make_transcript
+
+
+asr_work_directory = ContextVar("asr_work_directory", default=None)
+asr_capacity_check = ContextVar("asr_capacity_check", default=lambda: None)
 
 
 class ASRProvider(Protocol):
@@ -82,7 +89,8 @@ class OpenAICompatibleASRProvider:
                                     self.url,
                                     headers={"Authorization": f"Bearer {self.api_key}"},
                                     data=fields,
-                                    files={"file": ("audio.mp3", audio, "audio/mpeg")},
+                                    files={"file": ("audio.wav" if audio_path.suffix.lower() == ".wav" else "audio.mp3", audio,
+                                        "audio/wav" if audio_path.suffix.lower() == ".wav" else "audio/mpeg")},
                                 ) as response:
                                     if (
                                         response.status_code
@@ -191,8 +199,8 @@ class QwenASRProvider:
             raise AppException("FFMPEG_UNAVAILABLE", "千问分段转写需要 FFmpeg", 503)
         try:
             async with asyncio.timeout(self.timeout):
-                with tempfile.TemporaryDirectory(
-                    prefix="asr-chunks-", dir=audio_path.parent
+                with guarded_temporary_directory(
+                    prefix="asr-chunks-", dir=asr_work_directory.get() or audio_path.parent
                 ) as temporary:
                     directory = Path(temporary)
 
@@ -239,26 +247,28 @@ class QwenASRProvider:
                         cwd=directory,
                         is_cancel_requested=cancelled,
                         on_progress=progress,
+                        check_capacity=asr_capacity_check.get(),
                     )
                     paths = sorted(directory.glob("chunk-*.wav"))
                     if not paths:
                         raise AppException(
                             "ASR_INVALID_RESPONSE", "未能生成转写音频分段", 502
                         )
-                    segments, offset, detected = [], 0.0, language
+                    chunks, offset = [], 0.0
                     for path in paths:
                         with wave.open(str(path), "rb") as audio:
                             duration = audio.getnframes() / audio.getframerate()
-                        data = await self._transcribe_chunk(path, language)
-                        segments.append(
-                            {
-                                "start": offset,
-                                "end": offset + duration,
-                                "text": data.content_text,
-                            }
-                        )
+                        chunks.append((path, offset, duration))
                         offset += duration
-                        detected = detected or data.language
+
+                    async def transcribe_chunk(chunk):
+                        path, start, duration = chunk
+                        data = await self._transcribe_chunk(path, language)
+                        return {"start": start, "end": start + duration, "text": data.content_text}, data.language
+
+                    replies = await ordered_map(chunks, transcribe_chunk, settings.ASR_CHUNK_CONCURRENCY)
+                    segments = [segment for segment, _ in replies]
+                    detected = language or next((detected for _, detected in replies if detected), None)
                     return make_transcript(detected or "und", segments)
         except TimeoutError:
             raise AppException(

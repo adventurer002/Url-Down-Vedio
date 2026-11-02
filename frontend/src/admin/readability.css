@@ -1,0 +1,479 @@
+/* Admin reading scale, including portaled dialogs and menus. */
+.admin-app,
+.admin-dialog,
+.admin-dropdown,
+.admin-mobile-sidebar {
+  --admin-muted: #62626b;
+  --admin-meta: 12px;
+  --admin-label: 13px;
+  --admin-body: 15px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: var(--admin-body);
+  line-height: 1.65;
+}
+.admin-nav > a,
+.admin-sidebar-bottom > a,
+.admin-identity strong {
+  font-size: 14px;
+}
+.admin-brand small,
+.admin-nav > p,
+.admin-identity small,
+.admin-breadcrumb,
+.admin-updated,
+.admin-date,
+.admin-subtle,
+.admin-live-label,
+.admin-fetch-status,
+.admin-footer,
+.admin-footer strong {
+  font-size: var(--admin-meta);
+  color: var(--admin-muted);
+}
+.admin-page-heading p,
+.admin-panel-heading p,
+.admin-footnote,
+.admin-info-strip,
+.admin-storage-heading,
+.admin-storage-heading > span:last-child,
+.admin-metric p,
+.admin-task-state p,
+.admin-guide p,
+.admin-attention small,
+.admin-empty p {
+  font-size: var(--admin-label);
+  color: var(--admin-muted);
+  line-height: 1.7;
+}
+.admin-health {
+  font-size: var(--admin-label);
+}
+.admin-panel-heading h2 {
+  font-size: 18px;
+}
+.admin-metric h2,
+.admin-service-row,
+.admin-distribution-row,
+.admin-distribution-row strong,
+.admin-guide strong,
+.admin-attention strong,
+.admin-loading,
+.admin-empty {
+  font-size: 14px;
+}
+.admin-metric strong {
+  font-size: 30px;
+}
+.admin-metric {
+  padding: 20px 18px;
+}
+.admin-info-strip span {
+  font-size: var(--admin-meta);
+}
+.admin-app .admin-button,
+.admin-dialog .admin-button,
+.admin-app .admin-text-button,
+.admin-dialog .admin-text-button {
+  font-size: 14px;
+  min-height: 40px;
+}
+.admin-icon-button {
+  width: 36px;
+  height: 36px;
+}
+.admin-app .admin-filter-chip {
+  font-size: var(--admin-label) !important;
+  min-height: 36px;
+}
+.admin-filter-fields label,
+.admin-pagination,
+.admin-detail-nav {
+  font-size: var(--admin-label);
+}
+.admin-filter-fields label {
+  flex-basis: 135px;
+}
+.admin-filter-fields label:has(input:not([type="datetime-local"])) {
+  flex-grow: 1.5;
+}
+.admin-filter-fields input,
+.admin-filter-fields select {
+  min-height: 40px;
+  font-size: 14px;
+}
+.admin-filter-fields {
+  gap: 12px;
+}
+.admin-filters {
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.admin-advanced-filters {
+  margin-top: 12px;
+  border-top: 1px solid var(--admin-border);
+}
+.admin-advanced-filters > summary,
+.admin-list-guide > summary {
+  width: fit-content;
+  padding: 10px 0;
+  font-size: var(--admin-label);
+  color: #52525b;
+  cursor: pointer;
+}
+.admin-advanced-filters > summary > span {
+  margin-left: 12px;
+  color: #52525b;
+}
+.admin-advanced-filters > .admin-filter-fields {
+  padding-top: 4px;
+}
+.admin-advanced-filters .admin-footnote {
+  margin-top: 12px;
+}
+.admin-list-guide {
+  margin: -4px 0 14px;
+}
+.admin-list-guide .admin-guide {
+  margin: 0 0 14px;
+}
+
+/* Show the matched total once; current-page counts remain clearly labeled. */
+.admin-page-summary.admin-page-summary-compact {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 28px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+}
+.admin-page-summary-compact > section {
+  display: block;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  min-width: 0;
+}
+.admin-page-summary-compact > section > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.admin-page-summary-compact p {
+  font-size: var(--admin-label);
+  color: #52525b;
+}
+.admin-page-summary-compact strong {
+  display: inline;
+  margin: 0;
+  font-size: 18px;
+}
+.admin-page-summary-compact .admin-summary-total {
+  margin-right: auto;
+}
+.admin-page-summary-compact .admin-summary-total strong {
+  font-size: 24px;
+}
+.admin-page-summary-compact .admin-summary-total small {
+  flex-basis: 100%;
+  font-size: var(--admin-meta);
+  color: var(--admin-muted);
+}
+.admin-page-summary-compact .admin-summary-page-count strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Tables retain comfortable type while using columns deliberately. */
+.admin-table-scroll {
+  position: relative;
+}
+.admin-table {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.admin-table th {
+  color: #62626b;
+  font-size: var(--admin-label);
+  font-weight: 500;
+}
+.admin-table td {
+  padding: 13px 10px;
+  vertical-align: middle;
+}
+.admin-records-table {
+  table-layout: fixed;
+  white-space: normal;
+}
+.admin-users-table {
+  min-width: 900px;
+}
+.admin-users-table col:nth-child(1) {
+  width: 20%;
+}
+.admin-users-table col:nth-child(2) {
+  width: 7%;
+}
+.admin-users-table col:nth-child(3) {
+  width: 9%;
+}
+.admin-users-table col:nth-child(4) {
+  width: 10%;
+}
+.admin-users-table col:nth-child(5) {
+  width: 13%;
+}
+.admin-users-table col:nth-child(6),
+.admin-users-table col:nth-child(7) {
+  width: 14%;
+}
+.admin-users-table col:nth-child(8) {
+  width: 13%;
+}
+.admin-tasks-table {
+  min-width: 840px;
+}
+.admin-tasks-table col:nth-child(1) {
+  width: 30%;
+}
+.admin-tasks-table col:nth-child(2) {
+  width: 12%;
+}
+.admin-tasks-table col:nth-child(3) {
+  width: 14%;
+}
+.admin-tasks-table col:nth-child(4) {
+  width: 18%;
+}
+.admin-tasks-table col:nth-child(5) {
+  width: 14%;
+}
+.admin-tasks-table col:nth-child(6) {
+  width: 12%;
+}
+.admin-audit-table {
+  min-width: 900px;
+}
+.admin-audit-table col:nth-child(1) {
+  width: 14%;
+}
+.admin-audit-table col:nth-child(2) {
+  width: 14%;
+}
+.admin-audit-table col:nth-child(3) {
+  width: 16%;
+}
+.admin-audit-table col:nth-child(4),
+.admin-audit-table col:nth-child(5) {
+  width: 14%;
+}
+.admin-audit-table col:nth-child(6) {
+  width: 18%;
+}
+.admin-audit-table col:nth-child(7) {
+  width: 10%;
+}
+.admin-records-table td,
+.admin-records-table th {
+  overflow-wrap: anywhere;
+}
+.admin-records-table th:last-child,
+.admin-records-table td:last-child {
+  position: sticky;
+  right: 0;
+  background: #fff;
+  box-shadow: -5px 0 10px -8px #18181b55;
+  z-index: 1;
+}
+.admin-records-table th:last-child {
+  background: #f7f8fa;
+  z-index: 2;
+}
+.admin-records-table tbody tr:hover td:last-child {
+  background: #fcfcfd;
+}
+.admin-task-title {
+  min-width: 0;
+  align-items: flex-start;
+}
+.admin-task-title > div {
+  min-width: 0;
+}
+.admin-task-title strong,
+.admin-audit-reason {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+.admin-task-title small,
+.admin-cell-note,
+.admin-progress-number {
+  font-size: var(--admin-meta);
+  color: var(--admin-muted);
+}
+.admin-badge {
+  font-size: var(--admin-meta);
+  padding: 3px 7px;
+}
+.admin-date-cell {
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 1.7;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.admin-date-cell > span:last-child {
+  color: var(--admin-muted);
+  font-size: var(--admin-meta);
+}
+.admin-record-id {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--admin-muted);
+  vertical-align: middle;
+}
+.admin-id-value {
+  min-width: 0;
+}
+.admin-record-id code,
+.admin-record-id .admin-text-button {
+  font-size: var(--admin-meta);
+}
+.admin-record-id code {
+  font-variant-numeric: tabular-nums;
+}
+.admin-app .admin-copy-id {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  color: #62626b;
+}
+.admin-copy-id:hover {
+  background: #f1f2f4;
+  color: #18181b;
+}
+.admin-copy-error {
+  flex-basis: 100%;
+  font-size: var(--admin-meta);
+  color: #9f3434;
+  overflow-wrap: anywhere;
+}
+.admin-app .admin-record-id .admin-text-button {
+  min-height: 32px;
+}
+
+.admin-details {
+  grid-template-columns: 110px minmax(0, 1fr);
+  font-size: 14px;
+  gap: 16px 20px;
+}
+.admin-details dt {
+  color: var(--admin-muted);
+}
+.admin-dialog > p,
+.admin-operation-target,
+.admin-reason,
+.admin-confirm-check,
+.admin-operation-feedback,
+.admin-operation-receipt,
+.admin-operation-notice,
+.admin-grant-preview,
+.admin-error,
+.admin-gate-card > p:not(.admin-eyebrow) {
+  font-size: 14px;
+  line-height: 1.75;
+}
+.admin-operation-summary {
+  font-size: 15px;
+}
+.admin-operation-feedback p,
+.admin-operation-receipt p,
+.admin-error small,
+.admin-operation-notice a {
+  font-size: var(--admin-label);
+}
+.admin-dropdown [role="menuitem"] {
+  font-size: 14px;
+  padding: 10px 12px;
+}
+.admin-dropdown > div:not([role]) {
+  font-size: var(--admin-meta);
+}
+.admin-detail-subtitle {
+  font-size: 16px;
+}
+.admin-audit-json,
+.admin-audit-json pre {
+  font-size: var(--admin-label);
+}
+
+@media (max-width: 640px) {
+  .admin-filter-fields label {
+    flex-basis: 100%;
+  }
+  .admin-page-summary.admin-page-summary-compact {
+    gap: 10px 18px;
+    padding: 14px;
+  }
+  .admin-page-summary-compact .admin-summary-total {
+    flex-basis: 100%;
+  }
+  .admin-page-summary-compact .admin-summary-total > div {
+    gap: 4px 10px;
+  }
+  .admin-page-summary-compact .admin-summary-total small {
+    flex-basis: auto;
+  }
+  .admin-metric {
+    min-height: 130px;
+  }
+  .admin-metric h2 {
+    font-size: 13px;
+  }
+  .admin-metric p {
+    font-size: 12px;
+  }
+  .admin-table-scroll {
+    margin-inline: -4px;
+    width: calc(100% + 8px);
+  }
+  .admin-details {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .admin-details dd {
+    margin-bottom: 12px;
+  }
+  .admin-app .admin-button,
+  .admin-dialog .admin-button,
+  .admin-app .admin-filter-chip {
+    min-height: 44px;
+  }
+}
+@media (pointer: coarse) {
+  .admin-app .admin-copy-id {
+    width: 44px;
+    height: 44px;
+  }
+}

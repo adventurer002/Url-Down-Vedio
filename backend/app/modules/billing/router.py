@@ -2,7 +2,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -16,7 +16,7 @@ from app.modules.billing.repository import AllowanceRepository
 from app.modules.billing.service import AllowanceDispatcher, BillingService, resume_queued
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.service import TaskService, database_call
-from app.modules.video.parsers.ytdlp import YtDlpParser
+from app.modules.video.parsers.cached import get_video_parser
 from app.modules.video.repository import VideoRepository
 from app.modules.video.resolver import VideoResolver
 
@@ -26,16 +26,25 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 def get_billing_service():
     if not settings.ALLOWANCES_ENABLED:
         raise AppException("ALLOWANCES_DISABLED", "额度功能未启用", 503)
-    return BillingService(AllowanceRepository(SessionLocal), VideoResolver(YtDlpParser(), VideoRepository(SessionLocal)),
+    return BillingService(AllowanceRepository(SessionLocal), VideoResolver(get_video_parser(), VideoRepository(SessionLocal)),
         VideoRepository(SessionLocal), TaskService(TaskRepository(SessionLocal), ProgressBus(redis_client), AllowanceDispatcher()))
 
 
-class QuoteRequest(BaseModel):
+from app.modules.video.sources import AIInputRequest
+
+
+class QuoteRequest(AIInputRequest):
     model_config = ConfigDict(extra="forbid")
-    url: str = Field(min_length=1, max_length=8192)
     action: Literal["download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap"]
     preset_id: Literal["video_1080_mp4", "video_720_mp4", "video_480_mp4", "audio_mp3"] = "video_720_mp4"
     language: str = Field(default="zh", pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$", max_length=32)
+
+
+    @model_validator(mode="after")
+    def transcript_action(self):
+        if self.transcript_id is not None and self.action not in {"ai_summary", "ai_mindmap"}:
+            raise ValueError("transcript_id 仅支持总结或思维导图")
+        return self
 
 
 class ConfirmRequest(BaseModel):
@@ -61,7 +70,10 @@ async def ledger(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge
 
 @router.post("/quotes")
 async def quote(body: QuoteRequest, user=Depends(required_user), service=Depends(get_billing_service)):
-    return success_response(await service.quote(user.id, body.url, body.action, body.preset_id, body.language.lower()))
+    options = {"upload_id": body.upload_id}
+    if body.transcript_id:
+        options["transcript_id"] = body.transcript_id
+    return success_response(await service.quote(user.id, body.url, body.action, body.preset_id, body.language.lower(), **options))
 
 
 @router.post("/tasks", status_code=202)

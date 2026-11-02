@@ -462,6 +462,10 @@
   color: #18181b;
 }
 .billing-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
   border: 1px solid #e5e5eb;
   border-radius: 22px;
   padding: 36px;
@@ -470,7 +474,9 @@
   box-shadow: 0 25px 90px -30px #18181b50;
   color: #25252d;
   background: #fff;
-  overflow: visible;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .billing-dialog::backdrop {
   background: #15151b42;
@@ -850,5 +856,47 @@
   }
   .subscription-page .plan-action:hover {
     transform: none;
+  }
+}
+
+.subscription-page .subscription-read-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0 0 20px;
+  padding: 14px 18px;
+  border: 1px solid #dedee5;
+  border-radius: 14px;
+  background: #f6f6f8;
+  color: #4b4b55;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.subscription-read-notice p {
+  margin: 0;
+}
+.subscription-read-notice .text-button {
+  min-height: 40px;
+}
+.subscription-page .plan-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Keep decorative pixels above the price, benefits and actions. */
+.public-app .subscription-card > canvas {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 28px,
+    transparent 96px
+  );
+  mask-image: linear-gradient(to bottom, #000 0, #000 28px, transparent 96px);
+}
+@media (prefers-reduced-motion: reduce), (hover: none) {
+  .public-app .subscription-card > canvas {
+    display: none;
   }
 }

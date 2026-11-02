@@ -155,7 +155,7 @@ function QuestionSpace({
       await store.create(
         video,
         "ai_question",
-        "视频问答",
+        "内容问答",
         undefined,
         quote.quote_id,
       );
@@ -172,12 +172,11 @@ function QuestionSpace({
     }
   }
   return (
-    <section className="video-questions" aria-label="针对视频提问">
+    <section className="video-questions" aria-label="针对内容提问">
       <div className="knowledge-section-title">
-        <span className="eyebrow">ASK THE VIDEO</span>
         <h3>不止看懂，还能问明白。</h3>
         <p>
-          只依据当前视频文稿回答，并附原文。每次独立提问，成功消耗 1 次
+          只依据当前文稿回答，并附原文。每次独立提问，成功消耗 1 次
           AI；相同版本的已有回答免费。
         </p>
       </div>
@@ -196,11 +195,11 @@ function QuestionSpace({
           value={question}
           disabled={submitting || !!running || !!quote}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="例如：作者的核心结论是什么，有哪些原文依据？"
+          placeholder="例如：主要结论是什么，有哪些原文依据？"
           rows={3}
         />
         <div>
-          <small>最多 1000 字 · 不使用其他视频或聊天上下文</small>
+          <small>最多 1000 字 · 每次提问以当前文稿为依据</small>
           <button
             className="button primary"
             disabled={submitting || !!running || question.trim().length < 2}
@@ -282,8 +281,9 @@ function QuestionSpace({
       )}
       {quote && (
         <AllowanceConfirm
+          inline
           quote={quote}
-          label="视频问答"
+          label="内容问答"
           pending={submitting}
           error={error}
           onConfirm={() => void confirm()}

@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 import json
@@ -5,6 +6,8 @@ import math
 
 from app.core.config import settings
 from app.core.exceptions import AppException
+from app.infrastructure.concurrency import ordered_map
+from app.infrastructure.timing import stage_timer
 from app.modules.ai.providers.base import LLMProvider, LLMRequest, Usage, generate
 from app.modules.ai.schemas import ChapterSummary, VideoSummarySchema, SummaryEvidence, format_timestamp
 
@@ -124,10 +127,12 @@ def _compact(summary: VideoSummarySchema, limit: int) -> dict:
 
 
 class Summarizer:
-    def __init__(self, provider: LLMProvider, chunk_chars: int | None = None, max_chunks: int | None = None):
+    def __init__(self, provider: LLMProvider, chunk_chars: int | None = None, max_chunks: int | None = None,
+                 concurrency: int | None = None):
         self.provider = provider
         self.chunk_chars = chunk_chars or settings.LLM_CHUNK_CHARS
         self.max_chunks = max_chunks or settings.LLM_MAX_CHUNKS
+        self.concurrency = settings.LLM_CHUNK_CONCURRENCY if concurrency is None else concurrency
 
     async def summarize(self, transcript, language: str, *, cancelled=None,
                         on_progress: Callable[[int], Awaitable[None]] | None = None) -> GeneratedSummary:
@@ -137,15 +142,27 @@ class Summarizer:
             raise AppException("TRANSCRIPT_EMPTY", "没有可用于总结的文稿", 422)
         if len(chunks) > self.max_chunks:
             raise AppException("TRANSCRIPT_TOO_LONG", "文稿超过最大分段数量，请调整服务端分段预算", 413)
-        usage, mapped = Usage(), []
-        for index, chunk in enumerate(chunks):
+        completed = 0
+        progress_lock = asyncio.Lock()
+
+        async def map_chunk(chunk):
+            nonlocal completed
             reply = await generate(self.provider, LLMRequest("summary" if len(chunks) == 1 else "map", {"segments": chunk,
                                     "instructions": "提炼核心结论、支撑依据、适合谁、可执行步骤。只填原文能支持的内容；未提及时返回空数组。evidence.quote 必须是逐字原文片段。"},
                                     VideoSummarySchema.model_json_schema(), language, transcript.source_type), cancelled)
+            summary = repair_summary(reply.content, chunk, transcript.source_type)
+            async with progress_lock:
+                completed += 1
+                if on_progress:
+                    await on_progress(int(completed / len(chunks) * 75))
+            return summary, reply
+
+        with stage_timer("llm_map"):
+            replies = await ordered_map(chunks, map_chunk, self.concurrency)
+        usage, mapped = Usage(), []
+        for summary, reply in replies:
             usage = usage.add(reply)
-            mapped.append(repair_summary(reply.content, chunk, transcript.source_type))
-            if on_progress:
-                await on_progress(int((index + 1) / len(chunks) * 75))
+            mapped.append(summary)
         # Keep chapter evidence from every map, even if a reducer omits chapter fields.
         chapters = [chapter for summary in mapped for chapter in summary.chapters]
         level = mapped
@@ -163,14 +180,19 @@ class Summarizer:
                 groups.append(group)
             if len(groups) >= len(level):
                 raise AppException("LLM_CONTEXT_TOO_SMALL", "汇总上下文预算不足", 422)
-            reduced = []
-            for group in groups:
+            async def reduce_group(group):
                 reply = await generate(self.provider, LLMRequest("reduce", {"summaries": group,
                                         "instructions": "只汇总原材料支持的结论，不补充常识或虚构行动建议。"},
                                         VideoSummarySchema.model_json_schema(), language, transcript.source_type), cancelled)
-                usage = usage.add(reply)
                 evidence = [{"start": item["start_seconds"], "end": item["start_seconds"], "text": item["overview"]} for item in group]
-                reduced.append(repair_summary(reply.content, evidence, transcript.source_type))
+                return repair_summary(reply.content, evidence, transcript.source_type), reply
+
+            with stage_timer("llm_reduce"):
+                replies = await ordered_map(groups, reduce_group, self.concurrency)
+            reduced = []
+            for summary, reply in replies:
+                usage = usage.add(reply)
+                reduced.append(summary)
             level = reduced
             if on_progress:
                 await on_progress(90)

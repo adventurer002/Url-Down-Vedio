@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="72" failures="0" errors="0" time="3.726842583">
+    <testsuite name="src/tests/clips.test.tsx" timestamp="2026-11-02T09:05:42.180Z" hostname="bogon" tests="72" failures="0" errors="0" skipped="0" time="3.726842583">
+        <testcase classname="src/tests/clips.test.tsx" name="uses the dedicated analysis API and rejects generic quote/create fallbacks" time="0.002274417">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="handles short-video defaults and rejects impossible duration/quantity/focus before HTTP" time="0.000368833">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="prefers transcript analysis even after the original upload has expired" time="0.000955917">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not create a task until consent; then registers one globally and reads completed candidates" time="0.196898208">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="blocks double confirmation while the original request is unresolved" time="0.086375541">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="persists only the uncertain quote ID and recovers the same consent after a lost ACK" time="0.135559333">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="restores the pending confirmation after reload without obtaining a fresh quote" time="0.040265083">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="restores a read-only private plan on a fresh deep link with creation disabled" time="0.02168775">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not mix a deep-linked foreign plan into an existing video&apos;s context" time="0.026882541">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="checks export/plan identity before restoring a historical result without file_ids" time="0.034983917">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="rejects inconsistent export and plan IDs without fetching the unrelated plan" time="0.013988708">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="tracks a direct active task once without fabricating source metadata, then restores its result" time="0.023938416">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="ignores a late resource response after account switch" time="0.002533167">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not replace the reading plan until the user accepts newer candidates" time="0.109530459">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="keeps coarse overlapping candidates and pins original-text navigation to the plan transcript" time="0.039941458">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="opens the original text in a narrow-screen dialog" time="0.047023833">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="treats no highlights as a normal no-charge outcome and keeps the original text accessible" time="0.01693025">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="hides the creation tab by default without disabling the other workspace areas" time="0.006142125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="uses clip result IDs in history links instead of generic AI result parameters" time="0.000376083">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="keeps idempotent recovery available even when an uncertain quote&apos;s display expiry has passed" time="0.004598709">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="offers an explicit fresh quote after server invalidation, without silently confirming another operation" time="0.060397542">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="discards a quote arriving after the account has changed" time="0.014103291">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="uses the retained plan&apos;s transcript for a new analysis when its original file is gone" time="0.028244833">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="reports incomplete response data without showing partial candidates or creating source records" time="0.003762041">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not infer a cache hit from a zero-amount quote; uses the completed server result flag" time="0.016293167">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="closes the mobile original-text dialog when its bound transcript is opened" time="0.050964708">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="shows a login recovery action instead of an endless resource loader for an anonymous deep link" time="0.003098125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="offers newer candidates even when the first successful analysis was opened through a task deep link" time="0.108444416">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="opens the current plan&apos;s retained transcript when switching from clips to the transcript tab" time="0.077035">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="offers an older cached artifact from the latest request and keeps acceptance stable on reload and late completion" time="0.163427125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="accepts an old cached artifact on a task deep link without revalidating it against the original task" time="0.166366917">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="keeps the latest analysis ahead of later exports and unrelated videos while restoring an export deep link" time="0.110410041">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="shows the same-plan cache acknowledgement even if an older analysis arrives later" time="0.0608905">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: success" time="0.04975075">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: definite failure" time="0.047394166">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: network failure" time="0.039452">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: HTTP timeout" time="0.04123775">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not clear a newer quote on an old success response" time="0.000475917">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not clear a newer quote on an old failure response" time="0.00031475">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="fences a confirmation response after switch" time="0.000390708">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="fences a confirmation response after relogin" time="0.000356917">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="preserves the uncertain marker during an in-flight recovery guard and deduplicates acknowledged recovery" time="0.000709375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not offer older local history over a newer deep-linked plan whose task is not stored locally" time="0.054936">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="refreshes the accepted plan&apos;s source state without reverting to the original deep link" time="0.166489042">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 uses only the dedicated export quote API" time="0.003108375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 keeps selection separate from reading and freezes an explicit export confirmation" time="0.132720458">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 discards an export quote when the user changes the selected set" time="0.052152166">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 allows cache-aware quotes without a source and hides video selection for audio" time="0.087156958">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 recovers an ACK loss using the exact frozen quote and selection after reload" time="0.143813334">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 settles export confirmation after unmount: success" time="0.051465625">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 settles export confirmation after unmount: definite" time="0.040521584">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 settles export confirmation after unmount: uncertain" time="0.044015">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 replaces an invalidated export quote only after an explicit refresh and a second consent" time="0.074613375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 restores item states by candidate ID and distinguishes missing files from expired files" time="0.02630225">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 refreshes availability before obtaining one fresh native-download grant" time="0.056816709">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 stops before obtaining a grant if the file disappeared after rendering the button" time="0.053125459">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 ignores a download grant arriving after an account switch" time="0.056502541">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 retains delivered files while a newer export fails without a complete batch resource" time="0.10787925">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 accepts a newly completed request that reuses an older delivery while explicit links keep their batch" time="0.056789208">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 rejects foreign candidates and incomplete batches without exposing partial file buttons" time="0.057425417">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 preserves a new pending quote and fences old-account export confirmations" time="0.000950625">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 clears selection on an accepted plan change without changing the previous draft&apos;s identity" time="0.120307375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 rejects a quote for the wrong operation without submitting it" time="0.050156375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 discards a quote arriving after the user changes accounts" time="0.066838542">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 restores a read-only export when the creation flag is disabled without probing quote capabilities" time="0.034159375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 ignores malformed local selection, pending confirmation, and batch references" time="0.0318675">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 honours an explicit older delivery deep link over already-loaded newer history" time="0.055910833">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 does not clear a later confirmation on a delayed success in the same account" time="0.000904">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 does not roll back a new batch when an old download availability check arrives late" time="0.057581333">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 does not fetch a delivery again merely because its reference was persisted" time="0.057773625">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 restores focus to the generation trigger after an asynchronous quote dialog closes" time="0.086490833">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 keeps recovery for an old pending export available when the current analysis has no highlights" time="0.04207725">
+        </testcase>
+    </testsuite>
+</testsuites>

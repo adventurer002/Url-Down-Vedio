@@ -2,7 +2,7 @@ from app.modules.auth.dependencies import creation_user
 from fastapi import APIRouter, Depends
 
 from app.core.response import success_response
-from app.modules.video.parsers.ytdlp import YtDlpParser
+from app.modules.video.parsers.cached import get_video_parser
 from app.modules.video.schemas import ParseRequest, ParseResponse
 from app.modules.video.service import VideoService
 
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 
 
 def get_video_service() -> VideoService:
-    return VideoService(YtDlpParser())
+    return VideoService(get_video_parser())
 
 
 @router.post("/parse", response_model=ParseResponse)

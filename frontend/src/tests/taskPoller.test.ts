@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTaskTracker } from "../lib/taskTracker";
 import type { TaskEvent, TaskSnapshot } from "../types/api";
-import { ApiError } from "../api/client";
+import { ApiError, client } from "../api/client";
+import { authStore } from "../stores/auth";
 class FakeSource {
   onerror: ((event: Event) => void) | null = null;
   listeners = new Map<string, (event: MessageEvent) => void>();
@@ -33,12 +34,92 @@ const snapshot = (seq: number, status: TaskEvent["status"] = "completed") =>
     result_payload: { result_id: "result-1" },
   }) as TaskSnapshot;
 beforeEach(() => {
+  authStore.clear();
   vi.useFakeTimers();
   vi.stubGlobal("window", { location: { origin: "http://localhost:5173" } });
 });
 afterEach(() => {
+  authStore.clear();
+  vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+it("does not open an SSE connection after stopping a pending ticket exchange", async () => {
+  authStore.accept({
+    status: "authenticated",
+    access_token: "full-login-token",
+    user: {
+      id: "ticket-user",
+      nickname: "用户",
+      role: "user",
+      status: "active",
+      is_subscribed: true,
+    },
+  });
+  let resolve!: (value: { data: { access_token: string } }) => void;
+  vi.spyOn(client, "post").mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const eventSource = vi.fn((_url: string) => new FakeSource());
+  const tracker = createTaskTracker("task-1", {
+    eventSource,
+    onEvent: vi.fn(),
+    onSnapshot: vi.fn(),
+  });
+  tracker.stop();
+  expect(vi.mocked(client.post).mock.calls[0]![2]!.signal!.aborted).toBe(true);
+  resolve({ data: { access_token: "short-ticket" } });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(eventSource).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("connects SSE with a scoped ticket and retains polling when ticket exchange fails", async () => {
+  authStore.accept({
+    status: "authenticated",
+    access_token: "full-login-token",
+    user: {
+      id: "ticket-user",
+      nickname: "用户",
+      role: "user",
+      status: "active",
+      is_subscribed: true,
+    },
+  });
+  const post = vi
+    .spyOn(client, "post")
+    .mockResolvedValueOnce({ data: { access_token: "short-ticket" } })
+    .mockRejectedValue(new Error("temporary failure"));
+  const eventSource = vi.fn((_url: string) => new FakeSource());
+  const first = createTaskTracker("task-1", {
+    eventSource,
+    onEvent: vi.fn(),
+    onSnapshot: vi.fn(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  const url = new URL(eventSource.mock.calls[0]![0]);
+  expect(url.searchParams.get("access_token")).toBe("short-ticket");
+  expect(url.href).not.toContain("full-login-token");
+  expect(post).toHaveBeenCalledWith(
+    "/tasks/task-1/events/access",
+    undefined,
+    expect.objectContaining({ timeout: 5000 }),
+  );
+  first.stop();
+  const fetchTask = vi.fn().mockResolvedValue(snapshot(1));
+  const second = createTaskTracker("task-1", {
+    eventSource,
+    fetchTask,
+    onEvent: vi.fn(),
+    onSnapshot: vi.fn(),
+  });
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(fetchTask).toHaveBeenCalledOnce();
+  second.stop();
 });
 function setup(fetchTask = vi.fn().mockResolvedValue(snapshot(5))) {
   const source = new FakeSource(),

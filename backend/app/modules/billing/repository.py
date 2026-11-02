@@ -45,6 +45,11 @@ class AllowanceRepository:
         session.execute(insert(AllowanceAccount).values(user_id=user_id, identity_key=fingerprint,
             member_months=0).on_conflict_do_nothing(index_elements=[AllowanceAccount.user_id]))
         account = session.scalar(select(AllowanceAccount).where(AllowanceAccount.user_id == user_id).with_for_update())
+        # A status change can commit while this transaction waits for the account
+        # lock. Refresh identity after admission serialization, never trust the pre-lock read.
+        identity = self.identities.billing_identity(session, user_id)
+        if not identity or not identity["active"] or not identity["bound"]:
+            raise AppException("ACCOUNT_NOT_BOUND", "请先通过公众号绑定产品账号", 403)
         if account.trial_claimed_at is None and identity["subscribed"]:
             instant = now()
             account.trial_claimed_at = instant
@@ -117,59 +122,185 @@ class AllowanceRepository:
                 .order_by(AllowanceEvent.created_at.desc(), AllowanceEvent.key).limit(limit).offset(offset))
             return [{"id": x.key, "event": x.event, "detail": x.detail, "created_at": x.created_at} for x in rows]
 
+    @staticmethod
+    def member_user_ids(instant):
+        """Read-only membership filter contract for administrative user queries."""
+        return select(AllowanceAccount.user_id).where(AllowanceAccount.member_until > instant)
+
+    def membership_summaries(self, session, user_ids, instant):
+        result = {identifier: {"member": False, "member_until": None} for identifier in user_ids}
+        if user_ids:
+            for account in session.scalars(select(AllowanceAccount).where(AllowanceAccount.user_id.in_(user_ids))):
+                result[account.user_id] = {"member": bool(account.member_until and aware(account.member_until) > instant),
+                                           "member_until": account.member_until}
+        return result
+
+    def admin_snapshot(self, session, user_id, active, subscribed, limit=20, offset=0):
+        """Pure SELECTs, including for disabled/unbound users. Never call lock_account/daily."""
+        instant = now()
+        account = session.get(AllowanceAccount, user_id)
+        balances = {}
+        for kind in ("asr_seconds", "ai_generations"):
+            eligible = (Allowance.starts_at <= instant) & (Allowance.expires_at > instant)
+            if not subscribed:
+                eligible = eligible & (Allowance.source != "trial")
+            available, held = session.execute(select(
+                func.coalesce(func.sum(case((eligible, Allowance.granted - Allowance.used - Allowance.held), else_=0)), 0),
+                func.coalesce(func.sum(Allowance.held), 0)).where(
+                    Allowance.user_id == user_id, Allowance.kind == kind)).one()
+            balances[kind] = {"available": available, "held": held, "usable": available if active else 0}
+        conditions = [Allowance.user_id == user_id]
+        total = session.scalar(select(func.count()).select_from(Allowance).where(*conditions))
+        lots = session.scalars(select(Allowance).where(*conditions)
+            .order_by(Allowance.expires_at, Allowance.id).limit(limit).offset(offset))
+        items = []
+        for lot in lots:
+            started, expired = aware(lot.starts_at) <= instant, aware(lot.expires_at) <= instant
+            usable = active and started and not expired and (subscribed or lot.source != "trial")
+            items.append({"id": lot.id, "kind": lot.kind, "source": lot.source,
+                "granted": lot.granted, "used": lot.used, "held": lot.held,
+                "usable": lot.granted - lot.used - lot.held if usable else 0,
+                "starts_at": lot.starts_at, "expires_at": lot.expires_at,
+                "expired": expired, "future": not started})
+        day = instant.astimezone(BEIJING).date()
+        daily = session.get(DailyAllowance, (user_id, day))
+        member = bool(account and account.member_until and aware(account.member_until) > instant)
+        return {"version": VERSION, "as_of": instant, "account_exists": account is not None,
+            "account_active": active, "subscribed": subscribed, "member": member,
+            "member_until": account.member_until if account else None,
+            "trial_claimed_at": account.trial_claimed_at if account else None,
+            "balances": balances, "limits": dict(MEMBER_LIMITS if member else FREE_LIMITS),
+            "daily": {"date": day, "downloads_used": daily.downloads_used if daily else 0,
+                "downloads_held": daily.downloads_held if daily else 0,
+                "egress_used_bytes": daily.egress_used if daily else 0,
+                "egress_held_bytes": daily.egress_held if daily else 0},
+            "lots": {"items": items, "total": total, "limit": limit, "offset": offset}}
+
+    def admin_ledger(self, session, user_id, limit=50, offset=0):
+        condition = AllowanceEvent.user_id == user_id
+        total = session.scalar(select(func.count()).select_from(AllowanceEvent).where(condition))
+        events = session.scalars(select(AllowanceEvent).where(condition)
+            .order_by(AllowanceEvent.created_at.desc(), AllowanceEvent.key).limit(limit).offset(offset))
+        return {"items": [{"id": event.key, "event": event.event, "detail": event.detail,
+                            "created_at": event.created_at} for event in events],
+                "total": total, "limit": limit, "offset": offset}
+
+    def admin_task_usage(self, session, task_ids):
+        result = {identifier: None for identifier in task_ids}
+        if task_ids:
+            for item in session.scalars(select(AllowanceReservation).where(AllowanceReservation.task_id.in_(task_ids))):
+                result[item.task_id] = {"state": item.state, "business_date": item.business_date,
+                    "maximum": {name: item.snapshot.get(name, 0) for name in ("asr_seconds", "ai_generations")},
+                    "measured_asr_seconds": item.asr_seconds, "settlement": item.settlement}
+        return result
+
+    def admin_statistics(self, session, instant):
+        result = {"valid_memberships": session.scalar(select(func.count()).select_from(AllowanceAccount)
+            .where(AllowanceAccount.member_until > instant)), "usage": {}}
+        for kind in ("asr_seconds", "ai_generations"):
+            used, held = session.execute(select(func.coalesce(func.sum(Allowance.used), 0),
+                func.coalesce(func.sum(Allowance.held), 0)).where(Allowance.kind == kind)).one()
+            result["usage"][kind] = {"consumed": used, "held": held}
+        return result
+
     def grant(self, user_id, product, key, actor):
+        """Internal legacy contract; operator entry points use AdminService for audit."""
+        with self.sessions.begin() as session:
+            return self.grant_in_transaction(session, user_id, product, key, actor)
+
+    def grant_preview(self, session, user_id, product):
+        if product not in PRODUCTS:
+            raise AppException("INVALID_GRANT", "需要有效商品", 422)
+        account = session.get(AllowanceAccount, user_id)
+        start = now()
+        if product == "monthly":
+            if account and self.member(account):
+                start = month_boundary(account.member_anchor, account.member_months)
+                end = month_boundary(account.member_anchor, account.member_months + 1)
+            else:
+                end = month_boundary(start, 1)
+        else:
+            end = start + timedelta(days=30)
+        return {"product": product, "offer": dict(PRODUCTS[product]), "starts_at": start, "expires_at": end,
+                "member_until_before": account.member_until if account else None,
+                "mode": "operator_grant", "payment_verified": False,
+                "note": "预览不锁定时间；最终以发放事务结果为准，人工发放不是支付凭证"}
+
+    def grant_in_transaction(self, session, user_id, product, key, actor):
         if product not in PRODUCTS or not key or not actor:
             raise AppException("INVALID_GRANT", "需要有效商品、唯一发放键和操作人", 422)
-        with self.sessions.begin() as session:
-            account, _ = self.lock_account(session, user_id)
-            existing = session.get(AllowanceGrant, key)
-            if existing:
-                if existing.user_id != user_id or existing.product != product:
-                    raise AppException("IDEMPOTENCY_CONFLICT", "同一发放键对应不同请求", 409)
-                return {"key": key, "product": product, "starts_at": existing.starts_at,
-                        "expires_at": existing.expires_at, "duplicate": True}
-            offer = PRODUCTS[product]
-            start = now()
-            if product == "monthly":
-                if not self.member(account):
-                    account.member_anchor, account.member_months = start, 0
-                start = month_boundary(account.member_anchor, account.member_months)
-                account.member_months += 1
-                end = month_boundary(account.member_anchor, account.member_months)
-                account.member_until = end
-            else:
-                end = start + timedelta(days=30)
-            snapshot = {**offer, "version": VERSION, "currency": "CNY", "mode": "operator_grant"}
-            session.add(AllowanceGrant(key=key, user_id=user_id, product=product, actor=actor,
-                                      snapshot=snapshot, starts_at=start, expires_at=end))
-            self.add_allowances(session, user_id, "manual:" + key, product, start, end,
-                                offer["asr_seconds"], offer["ai_generations"])
-            return {"key": key, "product": product, "starts_at": start, "expires_at": end, "duplicate": False}
+        account, _ = self.lock_account(session, user_id)
+        existing = session.get(AllowanceGrant, key)
+        if existing:
+            if existing.user_id != user_id or existing.product != product:
+                raise AppException("IDEMPOTENCY_CONFLICT", "同一发放键对应不同请求", 409)
+            return {"key": key, "product": product, "starts_at": existing.starts_at,
+                    "expires_at": existing.expires_at, "duplicate": True}
+        offer = PRODUCTS[product]
+        start = now()
+        if product == "monthly":
+            if not self.member(account):
+                account.member_anchor, account.member_months = start, 0
+            start = month_boundary(account.member_anchor, account.member_months)
+            account.member_months += 1
+            end = month_boundary(account.member_anchor, account.member_months)
+            account.member_until = end
+        else:
+            end = start + timedelta(days=30)
+        snapshot = {**offer, "version": VERSION, "currency": "CNY", "mode": "operator_grant"}
+        session.add(AllowanceGrant(key=key, user_id=user_id, product=product, actor=actor,
+                                  snapshot=snapshot, starts_at=start, expires_at=end))
+        self.add_allowances(session, user_id, "manual:" + key, product, start, end,
+                            offer["asr_seconds"], offer["ai_generations"])
+        return {"key": key, "product": product, "starts_at": start, "expires_at": end, "duplicate": False}
 
     def save_quote(self, user_id, task_type, payload):
+        clips = task_type in {"ai_clip_plan", "clips_export"}
+        if clips:
+            from app.modules.clips.service import enabled
+            enabled()
         with self.sessions.begin() as session:
             account, identity = self.lock_account(session, user_id)
             if not self.member(account) and not identity["subscribed"] and task_type in {"download", "audio_extraction"}:
                 raise AppException("WECHAT_UNSUBSCRIBED", "免费权益需要保持关注公众号", 403)
             limits = self.limits(account)
-            if task_type != "ai_question" and payload["duration_seconds"] > limits["video_seconds"]:
+            text_only = payload.get("source_kind") == "transcript" and task_type in {"ai_summary", "ai_mindmap", "ai_clip_plan"}
+            if task_type != "ai_question" and not text_only and payload["duration_seconds"] > limits["video_seconds"]:
                 raise AppException("VIDEO_TOO_LONG", "视频超过当前权益的时长限制", 422)
+            if payload.get("source_kind") == "upload" and payload["size_bytes"] > min(limits["file_bytes"], settings.MAX_FILE_SIZE_MB * 1024**2):
+                raise AppException("FILE_TOO_LARGE", "文件超过当前权益的体积限制", 413)
             recent = session.scalar(select(func.count()).select_from(AllowanceQuote).where(
                 AllowanceQuote.user_id == user_id, AllowanceQuote.created_at > now() - timedelta(hours=1)))
             if recent >= 60:
                 raise AppException("QUOTE_RATE_LIMITED", "报价过于频繁，请稍后再试", 429)
             from app.modules.ai.providers import get_llm_provider
             from app.modules.transcript.providers import get_asr_provider
-            llm, asr = get_llm_provider(), get_asr_provider()
+            llm = get_llm_provider()
+            asr = None if text_only or task_type == "clips_export" else get_asr_provider()
             if settings.APP_ENV != "development" and task_type.startswith("ai_") and llm.name == "heuristic":
                 raise AppException("LLM_NOT_CONFIGURED", "生产 AI 服务需要配置真实模型", 503)
             quota = {"version": VERSION, "asr_seconds": payload["duration_seconds"] if task_type in
-                     {"transcription", "ai_summary", "ai_mindmap"} else 0,
-                     "ai_generations": int(task_type in {"ai_summary", "ai_mindmap", "ai_question"}), "limits": limits,
-                     "llm_model": llm.model, "asr_model": asr.model,
+                     {"transcription", "ai_summary", "ai_mindmap", "ai_clip_plan"} and not text_only else 0,
+                     "ai_generations": int(task_type in {"ai_summary", "ai_mindmap", "ai_question", "ai_clip_plan"}), "limits": limits,
+                     "llm_model": llm.model, "asr_model": asr.model if asr else "none",
                      "ai_limits": {"text_chars": 60000, "output_tokens_per_call": 4096, "total_output_tokens": 16384, "max_calls": 16},
                      "summary_version": settings.SUMMARY_PROMPT_VERSION,
                      "mindmap_version": settings.MINDMAP_PROMPT_VERSION + ":" + settings.MINDMAP_SCHEMA_VERSION}
+            if clips:
+                quota["clip_limits"] = {"analysis_timeout": settings.CLIPS_ANALYSIS_TIMEOUT_SECONDS,
+                    "export_timeout": settings.CLIPS_EXPORT_TIMEOUT_SECONDS,
+                    "render_timeout": settings.CLIPS_RENDER_TIMEOUT_SECONDS,
+                    "max_temp_bytes": settings.CLIPS_EXPORT_MAX_TEMP_MB * 1024**2,
+                    "max_export_seconds": settings.CLIPS_EXPORT_MAX_TOTAL_SECONDS,
+                    "timing_timeout": settings.CLIPS_TIMING_TIMEOUT_SECONDS,
+                    "max_timing_seconds": settings.CLIPS_TIMING_MAX_AUDIO_SECONDS,
+                    "max_daily_exports": settings.CLIPS_MAX_DAILY_EXPORTS,
+                    "max_daily_plan_exports": settings.CLIPS_MAX_DAILY_PLAN_EXPORTS}
+                if task_type == "clips_export" and not payload.get("reuse_result") and not payload.get("reuse_assets"):
+                    from app.modules.tasks.repository import TaskRepository
+                    counts = TaskRepository(self.sessions).clip_render_counts(session, user_id, payload["plan_id"])
+                    if counts[0] >= quota["clip_limits"]["max_daily_exports"] or counts[1] >= quota["clip_limits"]["max_daily_plan_exports"]:
+                        raise AppException("CLIP_RENDER_LIMIT", "今日切片渲染次数已达上限", 429)
             if payload.get("reuse_result"):
                 quota["asr_seconds"], quota["ai_generations"] = 0, 0
             quote = AllowanceQuote(id=uuid4(), user_id=user_id, task_type=task_type,
@@ -212,7 +343,10 @@ class AllowanceRepository:
         if not member and not identity["subscribed"] and task.task_type in {"download", "audio_extraction"}:
             return "entitlement"
         limits = self.limits(account)
-        if task.task_type != "ai_question" and task.input_payload["duration_seconds"] > limits["video_seconds"]:
+        text_only = task.input_payload.get("source_kind") == "transcript" and task.task_type in {"ai_summary", "ai_mindmap", "ai_clip_plan"}
+        if task.task_type != "ai_question" and not text_only and task.input_payload["duration_seconds"] > limits["video_seconds"]:
+            return "entitlement"
+        if task.input_payload.get("source_kind") == "upload" and task.input_payload["size_bytes"] > min(limits["file_bytes"], settings.MAX_FILE_SIZE_MB * 1024**2):
             return "entitlement"
         download = task.task_type in {"download", "audio_extraction"}
         slot = "download" if download else "ai"
@@ -220,6 +354,12 @@ class AllowanceRepository:
             AllowanceReservation.user_id == task.user_id, AllowanceReservation.state == "held", AllowanceReservation.slot == slot))
         if running >= (limits["download_concurrency"] if download else 1):
             return "capacity"
+        if task.task_type == "clips_export" and task.input_payload.get("_clip_execution_mode") != "cache" and not task.input_payload.get("reuse_result") and not task.input_payload.get("reuse_assets"):
+            from app.modules.tasks.repository import TaskRepository
+            counts = TaskRepository(self.sessions).clip_render_counts(session, task.user_id, task.input_payload["plan_id"])
+            clips = snapshot["clip_limits"]
+            if counts[0] >= clips["max_daily_exports"] or counts[1] >= clips["max_daily_plan_exports"]:
+                return "clip_render_limit"
         daily = self.daily(session, task.user_id)
         if download and not member and daily.downloads_used + daily.downloads_held >= 2:
             return "daily_downloads"

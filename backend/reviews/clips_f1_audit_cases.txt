@@ -1,0 +1,48 @@
+// Historical pre-fix reproduction assertions only. Do not use as correctness tests.
+// Current positive regressions live in frontend/src/tests/clips.test.tsx.
+it("AUDIT A01 cached analysis older than the displayed artifact is silently ignored", async () => {
+  const { store, wrapper } = setup();
+  store.rememberClipPlan(plan("plan-two"));
+  const { result } = renderHook(() => useClipWorkspace("demo_one", {plan:"plan-two"}, true), {wrapper});
+  await waitFor(() => expect(result.current.plan?.id).toBe("plan-two"));
+  act(() => store.adoptClipTask({ ...snapshot("completed", "plan-one"), task_id:"new-cache-request",
+    created_at:"2026-11-03T12:00:00Z", result_payload:{clip_plan_id:"plan-one", cache_hit:true} }, "demo_one"));
+  await waitFor(() => expect(api.clipPlan).toHaveBeenCalledWith("plan-one", expect.any(AbortSignal)));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.plan?.id).toBe("plan-two");
+  // BUG: the latest successful user request should be offered even when its artifact was cached earlier.
+  expect(result.current.pending).toBeUndefined();
+});
+it("AUDIT A02 an acknowledged background submission keeps an uncertain confirmation marker after leaving the page", async () => {
+  const pending=deferred<{task_id:string;status:"queued"}>();
+  vi.mocked(api.confirmQuote).mockReturnValue(pending.promise);
+  const {store}=setup();const rendered=page(store);
+  fireEvent.click(await screen.findByRole("button",{name:"查看分析额度"}));
+  await screen.findByRole("dialog");
+  fireEvent.click(screen.getByRole("button",{name:"确认并开始"}));
+  expect(store.findContent("demo_one")?.pendingClipQuoteId).toBe(proposal.quote_id);
+  rendered.unmount();
+  await act(async()=>pending.resolve({task_id:"clip-job",status:"queued"}));
+  await waitFor(()=>expect(store.tasks[0]?.id).toBe("clip-job"));
+  // BUG: the global task is confirmed, but the persistent marker still blocks new analysis on return.
+  expect(store.findContent("demo_one")?.pendingClipQuoteId).toBe(proposal.quote_id);
+});
+it("AUDIT A03 a later export of an old plan masks a newer completed analysis", async () => {
+  const {store,wrapper}=setup();
+  store.rememberClipPlan(plan("plan-one"));
+  store.adoptClipTask({...snapshot("completed","plan-two"),task_id:"new-analysis",created_at:"2026-11-02T12:00:00Z"},"demo_one");
+  store.adoptClipTask({...snapshot("completed","plan-one"),task_id:"later-export",task_type:"clips_export",
+    created_at:"2026-11-03T12:00:00Z",result_payload:{clip_export_id:"export-old",clip_plan_id:"plan-one"}},"demo_one");
+  const {result}=renderHook(()=>useClipWorkspace("demo_one",{plan:"plan-one"},true),{wrapper});
+  await waitFor(()=>expect(result.current.plan?.id).toBe("plan-one"));
+  // BUG: export chronology is being used to select the most recent analysis.
+  expect(result.current.pending).toBeUndefined();
+  expect(api.clipPlan).not.toHaveBeenCalledWith("plan-two",expect.anything());
+});
+it("AUDIT C01 control a genuinely newer analysis is offered when no export masks it", async () => {
+  const {store,wrapper}=setup();store.rememberClipPlan(plan("plan-one"));
+  store.adoptClipTask({...snapshot("completed","plan-two"),task_id:"new-analysis"},"demo_one");
+  const {result}=renderHook(()=>useClipWorkspace("demo_one",{plan:"plan-one"},true),{wrapper});
+  await waitFor(()=>expect(result.current.pending?.id).toBe("plan-two"));
+  expect(result.current.plan?.id).toBe("plan-one");
+});

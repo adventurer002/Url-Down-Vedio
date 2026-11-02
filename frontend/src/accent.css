@@ -1,0 +1,97 @@
+/* A single accent for public-page selection and emphasis. Primary actions stay black. */
+.public-app {
+  --accent-color: #0f766e;
+  --accent-hover: #115e59;
+  --accent-surface: #f0fdfa;
+  --accent-border: #99f6e4;
+}
+
+.public-app :is(button, a, input, select, textarea, summary):focus-visible {
+  outline-color: var(--accent-color);
+}
+
+.public-app :is(.library-nav, .subscription-nav)[aria-current="page"],
+.public-app .subscription-nav.current {
+  color: var(--accent-color);
+}
+.public-app :is(.library-nav, .subscription-nav):hover {
+  color: var(--accent-hover);
+}
+.public-app
+  :is(.account-popover, .mobile-navigation)
+  nav
+  a[aria-current="page"] {
+  color: var(--accent-color);
+  background: var(--accent-surface);
+}
+.public-app .subscription-nav small,
+.public-app .plan-recommended {
+  color: #fff;
+  background: var(--accent-color);
+}
+
+.public-app .workspace-tabs > button[aria-selected="true"] {
+  color: var(--accent-color);
+  background: var(--accent-surface);
+  border-color: var(--accent-color);
+  box-shadow: none;
+}
+.public-app button.timestamp {
+  color: var(--accent-color);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.public-app button.timestamp:hover {
+  color: var(--accent-hover);
+}
+.public-app .library-card.selected {
+  border-color: var(--accent-color);
+  background: var(--accent-surface);
+}
+
+.public-app .subscription-card.featured-plan {
+  border-color: var(--accent-color);
+}
+.public-app .featured-plan .plan-icon {
+  color: var(--accent-color);
+  background: var(--accent-surface);
+  border-color: var(--accent-border);
+}
+.public-app .membership-tag > span {
+  background: var(--accent-color);
+}
+
+.public-app .account-avatar {
+  color: var(--accent-color);
+  background: var(--accent-surface);
+}
+.public-app .account-membership.member strong {
+  color: var(--accent-color);
+}
+.public-app .account-metrics article:nth-child(-n + 2) > .account-metric-value {
+  color: var(--accent-color);
+}
+.public-app .account-metrics h3 svg {
+  color: var(--accent-color);
+}
+.public-app .account-allowance-details[open] {
+  border-color: var(--accent-border);
+}
+.public-app .account-allowance-details[open] summary {
+  color: var(--accent-color);
+}
+
+.public-app
+  :is(.subscription-sale-note, .workspace-quota-bar, .quote-warning)
+  a {
+  color: var(--accent-color);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.public-app
+  :is(.subscription-sale-note, .workspace-quota-bar, .quote-warning)
+  a:hover,
+.public-app .account-shortcuts :is(a, button):hover,
+.public-app .text-button:not(:disabled):hover {
+  color: var(--accent-hover);
+}

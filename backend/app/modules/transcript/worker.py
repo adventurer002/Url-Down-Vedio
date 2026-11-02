@@ -1,4 +1,6 @@
 import asyncio
+from contextlib import ExitStack
+from app.infrastructure.timing import log_queue_wait, stage_timer
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -13,7 +15,8 @@ from app.infrastructure.queue.celery_app import celery_app
 from app.infrastructure.queue.progress_bus import ProgressBus
 from app.infrastructure.storage import LocalStorageAdapter, StorageAdapter
 from app.infrastructure.storage.cleanup import cleanup_expired_files
-from app.modules.media.audio import AudioAcquirer
+from app.infrastructure.storage.retry import wait_for_storage
+from app.modules.media.audio import AudioAcquirer, TranscriptionAudioProvider
 from app.modules.media.repository import MediaRepository
 from app.modules.tasks.service import TaskService, database_call
 from app.modules.tasks.repository import TaskRepository
@@ -52,7 +55,7 @@ async def cooperative_asr(provider: ASRProvider, audio_path, language, cancelled
 
 async def execute_transcription(task_id: UUID, service: TaskService, transcripts: TranscriptRepository,
                                  media: MediaRepository, storage: StorageAdapter, subtitles: SubtitleProvider,
-                                 audio: AudioAcquirer, asr: ASRProvider, *, intermediate=False, intermediate_progress=None):
+                                 audio: TranscriptionAudioProvider, asr: ASRProvider, *, intermediate=False, intermediate_progress=None):
     tasks = service.repository
     if not intermediate and not await database_call(tasks.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(tasks.get, task_id)).status}
@@ -63,6 +66,8 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
     version = task.input_payload["content_version"]
     progress, status = 0, "running"
     keep_directory = False
+    source_guard = ExitStack()
+    uploaded_path = None
 
     async def cancelled():
         return await service.is_cancel_requested(task_id)
@@ -90,7 +95,18 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
 
     try:
         if not intermediate:
+            log_queue_wait(task)
             await publish(task)
+        if task.input_payload.get("source_kind") == "upload":
+            from app.modules.uploads.service import upload_service
+            uploads = upload_service(transcripts.sessions, storage)
+            # Recheck the authoritative owner and current file state on execution.
+            identifier = UUID(task.input_payload["upload_id"])
+            source_guard.enter_context(uploads.files.lock(identifier, shared=True))
+            payload = await uploads.resolve(identifier, task.user_id)
+            if payload["video_id"] != str(task.video_id) or payload["content_sha256"] != task.input_payload["content_sha256"]:
+                raise AppException("UPLOAD_SOURCE_MISMATCH", "任务文件来源发生变化", 409)
+            uploaded_path = uploads.files.path(identifier)
         cached = await database_call(transcripts.find_cache, task.video_id, language, version, asr.model)
         if cached:
             if intermediate:
@@ -98,15 +114,19 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
             task = await database_call(tasks.complete_with, task_id, result(cached, True), lambda session: None)
             await publish(task)
             return {"task_id": str(task_id), "status": task.status}
-        await cleanup_expired_files(storage, media, tasks)
-        with storage.lease():
+        async def waiting():
+            await on_progress({"stage": "waiting_for_storage", "progress": progress})
+
+        await cleanup_expired_files(storage, media, tasks, is_cancel_requested=cancelled, on_wait=waiting)
+        async with wait_for_storage(lambda: storage.reservation(task_id, settings.MAX_FILE_SIZE_MB * 1024 * 1024),
+                is_cancel_requested=cancelled, on_wait=waiting):
             if await cancelled():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)
-            storage.check_capacity(5 * 1024 * 1024)
             directory = storage.create_task_directory(task_id)
             controls = {"is_cancel_requested": cancelled, "on_progress": on_progress, "check_capacity": storage.check_capacity}
             await on_progress({"stage": "subtitles", "progress": 10})
-            data = await subtitles.fetch(task.input_payload, directory, **controls)
+            with stage_timer("subtitles", task_id):
+                data = None if uploaded_path is not None else await subtitles.fetch(task.input_payload, directory, **controls)
             source, model = "subtitle", "none"
             if data is None:
                 source, model = "asr", asr.model
@@ -116,14 +136,30 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
                     raise AppException("ASR_NOT_CONFIGURED", "无可用字幕且未配置 ASR；可配置云端密钥或显式启用 Mock", 503)
                 if settings.APP_ENV != "development" and getattr(asr, "mock", False):
                     raise AppException("ASR_NOT_CONFIGURED", "生产转写不能使用 Mock ASR", 503)
-                storage.check_capacity((2 if "allowance" in task.input_payload else 1) * settings.MAX_FILE_SIZE_MB * 1024 * 1024)
-                path = await audio.acquire(task.input_payload, directory, **controls)
+                with stage_timer("audio_acquire", task_id):
+                    if uploaded_path is not None:
+                        path = await audio.acquire_local(uploaded_path, payload["media_type"], directory,
+                            source_extension=payload["title"].rsplit(".", 1)[-1].lower(), **controls)
+                    else:
+                        path = await audio.acquire(task.input_payload, directory, **controls)
+                        if path.parent == storage.root / "files":
+                            source_guard.enter_context(storage.file_lock(path))
+                            if not path.is_file():
+                                raise AppException("FILE_NOT_FOUND", "音频缓存已过期，请重试", 404)
                 if "allowance" in task.input_payload:
                     from app.modules.media.probe import audio_seconds
                     duration = await audio_seconds(path, directory, controls, settings.MAX_FILE_SIZE_MB * 1024 * 1024)
                     await database_call(tasks.record_asr, task_id, duration)
                 await on_progress({"stage": "asr", "progress": 90})
-                data = await cooperative_asr(asr, path, language, cancelled)
+                with stage_timer("asr", task_id):
+                    from app.modules.transcript.providers import asr_work_directory, asr_capacity_check
+                    directory_token = asr_work_directory.set(directory)
+                    capacity_token = asr_capacity_check.set(storage.check_capacity)
+                    try:
+                        data = await cooperative_asr(asr, path, language, cancelled)
+                    finally:
+                        asr_capacity_check.reset(capacity_token)
+                        asr_work_directory.reset(directory_token)
             data = make_transcript(language or data.language, data.segments)
             if await cancelled():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)
@@ -151,6 +187,7 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
                                    error_code=code, error_message=message)
         await publish(task)
     finally:
+        source_guard.close()
         if not keep_directory:
             storage.remove_task_directory(task_id)  # Never deletes a reused media file outside this directory.
     return {"task_id": str(task_id), "status": task.status}

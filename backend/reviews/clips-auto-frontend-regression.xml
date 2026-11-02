@@ -1,0 +1,749 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="338" failures="0" errors="0" time="53.932046833">
+    <testsuite name="src/tests/admin.test.tsx" timestamp="2026-11-02T09:50:53.009Z" hostname="bogon" tests="14" failures="0" errors="0" skipped="0" time="2.627551292">
+        <testcase classname="src/tests/admin.test.tsx" name="does not query admin data for anonymous visitors" time="0.121620167">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="does not query admin data for ordinary visitors" time="0.010215">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="does not query admin data for disabled visitors" time="0.0092825">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="waits for identity restoration and blocks on verification failure" time="0.178409875">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="renders real metrics, unknown Worker liveness and actual storage quota" time="0.382514291">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="preserves unknown metrics on failure and can reload them" time="0.380903875">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="does not turn an incomplete storage scan into a zero or percent" time="0.162638375">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="shows empty state after a successful empty task page" time="0.208918541">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="refreshes all overview sources on demand" time="0.1548955">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="opens task metadata and restores trigger focus after Escape" time="0.293147541">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="dismisses mobile navigation with keyboard focus restoration" time="0.382815917">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="cancels old requests and excludes late data after account switch" time="0.233192834">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="stops admin reads and removes cached metrics after permission rejection" time="0.096698334">
+        </testcase>
+        <testcase classname="src/tests/admin.test.tsx" name="does not let a late identity restoration overwrite a new login" time="0.006896292">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/adminAuditStorage.test.tsx" timestamp="2026-11-02T09:50:53.011Z" hostname="bogon" tests="19" failures="0" errors="0" skipped="0" time="3.954494625">
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="preserves historical accepted outcome beside current completed state and exposes read-only details" time="0.743011959">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="keeps audit filters while paginating and resets pagination on search" time="0.549022417">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="blocks malformed audit queries: actor_id=bad" time="0.026367584">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="blocks malformed audit queries: action=toString" time="0.024520375">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="blocks malformed audit queries: outcome=__proto__" time="0.0958">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="blocks malformed audit queries: target_type=constructor" time="0.036365291">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="blocks malformed audit queries: since=not-a-date" time="0.020152041">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="blocks malformed audit queries: since=2026-10-27T00:00&amp;until=2026-10-26T00:00" time="0.07264875">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="converts Beijing dates to an explicit audit interval" time="0.001947">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="shows incomplete scans as unknown without a misleading percentage and refreshes on demand" time="0.225747917">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="requires reason and confirmation and accepts cleanup receipts without a duplicate flag" time="0.327881541">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="locks accepted cleanup to its original key after remount" time="0.565846167">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="locks outcome_unrecorded cleanup to its original key after remount" time="0.4592975">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="does not retry cleanup automatically after a server timeout" time="0.223067459">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="describes failed-or-partial cleanup honestly and requires confirmation again" time="0.13278525">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="keeps malformed cleanup success receipts uncertain" time="0.230259">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="bounds cleanup request time beyond the backend execution budget" time="0.002627334">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="removes protected /admin/audit after logout" time="0.059745">
+        </testcase>
+        <testcase classname="src/tests/adminAuditStorage.test.tsx" name="removes protected /admin/system after logout" time="0.156247625">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/adminExperience.test.tsx" timestamp="2026-11-02T09:50:53.012Z" hostname="bogon" tests="11" failures="0" errors="0" skipped="0" time="2.84490825">
+        <testcase classname="src/tests/adminExperience.test.tsx" name="shows an animated loading region and skeleton instead of invented zero counts" time="0.367750541">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="keeps current rows visible with explicit refresh feedback until the response arrives" time="0.353868291">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="retains the last successful rows after refresh failure and labels them as previous results" time="0.347531">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="distinguishes matched totals from current-page membership counts" time="0.145649334">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="quick filters preserve search and other conditions, reset the page and toggle off" time="0.38130625">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="recovers an empty filtered list by clearing the conditions" time="0.247293667">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="offers a first-page recovery when the current offset is outside the results" time="0.1850195">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="uses a fixed centered viewport for operation dialogs and restores trigger focus on Escape" time="0.373934584">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="keeps native message dialogs centered despite a global margin reset, with internal overflow" time="0.026000208">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="shows a spinner while an administrative write is pending without duplicate dispatch" time="0.342040917">
+        </testcase>
+        <testcase classname="src/tests/adminExperience.test.tsx" name="renders real task progress rather than a decorative completion graphic" time="0.071586625">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/adminLists.test.tsx" timestamp="2026-11-02T09:50:53.013Z" hostname="bogon" tests="14" failures="0" errors="0" skipped="0" time="3.372970875">
+        <testcase classname="src/tests/adminLists.test.tsx" name="submits task filters with explicit Beijing timezone and resets pagination" time="0.895686917">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="rejects invalid task UUID and reversed dates before sending a list request" time="0.380925708">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="retains task filters and page when returning from a detail" time="0.373549792">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="cancels filtered-out requests and cannot render their late result" time="0.174058958">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="shows list errors and request ID separately from a successful empty list" time="0.170623666">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="serializes read-only task filters and forwards AbortSignal to Axios" time="0.003832291">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="rejects calendar overflow rather than silently normalizing dates" time="0.000293125">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="polls active tasks quickly and keeps checking for new tasks after completion" time="0.204713375">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="keeps an out-of-range page recoverable with the previous-page control" time="0.266204083">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="keeps advanced filters as a draft when collapsed and includes them only on query" time="0.308497333">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="opens active advanced filters from the URL and clears them even after collapse" time="0.197029792">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="copies the complete task ID while preserving the abbreviated display and detail link" time="0.198220375">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="exposes a manual ID copy fallback when clipboard access is unavailable" time="0.177197167">
+        </testcase>
+        <testcase classname="src/tests/adminLists.test.tsx" name="splits date and time without changing Beijing timezone or losing the full timestamp" time="0.011777916">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/adminUsers.test.tsx" timestamp="2026-11-02T09:50:53.013Z" hostname="bogon" tests="8" failures="0" errors="0" skipped="0" time="1.556414125">
+        <testcase classname="src/tests/adminUsers.test.tsx" name="filters users without conflating subscription, membership or disabled status" time="0.547437">
+        </testcase>
+        <testcase classname="src/tests/adminUsers.test.tsx" name="navigates from a filtered user list to details and retains filters on return" time="0.283713291">
+        </testcase>
+        <testcase classname="src/tests/adminUsers.test.tsx" name="shows usable, retained and held quotas separately for a disabled account" time="0.057658875">
+        </testcase>
+        <testcase classname="src/tests/adminUsers.test.tsx" name="paginates lots and ledger independently and loads ledger only on demand" time="0.191750292">
+        </testcase>
+        <testcase classname="src/tests/adminUsers.test.tsx" name="reads uninitialized accounts without any write or automatic trial claim" time="0.04558475">
+        </testcase>
+        <testcase classname="src/tests/adminUsers.test.tsx" name="rejects malformed user detail URLs before fetching private metadata" time="0.011668375">
+        </testcase>
+        <testcase classname="src/tests/adminUsers.test.tsx" name="serializes user search and explicit false filters using only GET" time="0.00133775">
+        </testcase>
+        <testcase classname="src/tests/adminUsers.test.tsx" name="does not reuse a previous user&apos;s late allowance response" time="0.415872625">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/adminWrites.test.tsx" timestamp="2026-11-02T09:50:53.014Z" hostname="bogon" tests="24" failures="0" errors="0" skipped="0" time="4.871090083">
+        <testcase classname="src/tests/adminWrites.test.tsx" name="requires reason and explicit confirmation and sends the exact optimistic version" time="0.649378834">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="retains the original immutable request after a timeout and retries only on click" time="0.45661575">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="suppresses repeated submissions and preserves pending state when the dialog closes" time="0.252061042">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="refreshes a version conflict and requires a new reviewed request" time="0.235361417">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="protects administrator targets from status writes" time="0.174216042">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="recovers unknown requests after remount without automatically resubmitting" time="0.254135084">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="does not dispatch under a different account when identity changes before Axios sends" time="0.017108417">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="previews fixed products and never sends price, amount or expiry in a grant" time="0.338555084">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="locks unknown grant payload and replays the same key without automatic duplicate grants" time="0.432673041">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="does not revoke the operator&apos;s role on target account eligibility errors" time="0.127408041">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="reports accepted cancellation without claiming a cancelled terminal state" time="0.209161">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="preserves completed results when cancellation loses a completion race" time="0.223944625">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="marks cancellation terminal only after the server explicitly confirms it" time="0.082076917">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="persists pending request before sending and refuses submission if storage fails" time="0.10691025">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="ignores an old actor&apos;s write receipt after account switch" time="0.221278791">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="keeps malformed 200 responses uncertain instead of acknowledging success" time="0.1748865">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="stops the admin session on a write permission rejection" time="0.081349375">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="requires fresh confirmation and uses a fresh version/key after a definite conflict" time="0.179974709">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="disables mutation controls for cookie-only read sessions" time="0.033574083">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="recovers a request interrupted while pending as uncertain after remount" time="0.238493958">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="does not allow a fresh key when IDEMPOTENCY_CONFLICT needs reconciliation" time="0.135078833">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="does not allow a fresh key when LEGACY_GRANT_EXISTS needs reconciliation" time="0.139532041">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="sends admin write contracts with a guarded identity and bounded timeout" time="0.000543833">
+        </testcase>
+        <testcase classname="src/tests/adminWrites.test.tsx" name="keeps a confirmed receipt visible even if the following detail refresh fails" time="0.105620792">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/apiUrl.test.ts" timestamp="2026-11-02T09:50:53.015Z" hostname="bogon" tests="4" failures="0" errors="0" skipped="0" time="0.178835959">
+        <testcase classname="src/tests/apiUrl.test.ts" name="resolves downloads and SSE with API base /api/v1" time="0.138280792">
+        </testcase>
+        <testcase classname="src/tests/apiUrl.test.ts" name="resolves downloads and SSE with API base /api/v1/" time="0.02131525">
+        </testcase>
+        <testcase classname="src/tests/apiUrl.test.ts" name="resolves downloads and SSE with API base https://api.example.com/api/v1" time="0.008615625">
+        </testcase>
+        <testcase classname="src/tests/apiUrl.test.ts" name="resolves downloads and SSE with API base " time="0.008731709">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/auth.test.tsx" timestamp="2026-11-02T09:50:53.016Z" hostname="bogon" tests="11" failures="0" errors="0" skipped="0" time="0.513587583">
+        <testcase classname="src/tests/auth.test.tsx" name="displays and copies the code, counts down and calls mock confirmation" time="0.301105458">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="saves credentials, reloads history and closes after successful polling" time="0.0129095">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="stops polling on expiry and cleans up on unmount" time="0.018092291">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="keeps login credentials in API headers and exchanges scoped tickets for native URLs" time="0.008443541">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="discards a resource ticket if the account changes while it is being issued" time="0.001048959">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="switches identity and ignores old pending history responses" time="0.000416125">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="hides the development mock action for real accounts" time="0.007929917">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="keeps session bootstrap quiet and opens login for a protected action" time="0.013791208">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="ignores a stale authentication failure from the previous account" time="0.074814958">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="keeps the session when free entitlement requires following again" time="0.009360625">
+        </testcase>
+        <testcase classname="src/tests/auth.test.tsx" name="does not open a second login while the existing session is being restored" time="0.064707917">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/billingRefresh.test.tsx" timestamp="2026-11-02T09:50:53.016Z" hostname="bogon" tests="6" failures="0" errors="0" skipped="0" time="0.200062958">
+        <testcase classname="src/tests/billingRefresh.test.tsx" name="coalesces initial requests but lets task settlement force an immediate refresh" time="0.006376042">
+        </testcase>
+        <testcase classname="src/tests/billingRefresh.test.tsx" name="refreshes the daily count at Beijing midnight without a page reload" time="0.143149667">
+        </testcase>
+        <testcase classname="src/tests/billingRefresh.test.tsx" name="refreshes at membership boundaries" time="0.024379083">
+        </testcase>
+        <testcase classname="src/tests/billingRefresh.test.tsx" name="refreshes at allowance start boundaries" time="0.007625042">
+        </testcase>
+        <testcase classname="src/tests/billingRefresh.test.tsx" name="refreshes at allowance expiry boundaries" time="0.011446542">
+        </testcase>
+        <testcase classname="src/tests/billingRefresh.test.tsx" name="pauses hidden tabs and deduplicates visibility and focus refreshes on return" time="0.006298083">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/clearHistoryConfirm.test.tsx" timestamp="2026-11-02T09:50:53.017Z" hostname="bogon" tests="2" failures="0" errors="0" skipped="0" time="0.32231425">
+        <testcase classname="src/tests/clearHistoryConfirm.test.tsx" name="focuses the safe action and allows cancellation without clearing history" time="0.217994167">
+        </testcase>
+        <testcase classname="src/tests/clearHistoryConfirm.test.tsx" name="blocks duplicate clearing, keeps failures visible and closes only after success" time="0.103128667">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/client.test.ts" timestamp="2026-11-02T09:50:53.017Z" hostname="bogon" tests="6" failures="0" errors="0" skipped="0" time="0.010050417">
+        <testcase classname="src/tests/client.test.ts" name="unwraps the backend data envelope" time="0.006617541">
+        </testcase>
+        <testcase classname="src/tests/client.test.ts" name="normalizes backend errors, including request ID" time="0.000351167">
+        </testcase>
+        <testcase classname="src/tests/client.test.ts" name="uses safe opaque file IDs rather than server-supplied paths" time="0.000330375">
+        </testcase>
+        <testcase classname="src/tests/client.test.ts" name="sends exact endpoint contracts without exposing model or credentials" time="0.000904334">
+        </testcase>
+        <testcase classname="src/tests/client.test.ts" name="formats chapter timestamps and produces escaped Markdown hierarchy" time="0.000928959">
+        </testcase>
+        <testcase classname="src/tests/client.test.ts" name="quotes an operation then confirms only its immutable quote ID" time="0.00029525">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/clips.test.tsx" timestamp="2026-11-02T09:50:53.017Z" hostname="bogon" tests="75" failures="0" errors="0" skipped="0" time="12.47569175">
+        <testcase classname="src/tests/clips.test.tsx" name="uses the dedicated analysis API and rejects generic quote/create fallbacks" time="0.004677041">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="defaults every source to semantic duration and rejects contradictory limits before HTTP" time="0.000684083">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="prefers transcript analysis even after the original upload has expired" time="0.002088583">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not create a task until consent; then registers one globally and reads completed candidates" time="1.057291542">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="blocks double confirmation while the original request is unresolved" time="0.470309375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="persists only the uncertain quote ID and recovers the same consent after a lost ACK" time="0.572144333">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="restores the pending confirmation after reload without obtaining a fresh quote" time="0.174985417">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="restores a read-only private plan on a fresh deep link with creation disabled" time="0.152927709">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not mix a deep-linked foreign plan into an existing video&apos;s context" time="0.121067166">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="checks export/plan identity before restoring a historical result without file_ids" time="0.251627917">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="rejects inconsistent export and plan IDs without fetching the unrelated plan" time="0.130101583">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="tracks a direct active task once without fabricating source metadata, then restores its result" time="0.157316209">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="ignores a late resource response after account switch" time="0.00721175">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not replace the reading plan until the user accepts newer candidates" time="0.125318334">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="keeps coarse overlapping candidates and pins original-text navigation to the plan transcript" time="0.175792625">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="opens the original text in a narrow-screen dialog" time="0.197512875">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="treats no highlights as a normal no-charge outcome and keeps the original text accessible" time="0.1708535">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="hides the creation tab by default without disabling the other workspace areas" time="0.065704125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="uses clip result IDs in history links instead of generic AI result parameters" time="0.001444125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="keeps idempotent recovery available even when an uncertain quote&apos;s display expiry has passed" time="0.005768875">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="offers an explicit fresh quote after server invalidation, without silently confirming another operation" time="0.289110083">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="discards a quote arriving after the account has changed" time="0.098471208">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="uses the retained plan&apos;s transcript for a new analysis when its original file is gone" time="0.0884985">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="reports incomplete response data without showing partial candidates or creating source records" time="0.063505583">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not infer a cache hit from a zero-amount quote; uses the completed server result flag" time="0.104637958">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="closes the mobile original-text dialog when its bound transcript is opened" time="0.274028958">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="shows a login recovery action instead of an endless resource loader for an anonymous deep link" time="0.011114375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="offers newer candidates even when the first successful analysis was opened through a task deep link" time="0.133366709">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="opens the current plan&apos;s retained transcript when switching from clips to the transcript tab" time="0.165617791">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="offers an older cached artifact from the latest request and keeps acceptance stable on reload and late completion" time="0.188311959">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="accepts an old cached artifact on a task deep link without revalidating it against the original task" time="0.180825667">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="keeps the latest analysis ahead of later exports and unrelated videos while restoring an export deep link" time="0.120440416">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="shows the same-plan cache acknowledgement even if an older analysis arrives later" time="0.08973475">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: success" time="0.089378458">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: definite failure" time="0.1436105">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: network failure" time="0.220593042">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="settles an unmounted confirmation globally: HTTP timeout" time="0.118502958">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not clear a newer quote on an old success response" time="0.000554958">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not clear a newer quote on an old failure response" time="0.00037925">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="fences a confirmation response after switch" time="0.000469667">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="fences a confirmation response after relogin" time="0.000431208">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="preserves the uncertain marker during an in-flight recovery guard and deduplicates acknowledged recovery" time="0.000931125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="does not offer older local history over a newer deep-linked plan whose task is not stored locally" time="0.062036458">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="refreshes the accepted plan&apos;s source state without reverting to the original deep link" time="0.168693916">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 uses only the dedicated export quote API" time="0.001606667">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 keeps selection separate from reading and freezes an explicit export confirmation" time="0.413209333">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 discards an export quote when the user changes the selected set" time="0.332164292">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 allows cache-aware quotes without a source and hides video selection for audio" time="0.480047792">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 recovers an ACK loss using the exact frozen quote and selection after reload" time="0.730178042">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 settles export confirmation after unmount: success" time="0.355966375">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 settles export confirmation after unmount: definite" time="0.376425958">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 settles export confirmation after unmount: uncertain" time="0.362974083">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 replaces an invalidated export quote only after an explicit refresh and a second consent" time="0.442932916">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 restores item states by candidate ID and distinguishes missing files from expired files" time="0.206182084">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 refreshes availability before obtaining one fresh native-download grant" time="0.421285625">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 stops before obtaining a grant if the file disappeared after rendering the button" time="0.293854125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 ignores a download grant arriving after an account switch" time="0.253243833">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 retains delivered files while a newer export fails without a complete batch resource" time="0.11829725">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 accepts a newly completed request that reuses an older delivery while explicit links keep their batch" time="0.074081042">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 rejects foreign candidates and incomplete batches without exposing partial file buttons" time="0.053118166">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 preserves a new pending quote and fences old-account export confirmations" time="0.001168583">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 clears selection on an accepted plan change without changing the previous draft&apos;s identity" time="0.340872959">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 rejects a quote for the wrong operation without submitting it" time="0.072950833">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 discards a quote arriving after the user changes accounts" time="0.080955208">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 restores a read-only export when the creation flag is disabled without probing quote capabilities" time="0.042018459">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 ignores malformed local selection, pending confirmation, and batch references" time="0.036712708">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 honours an explicit older delivery deep link over already-loaded newer history" time="0.05634175">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 does not clear a later confirmation on a delayed success in the same account" time="0.000773291">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 does not roll back a new batch when an old download availability check arrives late" time="0.059343917">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 does not fetch a delivery again merely because its reference was persisted" time="0.0593845">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 restores focus to the generation trigger after an asynchronous quote dialog closes" time="0.077905125">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="F2 keeps recovery for an old pending export available when the current analysis has no highlights" time="0.066763459">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="defaults to AI duration without seconds inputs and sends an unambiguous semantic strategy" time="0.050667958">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="allows optional multi-minute manual ranges and invalidates them when returning to AI duration" time="0.079834208">
+        </testcase>
+        <testcase classname="src/tests/clips.test.tsx" name="reads legacy plans unchanged while making re-analysis default to AI duration" time="0.073459166">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/downloadSettings.test.tsx" timestamp="2026-11-02T09:50:53.023Z" hostname="bogon" tests="2" failures="0" errors="0" skipped="0" time="0.405720375">
+        <testcase classname="src/tests/downloadSettings.test.tsx" name="selects real presets without creating a task until download is clicked" time="0.381232458">
+        </testcase>
+        <testcase classname="src/tests/downloadSettings.test.tsx" name="disables missing video presets while keeping the separate audio workflow" time="0.023196583">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/errorNotice.test.tsx" timestamp="2026-11-02T09:50:53.023Z" hostname="bogon" tests="5" failures="0" errors="0" skipped="0" time="0.648032583">
+        <testcase classname="src/tests/errorNotice.test.tsx" name="escapes the page stacking context and can be dismissed without removing form input" time="0.382036459">
+        </testcase>
+        <testcase classname="src/tests/errorNotice.test.tsx" name="keeps a dismissed occurrence closed on rerender and shows the next failed attempt with identical text" time="0.020711209">
+        </testcase>
+        <testcase classname="src/tests/errorNotice.test.tsx" name="stacks concurrent errors in one shared layer and cleans up during Strict Mode remounts" time="0.109960666">
+        </testcase>
+        <testcase classname="src/tests/errorNotice.test.tsx" name="keeps modal errors inside the modal subtree so dismiss and retry controls remain interactive" time="0.06612375">
+        </testcase>
+        <testcase classname="src/tests/errorNotice.test.tsx" name="waits for a containing dialog to open before promoting the notice to the top layer" time="0.065394">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/foldText.test.tsx" timestamp="2026-11-02T09:50:53.024Z" hostname="bogon" tests="3" failures="0" errors="0" skipped="0" time="0.078267792">
+        <testcase classname="src/tests/foldText.test.tsx" name="starts the entry fold when the engine is ready promptly" time="0.067019875">
+        </testcase>
+        <testcase classname="src/tests/foldText.test.tsx" name="keeps readable text unchanged when the engine arrives after the entry window" time="0.005184917">
+        </testcase>
+        <testcase classname="src/tests/foldText.test.tsx" name="does not replay server text when hydration itself happens late" time="0.004765125">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/frontendExperience.test.tsx" timestamp="2026-11-02T09:50:53.024Z" hostname="bogon" tests="8" failures="0" errors="0" skipped="0" time="0.825582166">
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="paginates long transcripts and searches all segments beyond the current page" time="0.389796625">
+        </testcase>
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="opens the page containing a citation and clears an unrelated search" time="0.133740416">
+        </testcase>
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="copies and exports the complete transcript even when the view is filtered" time="0.139269417">
+        </testcase>
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="exports SRT millisecond timestamps across minute and hour boundaries" time="0.000851417">
+        </testcase>
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="provides page recovery controls after a rendering failure" time="0.009391417">
+        </testcase>
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="opens mobile navigation, closes it on Escape and restores trigger focus" time="0.119732041">
+        </testcase>
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="keeps recovery actions available while technical error details are collapsed" time="0.012941">
+        </testcase>
+        <testcase classname="src/tests/frontendExperience.test.tsx" name="preserves actionable validation messages and hides unknown technical failures in details" time="0.018050708">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/heroBackground.test.tsx" timestamp="2026-11-02T09:50:53.024Z" hostname="bogon" tests="4" failures="0" errors="0" skipped="0" time="0.164319125">
+        <testcase classname="src/tests/heroBackground.test.tsx" name="keeps a plain background without WebGPU" time="0.013658833">
+        </testcase>
+        <testcase classname="src/tests/heroBackground.test.tsx" name="skips GPU decoration for reduced motion or mobile (true, false)" time="0.001486666">
+        </testcase>
+        <testcase classname="src/tests/heroBackground.test.tsx" name="skips GPU decoration for reduced motion or mobile (false, true)" time="0.001725125">
+        </testcase>
+        <testcase classname="src/tests/heroBackground.test.tsx" name="unmounts on preference change and falls back after a GPU error" time="0.145595042">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/knowledge.test.tsx" timestamp="2026-11-02T09:50:53.025Z" hostname="bogon" tests="7" failures="0" errors="0" skipped="0" time="0.912172167">
+        <testcase classname="src/tests/knowledge.test.tsx" name="shows a quote before asking, cancels without creating a task, and retries the same confirmation" time="0.334552417">
+        </testcase>
+        <testcase classname="src/tests/knowledge.test.tsx" name="renders exact citations, approximate timestamps and a source link" time="0.062787375">
+        </testcase>
+        <testcase classname="src/tests/knowledge.test.tsx" name="saves tags with an owned transcript and never creates an AI task" time="0.163037917">
+        </testcase>
+        <testcase classname="src/tests/knowledge.test.tsx" name="searches owned library text, filters tags and reads a saved result without generation" time="0.189044167">
+        </testcase>
+        <testcase classname="src/tests/knowledge.test.tsx" name="removes a saved item and shows the empty state" time="0.117626875">
+        </testcase>
+        <testcase classname="src/tests/knowledge.test.tsx" name="does not show a previous account’s pending library response after switching users" time="0.024177667">
+        </testcase>
+        <testcase classname="src/tests/knowledge.test.tsx" name="opens an older purchased answer directly even when the recent list is empty" time="0.020014125">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/logoLoop.test.tsx" timestamp="2026-11-02T09:50:53.025Z" hostname="bogon" tests="2" failures="0" errors="0" skipped="0" time="0.445147708">
+        <testcase classname="src/tests/logoLoop.test.tsx" name="presents one accessible platform list without extra captions or controls" time="0.241736542">
+        </testcase>
+        <testcase classname="src/tests/logoLoop.test.tsx" name="switches to a complete static list when reduced motion is enabled and removes its listener" time="0.199064083">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/marketing.test.tsx" timestamp="2026-11-02T09:50:53.025Z" hostname="bogon" tests="18" failures="0" errors="0" skipped="0" time="1.334222208">
+        <testcase classname="src/tests/marketing.test.tsx" name="renders product facts and the case without making auth or business requests" time="0.219318584">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="shows one source-backed example with real chapter timestamps and readable expandable map nodes" time="0.188303458">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="lets visitors explore real outputs with keyboard tabs and a working sample download" time="0.1611705">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="marks only the current navigation section while scrolling from the hero through content" time="0.188643125">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="keeps the side-card curves attached after resizing even with reduced motion" time="0.046374667">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="batches hero scroll motion, bounds displacement and removes it when reduced motion is enabled" time="0.016591125">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="applies mouse parallax only on fine-pointer devices and clears pending motion on exit" time="0.082845292">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="reveals below-fold content once, exposes keyboard targets and cleans up observers" time="0.061650917">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="keeps content visible for reduced motion and when the preference changes" time="0.0559325">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="ships readable static content without motion-dependent visibility or running effects on other pages" time="0.103844125">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="keeps the complete case text, provenance and outputs available without client JavaScript" time="0.012960792">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="publishes independent metadata, canonical and readable HTML for /" time="0.058667208">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="publishes independent metadata, canonical and readable HTML for /help" time="0.005822083">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="publishes independent metadata, canonical and readable HTML for /privacy" time="0.006717292">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="publishes independent metadata, canonical and readable HTML for /examples" time="0.012153583">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="publishes independent metadata, canonical and readable HTML for /examples/knowledge-loop" time="0.009023875">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="publishes independent metadata, canonical and readable HTML for /subscription" time="0.080826542">
+        </testcase>
+        <testcase classname="src/tests/marketing.test.tsx" name="keeps private shells and missing pages noindex without a homepage redirect or canonical" time="0.0222775">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/mindmapRenderer.test.ts" timestamp="2026-11-02T09:50:53.026Z" hostname="bogon" tests="6" failures="0" errors="0" skipped="0" time="0.892382833">
+        <testcase classname="src/tests/mindmapRenderer.test.ts" name="keeps branch hues stable across depth and branch changes" time="0.00470375">
+        </testcase>
+        <testcase classname="src/tests/mindmapRenderer.test.ts" name="connects card edges at their vertical centers with right-angle segments" time="0.000783">
+        </testcase>
+        <testcase classname="src/tests/mindmapRenderer.test.ts" name="uses the real layout and preserves straight colored links through fold/unfold and resize" time="0.418956083">
+        </testcase>
+        <testcase classname="src/tests/mindmapRenderer.test.ts" name="exports all currently expanded content and its colors independent of screen zoom" time="0.114627416">
+        </testcase>
+        <testcase classname="src/tests/mindmapRenderer.test.ts" name="renders single roots and long multiline maps with finite layout and cleans up pending renders" time="0.244037084">
+        </testcase>
+        <testcase classname="src/tests/mindmapRenderer.test.ts" name="cancels queued canvas animations when the map is destroyed" time="0.107446541">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/mindmapViewer.test.tsx" timestamp="2026-11-02T09:50:53.027Z" hostname="bogon" tests="3" failures="0" errors="0" skipped="0" time="0.673168084">
+        <testcase classname="src/tests/mindmapViewer.test.tsx" name="waits for render completion before export, retains controls and disables Markdown HTML" time="0.472980917">
+        </testcase>
+        <testcase classname="src/tests/mindmapViewer.test.tsx" name="keeps Markdown available after rendering fails and recovers on retry" time="0.166363">
+        </testcase>
+        <testcase classname="src/tests/mindmapViewer.test.tsx" name="destroys the engine and ignores a late initial render after unmount" time="0.030733208">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/reactApp.test.tsx" timestamp="2026-11-02T09:50:53.027Z" hostname="bogon" tests="33" failures="0" errors="0" skipped="0" time="12.780851209">
+        <testcase classname="src/tests/reactApp.test.tsx" name="parses a URL, navigates to the React workspace and retains metadata after refresh" time="1.226253458">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="preserves the input and request ID on API errors and allows retry" time="0.547638">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="reacts to SSE progress, fetches the completed result and exposes the controlled download" time="1.142202083">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="cancels an active task through the store and updates the React task card" time="0.874413583">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="restores a summary and transcript and switches workspace tabs" time="0.61198025">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="opens focused task history without storage controls and returns focus on Escape" time="0.145691292">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="Strict Mode remounts close old SSE sources and leave only the live subscription" time="0.125708958">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="retries a failed result request and still loads its transcript" time="0.381296625">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="aborts pending result requests when leaving a workspace and ignores late responses" time="0.255328292">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="prompts and focuses an empty video link without calling the parse API" time="0.08731275">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="keeps cleanup in the admin area and settings permissions consistent for anonymous" time="0.361813">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="keeps cleanup in the admin area and settings permissions consistent for user" time="0.114254667">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="keeps cleanup in the admin area and settings permissions consistent for disabled" time="0.12808325">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="keeps cleanup in the admin area and settings permissions consistent for admin" time="0.099058667">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="groups account actions behind an avatar and closes the menu on Escape" time="0.074117834">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="keeps service health in the administrator page" time="0.506858541">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="does not poll service health for non-admin visitors" time="0.109137416">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="deletes a history item and clears the remaining records without cancelling jobs" time="0.377962">
+            <system-err>
+Error: Error: Response for preflight has invalid HTTP status code 400
+    at Object.dispatchError (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/xhr/xhr-utils.js:62:19)
+    at EventEmitter.&lt;anonymous&gt; (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:655:18)
+    at EventEmitter.emit (node:events:521:24)
+    at Request.&lt;anonymous&gt; (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/xhr/xhr-utils.js:349:16)
+    at Request.emit (node:events:509:20)
+    at Request._processResponse (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/helpers/http-request.js:240:12)
+    at ClientRequest.&lt;anonymous&gt; (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/helpers/http-request.js:107:12)
+    at Object.onceWrapper (node:events:631:12)
+    at ClientRequest.emit (node:events:509:20)
+    at HTTPParser.parserOnIncomingClient [as onIncoming] (node:_http_client:798:27) undefined
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="opens the login card from parse without sending business requests" time="0.210834875">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="opens the login card from history without sending business requests" time="0.209400458">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="opens the login card from login without sending business requests" time="0.141242709">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="preserves workspace access for an active unsubscribed account" time="0.252399583">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="lets a subscribed signed-in user paste and parse normally" time="0.378612875">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="keeps the confirmed quote on a transient submission failure and sends it once on retry" time="1.043454208">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="does not create a task when the user closes an allowance quote" time="0.615397167">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="restores a signed-in parsed video through real session bootstrap even with no server history" time="0.172321167">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="lets visitors prepare a link, preserves it through login and parses only after explicit submission" time="0.495193042">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="offers session recovery after network failure without opening another login card" time="0.238735084">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="aborts parsing on account changes and ignores a late successful response" time="0.095013791">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="opens saved transcript and summary in the workspace without depending on task history" time="0.662255292">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="navigates from the account menu to personal allowances and reuses task history" time="0.779006584">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="retains video context across tabs and guides the question empty state back to transcript actions" time="0.176550917">
+        </testcase>
+        <testcase classname="src/tests/reactApp.test.tsx" name="starts the existing summary confirmation from an empty state and replaces guidance with progress" time="0.139356042">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/subscription.test.tsx" timestamp="2026-11-02T09:50:53.029Z" hostname="bogon" tests="12" failures="0" errors="0" skipped="0" time="1.112475625">
+        <testcase classname="src/tests/subscription.test.tsx" name="renders the API catalog, switches addons and shows an unavailable purchase notice" time="0.386400208">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="does not invent catalog values after failure and supports retry" time="0.055273">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="retains the published plan after a refresh fails and enables actions only after live recovery" time="0.210716916">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="shows real balances, held usage and expiry without exposing the previous account" time="0.03718725">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="ignores an old account balance response after switching users" time="0.000513083">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="shows insufficient allowance as queued confirmation, with a cancel that does not submit" time="0.012705375">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="requires a new quote once expired and blocks duplicate submission while pending" time="0.006762583">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="opens personal allowances from the logged-in trial action and returns to plans" time="0.173782209">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="keeps account balances visible when the download catalog fails and retries the cap" time="0.13000025">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="retries a failed allowance request without showing invented balances" time="0.032309208">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="keeps paid membership separate from following status" time="0.047919166">
+        </testcase>
+        <testcase classname="src/tests/subscription.test.tsx" name="identifies both addon products in personal allowance details" time="0.017321709">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/taskPoller.test.ts" timestamp="2026-11-02T09:50:53.030Z" hostname="bogon" tests="14" failures="0" errors="0" skipped="0" time="0.058347417">
+        <testcase classname="src/tests/taskPoller.test.ts" name="does not open an SSE connection after stopping a pending ticket exchange" time="0.007389917">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="connects SSE with a scoped ticket and retains polling when ticket exchange fails" time="0.008223042">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; strictly discards repeated or out-of-order seq and hydrates same-seq terminal payload" time="0.014131709">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; falls back to 1.5 second polling and stops on terminal status" time="0.005381291">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; closes on completed" time="0.001243417">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; closes on failed" time="0.005883333">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; closes on cancelled" time="0.000875916">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; closes on expired" time="0.000841625">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; never regresses to an older polled event" time="0.002532584">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; retries fetching terminal results after temporary GET failure" time="0.003882708">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; stops polling if the task does not exist" time="0.002070916">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; validates task identity and falls back on malformed events" time="0.001426375">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; uses durable terminal state when Redis is unavailable and GET returns seq zero" time="0.001658083">
+        </testcase>
+        <testcase classname="src/tests/taskPoller.test.ts" name="task SSE and polling &gt; stopping closes the source, aborts I/O and cancels timers" time="0.001244834">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/uploads.test.ts" timestamp="2026-11-02T09:50:53.031Z" hostname="bogon" tests="13" failures="0" errors="0" skipped="0" time="0.217727083">
+        <testcase classname="src/tests/uploads.test.ts" name="validates supported file extensions, empty bytes and account size before HTTP" time="0.005215">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="sends raw File, separates transfer progress from ACK, and starts one probe after ACK" time="0.056057875">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="recovers lost ACK and resumes server confirmation without retransmitting bytes" time="0.058941916">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="reload recovers pending metadata without storing or sending File" time="0.016559584">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="reload recovers uploaded metadata without storing or sending File" time="0.008602375">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="rejects a different reselected file and locks concurrent retries" time="0.059920417">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="aborts on identity change, revokes previews and ignores late upload ACK" time="0.0077605">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="prevents duplicate session creation while the first request is pending" time="0.000638792">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="waits for server task termination before deleting a source" time="0.001001083">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="canonicalizes private content without null platform collisions, preserving route aliases and result refs" time="0.0010495">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="uses only transcript_id for AI after deleting or expiring source files" time="0.000355625">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="recognizes recording.m4a as M4A audio before probing" time="0.000347208">
+        </testcase>
+        <testcase classname="src/tests/uploads.test.ts" name="recognizes RECORDING.M4A as M4A audio before probing" time="0.000234167">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/workspace.test.ts" timestamp="2026-11-02T09:50:53.032Z" hostname="bogon" tests="10" failures="0" errors="0" skipped="0" time="0.031191333">
+        <testcase classname="src/tests/workspace.test.ts" name="restores each user&apos;s videos and tasks without overwriting their saved cache" time="0.006221041">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="throttles progress storage, immediately saves terminal results and flushes before switching users" time="0.010890958">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="persists parsed video metadata so direct refresh can restore the workspace" time="0.00017825">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="prevents duplicate active jobs and retains independent job kinds" time="0.00092">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="clears submission state when enqueue fails, allowing retry" time="0.000662209">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="loads server history and reconstructs workspaces missing from browser storage" time="0.00043975">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="replaces stale downloadable IDs after a server cleanup refresh" time="0.000201416">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="does not restart subscriptions when an in-flight history request finishes after cleanup" time="0.000313833">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="deletes history persistently without removing or cancelling active work" time="0.009609709">
+        </testcase>
+        <testcase classname="src/tests/workspace.test.ts" name="ignores an older history response after deletion and retains records on deletion failure" time="0.000499333">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/workspaceResults.test.tsx" timestamp="2026-11-02T09:50:53.032Z" hostname="bogon" tests="4" failures="0" errors="0" skipped="0" time="0.424466958">
+        <testcase classname="src/tests/workspaceResults.test.tsx" name="pins the reading bundle and switches transcript and summary together only on explicit acceptance" time="0.1429645">
+        </testcase>
+        <testcase classname="src/tests/workspaceResults.test.tsx" name="loads the selected result&apos;s canonical transcript and rejects maps from another time axis" time="0.058441834">
+        </testcase>
+        <testcase classname="src/tests/workspaceResults.test.tsx" name="does not re-pin while filling the first summary for an already readable transcript" time="0.163344791">
+        </testcase>
+        <testcase classname="src/tests/workspaceResults.test.tsx" name="aborts old identity requests and hides their results immediately after an account change" time="0.058529083">
+        </testcase>
+    </testsuite>
+</testsuites>

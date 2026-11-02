@@ -1,4 +1,5 @@
 import asyncio
+from app.infrastructure.timing import log_queue_wait, stage_timer
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -25,6 +26,7 @@ async def execute_question(task_id, service, repository, transcripts, provider):
     if not await database_call(tasks.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(tasks.get, task_id)).status}
     task = await database_call(tasks.get, task_id)
+    log_queue_wait(task)
     payload = task.input_payload
     try:
         async with asyncio.timeout(settings.AI_TASK_TIMEOUT_SECONDS):
@@ -44,8 +46,9 @@ async def execute_question(task_id, service, repository, transcripts, provider):
                 if provider.name == "openai_compatible":
                     provider.model = payload["allowance"]["llm_model"]
                 provider = BoundedLLMProvider(provider, {"max_calls": 1, "total_output_tokens": 4096, "output_tokens_per_call": 4096})
-                answer, citations, usage = await answer_question(provider, transcript, payload["question"],
-                    payload["output_language"], lambda: service.is_cancel_requested(task_id))
+                with stage_timer("question", task_id):
+                    answer, citations, usage = await answer_question(provider, transcript, payload["question"],
+                        payload["output_language"], lambda: service.is_cancel_requested(task_id))
                 def write(session):
                     identifier = repository.store_answer(session, task.user_id, task_id,
                         {**payload, "transcript_uuid": transcript.id}, answer, citations, usage)

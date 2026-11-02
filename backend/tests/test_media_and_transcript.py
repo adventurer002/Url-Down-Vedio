@@ -236,8 +236,9 @@ async def test_asr_can_be_cooperatively_cancelled():
     assert error.value.code == "TASK_CANCELLED" and exited.is_set()
 
 
-async def test_cloud_asr_multipart_and_verbose_segments(tmp_path):
-    path = tmp_path / "audio.mp3"
+@pytest.mark.parametrize("extension,mime", [("mp3", "audio/mpeg"), ("wav", "audio/wav")])
+async def test_cloud_asr_multipart_and_verbose_segments(tmp_path, extension, mime):
+    path = tmp_path / f"audio.{extension}"
     path.write_bytes(b"fixture audio")
     requests = []
 
@@ -246,6 +247,8 @@ async def test_cloud_asr_multipart_and_verbose_segments(tmp_path):
         body = await request.aread()
         assert request.headers["authorization"] == "Bearer test-secret"
         assert request.url.path == "/v1/audio/transcriptions"
+        assert f'filename="audio.{extension}"'.encode() in body
+        assert f'Content-Type: {mime}'.encode() in body
         for value in (b"verbose_json", b"whisper-1", b"timestamp_granularities[]", b"fixture audio", b"segment"):
             assert value in body
         return httpx.Response(200, json={"language": "chinese", "segments": [{"start": 0, "end": 1, "text": "你好"}]})

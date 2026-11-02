@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from uuid import UUID
+from types import SimpleNamespace
 
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -12,8 +13,9 @@ class TranscriptService:
     def __init__(self, resolver: VideoResolver, tasks: TaskService, transcripts: TranscriptRepository):
         self.resolver, self.tasks, self.transcripts = resolver, tasks, transcripts
 
-    async def create(self, url: str, language: str | None):
-        payload = await self.resolver.resolve(url)
+    async def create(self, url: str | None, language: str | None, *, upload_id=None, user_id=None):
+        from app.modules.video.sources import resolve_input
+        payload = await resolve_input(self.resolver, url, upload_id, user_id)
         return await self.tasks.create("transcription", UUID(payload["video_id"]),
                                        {**payload, "language": language.lower() if language else None,
                                         "content_version": settings.TRANSCRIPT_CONTENT_VERSION, "preset_id": "audio_mp3"})
@@ -32,6 +34,21 @@ class TranscriptService:
                 raise
         return asdict(transcript)
 
+    async def ai_source(self, transcript_id, user_id):
+        if user_id is None:
+            raise AppException("AUTH_REQUIRED", "请登录后使用已有文稿", 401)
+        data = await self.get(transcript_id, SimpleNamespace(id=user_id))
+        from app.modules.billing.policy import MAX_TEXT_CHARS
+        if len(data["content_text"]) > MAX_TEXT_CHARS:
+            raise AppException("TRANSCRIPT_TOO_LONG", "首版单次文稿最多 60000 字符", 413)
+        if not data["content_text"].strip():
+            raise AppException("TRANSCRIPT_EMPTY", "文稿内容为空", 422)
+        from app.modules.video.repository import VideoRepository
+        metadata = await database_call(VideoRepository(self.transcripts.sessions).history_metadata, [data["video_id"]])
+        return {"source_kind": "transcript", "transcript_id": str(data["id"]), "video_id": str(data["video_id"]),
+            "transcript_content_hash": data["content_hash"], "content_version": data["content_version"],
+            "title": metadata[data["video_id"]]["title"], "duration_seconds": 0}
+
 
 class TranscriptionPipeline:
     """Acquire a transcript within an existing Celery task; never wait on a Solo child task."""
@@ -39,6 +56,17 @@ class TranscriptionPipeline:
         self.tasks, self.sessions, self.storage = tasks, sessions, storage
 
     async def acquire(self, task_id, on_progress=None):
+        task = await database_call(self.tasks.repository.get, task_id)
+        if task.input_payload.get("source_kind") == "transcript":
+            if await self.tasks.is_cancel_requested(task_id):
+                raise AppException("TASK_CANCELLED", "任务已取消", 409)
+            data = await TranscriptService(None, self.tasks, TranscriptRepository(self.sessions)).get(
+                UUID(task.input_payload["transcript_id"]), SimpleNamespace(id=task.user_id) if task.user_id else None)
+            if (data["video_id"] != task.video_id or data["content_hash"] != task.input_payload["transcript_content_hash"]):
+                raise AppException("TRANSCRIPT_SOURCE_MISMATCH", "任务文稿来源发生变化", 409)
+            from app.modules.transcript.repository import TranscriptRecord
+            return TranscriptRecord(**data)
+
         from app.infrastructure.process_runner import ProcessRunner
         from app.modules.media.audio import AudioAcquirer
         from app.modules.media.repository import MediaRepository

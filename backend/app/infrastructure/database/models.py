@@ -12,3 +12,7 @@ from app.modules.billing import models as billing_models  # noqa: F401
 __all__ = ["Video", "Task", "MediaFile", "Transcript", "AIResult", "User"]
 
 from app.modules.knowledge import models as knowledge_models  # noqa: F401
+from app.modules.audit import models as audit_models  # noqa: F401
+
+from app.modules.uploads.models import Upload  # noqa: F401
+from app.modules.clips import models as clips_models  # noqa: F401

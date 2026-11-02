@@ -1,28 +1,18 @@
-import asyncio
+from fastapi import APIRouter, Depends, Request
 
-from fastapi import APIRouter, Depends
-
-from app.core.exceptions import AppException
 from app.core.response import success_response
-from app.modules.auth.dependencies import required_admin
-from app.infrastructure.storage.cleanup import cleanup_expired_files
+from app.modules.auth.dependencies import admin_writer
+from app.modules.admin.router import OperationRequest, get_admin_service
+from app.modules.system.service import CleanupService, get_cleanup_service
 
 router = APIRouter(prefix="/system", tags=["system"])
 
 
-class CleanupService:
-    def run(self):
-        # FastAPI executes this synchronous route in its thread pool, not the HTTP event loop.
-        try:
-            return asyncio.run(cleanup_expired_files())
-        except OSError:
-            raise AppException("STORAGE_CLEANUP_FAILED", "文件清理失败，请稍后重试", 503) from None
-
-
-def get_cleanup_service():
-    return CleanupService()
-
-
-@router.post("/cleanup", dependencies=[Depends(required_admin)])
-def cleanup(service=Depends(get_cleanup_service)):
-    return success_response(service.run())
+@router.post("/cleanup")
+async def cleanup(request: Request, body: OperationRequest | None = None,
+                   actor=Depends(admin_writer), service=Depends(get_cleanup_service), admin=Depends(get_admin_service)):
+    # Preserve the existing settings button while routing every cleanup through
+    # audit. Legacy requests use their server request ID as a one-shot key.
+    reason = body.reason if body else "设置页清理过期文件"
+    key = body.key if body else request.state.request_id
+    return success_response(await admin.cleanup(actor, reason, key, request.state.request_id, service))

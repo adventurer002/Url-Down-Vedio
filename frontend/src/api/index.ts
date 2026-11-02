@@ -1,4 +1,9 @@
-import { get, post, del } from "./client";
+import type {
+  UploadRecord,
+  ContentInput,
+  RequestIdentity,
+} from "../types/uploads";
+import { client, get, post, del } from "./client";
 import type {
   Allowances,
   AllowanceQuote,
@@ -20,7 +25,21 @@ import type {
   LibraryDetail,
   VideoAnswer,
 } from "../types/knowledge";
+import type {
+  ClipPlan,
+  ClipPlanQuoteInput,
+  ClipExport,
+  ClipExportQuoteInput,
+} from "../types/clips";
 export const api = {
+  clipPlanQuote: (input: ClipPlanQuoteInput, signal?: AbortSignal) =>
+    post<AllowanceQuote>("/clips/plans/quotes", input, signal),
+  clipPlan: (id: string, signal?: AbortSignal) =>
+    get<ClipPlan>(`/clips/plans/${encodeURIComponent(id)}`, signal),
+  clipExport: (id: string, signal?: AbortSignal) =>
+    get<ClipExport>(`/clips/exports/${encodeURIComponent(id)}`, signal),
+  clipExportQuote: (input: ClipExportQuoteInput, signal?: AbortSignal) =>
+    post<AllowanceQuote>("/clips/exports/quotes", input, signal),
   questionQuote: (
     transcriptId: string,
     question: string,
@@ -67,22 +86,87 @@ export const api = {
     get<BillingCatalog>("/billing/catalog", signal),
   allowances: (signal?: AbortSignal) =>
     get<Allowances>("/billing/allowances", signal),
+  createUpload: async (
+    filename: string,
+    sizeBytes: number,
+    signal: AbortSignal,
+    contentIdentity: RequestIdentity,
+  ) =>
+    (
+      await client.post<UploadRecord>(
+        "/uploads",
+        { filename, size_bytes: sizeBytes },
+        { signal, contentIdentity, timeout: 10000 },
+      )
+    ).data,
+  uploadContent: async (
+    id: string,
+    file: File,
+    signal: AbortSignal,
+    onProgress: (loaded: number) => void,
+    contentIdentity: RequestIdentity,
+  ) =>
+    (
+      await client.put<UploadRecord>(
+        `/uploads/${encodeURIComponent(id)}/content`,
+        file,
+        {
+          signal,
+          contentIdentity,
+          timeout: 610000,
+          headers: { "Content-Type": "application/octet-stream" },
+          onUploadProgress: (event) => onProgress(event.loaded),
+        },
+      )
+    ).data,
+  completeUpload: async (
+    id: string,
+    signal?: AbortSignal,
+    contentIdentity?: RequestIdentity,
+  ) =>
+    (
+      await client.post<TaskCreated>(
+        `/uploads/${encodeURIComponent(id)}/complete`,
+        undefined,
+        { signal, contentIdentity, timeout: 10000 },
+      )
+    ).data,
+  upload: (id: string, signal?: AbortSignal) =>
+    get<UploadRecord>(`/uploads/${encodeURIComponent(id)}`, signal),
+  deleteUpload: (id: string) =>
+    del<UploadRecord>(`/uploads/${encodeURIComponent(id)}`),
+  ledger: (signal?: AbortSignal) =>
+    get<{
+      items: Array<{
+        id: string;
+        event: string;
+        detail: {
+          task_id?: string;
+          asr_seconds?: number;
+          ai_generations?: number;
+        };
+        created_at: string;
+      }>;
+    }>("/billing/ledger", signal),
   quote: (
     kind: JobKind,
-    url: string,
+    url: string | ContentInput,
     presetId?: string,
     signal?: AbortSignal,
-  ) =>
-    post<AllowanceQuote>(
+  ) => {
+    if (kind === "ai_clip_plan" || kind === "clips_export")
+      throw new Error("切片任务需先获取专属报价");
+    return post<AllowanceQuote>(
       "/billing/quotes",
       {
         action: kind,
-        url,
+        ...(typeof url === "string" ? { url } : url),
         ...(presetId ? { preset_id: presetId } : {}),
         language: "zh",
       },
       signal,
-    ),
+    );
+  },
   confirmQuote: (quoteId: string) =>
     post<TaskCreated>("/billing/tasks", { quote_id: quoteId }),
   resumeQueued: () => post<{ dispatched: number }>("/billing/resume"),
@@ -92,7 +176,8 @@ export const api = {
   history: (limit = 20, offset = 0, signal?: AbortSignal) =>
     get<TaskHistoryPage>(`/tasks?limit=${limit}&offset=${offset}`, signal),
   cleanup: () => post<CleanupResult>("/system/cleanup"),
-  parse: (url: string) => post<VideoParseResult>("/videos/parse", { url }),
+  parse: (url: string, signal?: AbortSignal) =>
+    post<VideoParseResult>("/videos/parse", { url }, signal),
   task: (id: string, signal?: AbortSignal) =>
     get<TaskSnapshot>(`/tasks/${encodeURIComponent(id)}`, signal),
   cancel: (id: string) =>
@@ -104,7 +189,12 @@ export const api = {
   ready: (signal?: AbortSignal) =>
     get<ReadinessStatus>("/health/ready", signal),
   create: (kind: JobKind, url: string, presetId?: string) => {
-    if (kind === "ai_question") throw new Error("视频问答需先确认专属报价");
+    if (
+      kind === "ai_question" ||
+      kind === "ai_clip_plan" ||
+      kind === "clips_export"
+    )
+      throw new Error("此任务需先确认专属报价");
     const path = {
       download: "/downloads",
       audio_extraction: "/audio/extractions",

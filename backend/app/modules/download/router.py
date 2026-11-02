@@ -1,8 +1,9 @@
-from app.modules.auth.dependencies import creation_user, optional_user
+from app.modules.auth.dependencies import creation_user, required_user, resource_user
+from app.modules.auth.tokens import issue_resource_access
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import settings
@@ -17,7 +18,7 @@ from app.modules.media.repository import MediaRepository
 from app.modules.media.service import MediaService
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.service import TaskService
-from app.modules.video.parsers.ytdlp import YtDlpParser
+from app.modules.video.parsers.cached import get_video_parser
 from app.modules.video.repository import VideoRepository
 
 router = APIRouter(tags=["downloads"])
@@ -35,7 +36,7 @@ def get_storage():
 
 def get_download_service() -> DownloadService:
     tasks = TaskService(TaskRepository(SessionLocal), ProgressBus(redis_client), DownloadDispatcher())
-    return DownloadService(YtDlpParser(), VideoRepository(SessionLocal), tasks, get_storage())
+    return DownloadService(get_video_parser(), VideoRepository(SessionLocal), tasks, get_storage())
 
 
 def get_media_service() -> MediaService:
@@ -55,7 +56,7 @@ async def create_download(body: DownloadRequest, service: DownloadService = Depe
 
 @router.get("/files/{file_id}/download")
 async def download_file(file_id: UUID, request: Request, service: MediaService = Depends(get_media_service),
-                        tasks=Depends(get_file_task_service), user=Depends(optional_user)):
+                        tasks=Depends(get_file_task_service), user=Depends(resource_user)):
     record, path, filename = await service.download(file_id)
     await tasks.authorize_file(file_id, record.task_id, user)
     if settings.ALLOWANCES_ENABLED:
@@ -70,3 +71,12 @@ async def download_file(file_id: UUID, request: Request, service: MediaService =
             headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
     return FileResponse(path, filename=filename, media_type=record.mime_type,
                         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
+
+
+@router.post("/files/{file_id}/download/access")
+async def download_access(file_id: UUID, service: MediaService = Depends(get_media_service),
+                          tasks=Depends(get_file_task_service), user=Depends(required_user)):
+    record, _, _ = await service.download(file_id)
+    await tasks.authorize_file(file_id, record.task_id, user)
+    return JSONResponse(success_response(issue_resource_access(user.id, user.auth_version, "file_download", file_id)),
+                        headers={"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer"})

@@ -14,8 +14,90 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+it("restores each user's videos and tasks without overwriting their saved cache", async () => {
+  vi.spyOn(api, "create").mockResolvedValue({
+    task_id: "owned-job",
+    status: "queued",
+  });
+  const store = createWorkspace();
+  store.switchUser("user-a");
+  store.remember("https://example.com/video", metadata, false, {
+    transcriptId: "saved-transcript",
+  });
+  await store.create(store.videos[0]!, "ai_summary", "总结");
+  store.stopAll();
+  const reloaded = createWorkspace();
+  reloaded.switchUser("user-a");
+  expect(reloaded.videos[0]?.results?.transcriptId).toBe("saved-transcript");
+  expect(reloaded.tasks[0]?.id).toBe("owned-job");
+  reloaded.switchUser("user-b");
+  expect(reloaded.videos).toEqual([]);
+  expect(reloaded.tasks).toEqual([]);
+  reloaded.switchUser("user-a");
+  expect(reloaded.videos[0]?.metadata.title).toBe(metadata.title);
+  expect(reloaded.tasks[0]?.id).toBe("owned-job");
+  reloaded.stopAll();
+});
+
+it("throttles progress storage, immediately saves terminal results and flushes before switching users", async () => {
+  vi.useFakeTimers();
+  const { createTaskTracker } = await import("../lib/taskTracker");
+  const store = createWorkspace();
+  store.switchUser("user-a");
+  store.remember("https://example.com/video", metadata);
+  vi.spyOn(api, "create").mockResolvedValue({
+    task_id: "progress-job",
+    status: "queued",
+  });
+  await store.create(store.videos[0]!, "download", "下载");
+  const callbacks = vi.mocked(createTaskTracker).mock.calls.at(-1)![1];
+  const event = {
+    task_id: "progress-job",
+    status: "running" as const,
+    progress: 1,
+    seq: 1,
+    stage: "downloading",
+    error_code: null,
+    updated_at: "2026-10-28",
+  };
+  callbacks.onEvent(event);
+  const writes = vi.spyOn(localStorage, "setItem");
+  for (let seq = 2; seq <= 8; seq++)
+    callbacks.onEvent({ ...event, seq, progress: seq });
+  expect(store.tasks[0]?.event.progress).toBe(8);
+  expect(writes).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(writes).toHaveBeenCalledTimes(2);
+  callbacks.onEvent({ ...event, seq: 9, progress: 9 });
+  store.switchUser("user-b");
+  expect(
+    JSON.parse(localStorage.getItem("videohub.tasks.v1:user-a")!)[0].event
+      .progress,
+  ).toBe(9);
+  // A late callback from the old identity must not write to the new account.
+  callbacks.onEvent({ ...event, seq: 10, progress: 10 });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(localStorage.getItem("videohub.tasks.v1:user-b")).toBeNull();
+  store.switchUser("user-a");
+  const current = vi.mocked(createTaskTracker).mock.calls.at(-1)![1];
+  writes.mockClear();
+  current.onEvent({
+    ...event,
+    status: "completed",
+    stage: "completed",
+    progress: 100,
+    seq: 11,
+  });
+  expect(writes).toHaveBeenCalledTimes(2);
+  expect(
+    JSON.parse(localStorage.getItem("videohub.tasks.v1:user-a")!)[0].event
+      .status,
+  ).toBe("completed");
+  store.stopAll();
 });
 const metadata: VideoParseResult = {
   platform: "demo",

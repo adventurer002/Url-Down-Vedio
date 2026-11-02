@@ -1,5 +1,4 @@
 import asyncio
-from dataclasses import asdict
 import hashlib
 import hmac
 import logging
@@ -19,6 +18,7 @@ from app.core.exceptions import AppException
 from app.core.response import success_response
 from app.modules.auth.dependencies import get_auth_service, required_user
 from app.modules.auth.service import redis_call
+from app.modules.auth.repository import public_user
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ async def mock_confirm(scene_id: UUID, service=Depends(get_auth_service)):
 
 @router.get("/me")
 async def me(user=Depends(required_user)):
-    return success_response(asdict(user))
+    return success_response(public_user(user))
 
 
 @router.post("/logout")

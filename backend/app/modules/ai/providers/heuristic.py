@@ -12,7 +12,15 @@ class HeuristicLLMProvider:
     async def generate(self, request: LLMRequest) -> LLMResult:
         context = request.context
         chinese = request.output_language.startswith("zh")
-        if request.purpose == "question":
+        if request.purpose == "clip_map":
+            # Explicit development-only excerpt baseline; never presented as real LLM quality.
+            units = context["units"]
+            content = {"candidates": [{"start_unit": units[0]["id"], "end_unit": units[-1]["id"],
+                "title": "离线摘录示例", "reason": "开发验收摘录，不代表真实精选判断", "topic": "摘录",
+                "completeness": .7, "standalone": .7, "information": .5, "hook": .3}] if units else [], "reason": ""}
+        elif request.purpose == "clip_rank":
+            content = {"candidate_ids": [item["id"] for item in context["candidates"]]}
+        elif request.purpose == "question":
             evidence = context.get("evidence", [])
             content = {"answer": "本地摘录模式，仅展示相关原文：" + (evidence[0]["quote"] if evidence else "未找到依据"),
                 "evidence_ids": [1] if evidence else [], "insufficient_evidence": not bool(evidence)}

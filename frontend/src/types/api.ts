@@ -45,6 +45,8 @@ export interface TaskEvent {
   updated_at: string;
 }
 export interface TaskResultPayload {
+  upload_id?: string;
+  video_id?: string;
   file_id?: string;
   download_url?: string;
   transcript_id?: string;
@@ -55,6 +57,10 @@ export interface TaskResultPayload {
   result_type?: "summary" | "mindmap";
   summary_result_id?: string;
   answer_id?: string;
+  clip_plan_id?: string;
+  clip_export_id?: string;
+  file_ids?: string[];
+  outcome?: "highlights" | "no_highlights";
   reused?: boolean;
   [key: string]: unknown;
 }
@@ -157,13 +163,17 @@ export type JobKind =
   | "transcription"
   | "ai_summary"
   | "ai_mindmap"
-  | "ai_question";
+  | "ai_question"
+  | "ai_clip_plan"
+  | "clips_export";
 
 export interface HistoryVideo {
   id: string;
-  platform: string;
-  platform_video_id: string;
-  source_url: string;
+  platform: string | null;
+  platform_video_id: string | null;
+  source_url: string | null;
+  source_kind?: "link" | "upload";
+  media_type?: "audio" | "video";
   title: string;
   duration: number | null;
   thumbnail: string | null;

@@ -1,9 +1,23 @@
 # VideoHub AI 前端 · React 迁移版
 
+精彩切片 F1、F1.1 和 F2 已完成：分析报价、候选审阅、视频生成、逐条下载与历史恢复，见 [F2 交付说明](CLIPS_F2.md)。发布模板的创建入口默认关闭；本地开发可在 `frontend/.env.local` 配置 `VITE_CLIPS_ENABLED=true`，或使用 `VITE_CLIPS_ENABLED=true pnpm dev`。该分区位于导入内容后的内容工作台，不是首页顶级导航。服务端仍需启用 `CLIPS_ENABLED`，视频生成还需配置定位模型。
+
+切片时长现默认由 AI 按语义完整性判断，固定秒数为可选模式；兼容与验收见 [自动时长交付说明](../backend/CLIPS_AUTO_DURATION.md)。
+
+最新的落地页审查前四项修复与验收，见 [慢加载、故障保留、对比度与横屏适配](LANDING_AUDIT_FIXES.md)。整页布局、内容与交互优化记录见 [落地页整体优化与验收](LANDING_REFINEMENT.md)。
+
+落地页 GooeyNav 导航与 FoldText 标题动效的修改文件、启动命令和验收结果，见 [落地页导航与标题动效](LANDING_MOTION.md)。
+
+整体检查后新增的额度刷新、历史清空确认、后台状态用词、切页体验及短期访问凭证，见 [本轮交付说明](EXPERIENCE_RELIABILITY.md)。
+
 React 19 + TypeScript + Vite + React Router + Tailwind CSS v4（`@tailwindcss/vite`）。
 共享状态通过 React Context + `useSyncExternalStore` 订阅；Axios 统一响应与错误处理；Markmap 按需加载。
 Vitest 验证请求契约、任务追踪及 React 页面交互。
 无示例数据注入生产代码，所有业务操作调用现有 `/api/v1`。
+
+最新一轮的缓存恢复、登录连续性、长文稿工具、手机导航与首屏分包优化，见 [前端优化交付与验收说明](FRONTEND_OPTIMIZATION.md)。
+
+桌面正文、操作入口及辅助文字的字号、对比度和行高调整，见 [桌面字体交付与验收说明](DESKTOP_TYPOGRAPHY.md)。
 
 ## 启动
 
@@ -80,8 +94,9 @@ Vitest 覆盖：SSE 严格版本去重、四种终态关闭、同序号终态结
 GET 失败重试、404 停止、错误任务 ID、订阅清理、Redis 降级 `seq=0`、响应解包、错误规范化、
 请求体契约、受控文件地址、树转 Markdown、视频元数据持久化、重复任务防护及入队失败重试。
 
-`dist/` 是静态发布产物。服务器需将 `/video/*` 回退至 `index.html`（React Router BrowserRouter 模式），
-例如 Nginx `try_files $uri $uri/ /index.html;`。生产 API 使用 HTTPS，并配置对应 CORS 来源。
+`dist/` 包含公开页面的独立 HTML；原解析入口为 `/app`，`/video/*` 等产品页面回退到 `app-shell.html`，不存在的路径保留 404。
+服务器配置参考 `backend/deploy/openresty-api.conf`，不要将全部路径回退到首页。生产 API 使用 HTTPS，并配置对应 CORS 来源。
+落地页、SEO/GEO、原创素材与验证说明见 [LANDING_PAGE.md](./LANDING_PAGE.md)。
 Markmap 解析器与渲染器分包，仅在导图生成后加载。
 
 ## 文件清单
@@ -226,7 +241,7 @@ TypeScript + Tailwind 源码。品牌图标使用 `react-icons/si`，按需打�
 
 ## 首页登录拦截与 StarBorder 登录入口
 
-未登录、未关注或账户停用时，点击首页视频输入框、开始解析、任务历史均打开同一个公众号登录卡片；键盘输入、粘贴和表单提交也经过相同入口检查。输入框在登录前只读，已关注并登录后正常输入解析。关闭卡片恢复焦点时不会再次自动弹出。后端报告取关或凭证失效时，清除当前凭证并重新打开登录卡片；账户恢复探测失败不会在页面首次打开时强制弹窗。
+首页允许未登录用户先输入和粘贴链接，提交有效链接或打开任务历史时再检查登录。登录完成后保留链接，由用户再次点击“开始解析”；关闭卡片恢复焦点时不会再次自动弹出。活跃账户取关后仍可访问已有结果和付费额度，免费新下载由后端检查关注状态。凭证失效时清除凭证并提示登录；账户恢复中的业务提交暂时禁用，网络恢复失败显示“重新连接”，不会自动弹出新的登录卡片。
 
 顶栏将“关注公众号登录”改为“登录”，使用用户提供的 React Bits `StarBorder.tsx`（浅色、黑色流光、4 秒一圈），保留现有二维码与口令登录流程。动画在标签页隐藏时暂停，减少动态效果模式使用静态边框；旧浏览器缺少 Canvas/Observer 时仍保留可点击登录按钮。
 
@@ -298,3 +313,63 @@ uv run pytest
 浏览器成功数据使用独立 schema 的离线样本，未调用付费模型，样本不进入业务数据。
 
 本阶段最终验证：前端 **79 项通过**、后端 **284 项通过**，类型检查、生产构建与迁移一致性检查通过。独立离线浏览器样本已验证工作台引用跳转及 375px 无横向溢出；预览不代表真实云模型效果。
+
+## 备案期间的服务器版本内部预览
+
+前提：Mac的SSH隧道127.0.0.1:18000 → 服务器127.0.0.1:8000保持打开，服务器端已成功部署。此模式不会开放公网网站或修改生产CORS。
+
+在项目根目录下载当前部署的前端静态文件（不会下载任何.env）：
+
+```sh
+mkdir -p .runtime/server-preview
+scp -i ~/.ssh/videohub_actions -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -r videohub-deploy@129.28.26.221:/opt/videohub/current/frontend/dist .runtime/server-preview/
+```
+
+然后在frontend目录启动本机预览：
+
+```sh
+node node_modules/vite/bin/vite.js preview --config vite.server-preview.config.ts
+```
+
+打开http://127.0.0.1:5175，静态页面来自下载的部署版本，/api/v1请求经过本地代理与SSH隧道到真实服务器；SSE及下载也沿同一路径。Ctrl+C停止预览，SSH窗口需另行Ctrl+C关闭。刷新/subscription等路由由Vite预览提供SPA回退。
+
+这是内部测试工具，不用于公网生产托管。真实任务使用服务器账号和额度，可能调用付费模型；仅打开页面不创建AI任务。公众号公网回调仍需原有可用回调配置，隧道不会把本机18000端口暴露给微信，不提供生产mock登录绕过。服务器新版部署后重新下载静态文件再启动预览；如需核实版本，可读取服务器current/release.json的commit。下载缓存位于被Git忽略的.runtime，不要提交。
+
+## 管理后台前端（2026-10-26）
+
+`/admin` 已接入概览、用户管理、会员与额度、任务管理、操作审计和存储与服务六个入口。
+沿用 React、TanStack Query、Radix Dialog/Dropdown Menu 和独立样式，后端保持模块化单体。
+账号停用/恢复、固定产品人工发放、协作取消和过期文件清理均接入原因、明确确认、原编号核对及审计回执。
+`/settings` 只向活跃管理员提供存储管理链接，不再直接执行全局清理。
+
+本地源码验收：**http://127.0.0.1:5176/admin**，配套 **18766 临时数据后端**，不连接生产。
+启动命令、修改清单、curl/Swagger 验证和最终结果见 [阶段 4–5 交付与最终检查](ADMIN_FRONTEND_FINAL.md)。
+前端 160 项、后端 338 项和 31 个隔离 HTTP 检查通过；类型检查与构建通过。
+真实浏览器视觉验收受工具已保存的访问权限限制尚未完成；生产未部署。
+5175 仍是上文服务器发布版本预览的独立方案，本轮没有启动该预览或 SSH 隧道。
+
+历史阶段记录：[阶段 1](ADMIN_FRONTEND_STAGE_1.md)、[阶段 2](ADMIN_FRONTEND_STAGE_2.md)、[阶段 3](ADMIN_FRONTEND_STAGE_3.md)。
+
+2026-10-27 根据手测完善加载、弹窗居中、列表摘要与快捷筛选，并修复分页恢复、刷新失败保留和焦点问题。前端现为 **171 项通过**；详见 [交互完善与验证](ADMIN_UI_REFINEMENT.md)。
+
+
+## 思维导图配色与直角连线（2026-10-31）
+
+已有导图现在按一级分支着色，用字号、背景和线宽区分层级，连接线改为直角折线。保留缩放、平移和展开收起，并支持键盘操作；SVG 导出保留配色和当前展开内容，不受屏幕缩放裁切影响。无需重新生成导图或消耗额度。
+
+修改清单、启动命令、curl / Swagger 验证、格式说明与测试结果见 [导图交付说明](MINDMAP_STYLE.md)。本轮前端 232 项、后端 360 项测试通过，类型检查与生产构建通过。
+
+
+## 首页输入框与广告占位（2026-10-31）
+
+`/app` 的链接输入区改为白底、细灰边框和一体式圆角布局；输入框自身不再显示绿色焦点边框，由外框提供中性的灰色聚焦反馈。按钮的圆角、尺寸及禁用态同步优化；手机端使用输入行与全宽按钮两行布局。链接输入关闭自动大写、自动纠正和拼写检查，原有校验、登录、提交和失败重试逻辑保持。
+
+静态广告展示位固定贴在视口底部，最大宽度 560px，桌面高度 88px、手机高度 72px（另计设备安全区），右上角提供 X 关闭按钮。页面预留底部空间避免遮挡内容，关闭广告时同步释放；刷新页面后恢复展示。当前没有广告 SDK、外部请求或点击跳转。
+
+主内容在页面就绪后自动获焦产生的蓝色轮廓已移除，保留原有焦点管理以及输入框、按钮的键盘焦点提示。登录状态恢复失败提醒改为浅橙背景、橙色边框及警告图标，重连按钮使用同色系。提醒固定在右上方，最大宽度 420px，层级高于普通导航和正文，不再占用页面布局；手机端按屏幕宽度及安全区收窄。右上角 X 可关闭当前提醒，关闭不清除登录错误或改变操作权限；重新尝试恢复后如仍失败会再次提醒。短暂淡入动效遵守系统减少动态效果设置。
+
+修改文件：`src/views/HomeView.tsx`、新增 `src/home.css`、`src/PublicApp.tsx`、`src/components/Icon.tsx`、`src/workspace.css` 及本文。在 `frontend/` 执行 `npm run dev`，访问 http://127.0.0.1:5173/app；用鼠标和 Tab 检查输入及按钮焦点，检查空链接、非法链接、登录与解析流程、登录恢复失败提醒，并检查底部广告关闭和空间释放。HTTP 验证：`curl --max-time 10 -I http://127.0.0.1:5173/app`。本轮没有修改 API，Swagger 验证沿用原流程。
+
+验证：`npm run type-check`、`npm run build`（含公开静态文档检查）及 `npm run test:unit -- src/tests/reactApp.test.tsx src/tests/auth.test.tsx src/tests/frontendExperience.test.tsx`（52 项）通过。真实浏览器截图未在本轮复核。
+
+悬浮提醒调整复核：`npm run type-check`、`npm run build` 及 `npm run test:unit -- src/tests/reactApp.test.tsx src/tests/auth.test.tsx`（44 项）通过，`/app` HTTP 检查返回 200。手动检查提醒不推挤正文、点击 X 后消失，以及重连成功后不再显示提醒；本轮未复核浏览器截图。

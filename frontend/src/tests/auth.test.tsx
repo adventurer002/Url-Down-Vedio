@@ -17,7 +17,12 @@ import {
 } from "../stores/auth";
 import WeChatLoginModal from "../components/auth/WeChatLoginModal";
 import { api } from "../api";
-import { client, authenticatedUrl, get } from "../api/client";
+import {
+  client,
+  authenticatedUrl,
+  resourceAccessUrl,
+  get,
+} from "../api/client";
 const session: LoginSession = {
   scene_id: "scene-test",
   mode: "mock",
@@ -134,14 +139,19 @@ it("stops polling on expiry and cleans up on unmount", async () => {
   expect(signal.aborted).toBe(true);
   expect(vi.getTimerCount()).toBe(0);
 });
-it("adds credentials to API and native stream/download URLs", async () => {
+it("keeps login credentials in API headers and exchanges scoped tickets for native URLs", async () => {
   authStore.accept(authenticated);
   const original = client.defaults.adapter;
   client.defaults.adapter = async (config) => {
     expect(config.withCredentials).toBe(true);
     expect(config.headers.Authorization).toBe("Bearer token-a");
     return {
-      data: { data: { ok: true } },
+      data: {
+        data:
+          config.method === "post"
+            ? { access_token: "scoped-ticket" }
+            : { ok: true },
+      },
       status: 200,
       statusText: "OK",
       headers: {},
@@ -150,13 +160,35 @@ it("adds credentials to API and native stream/download URLs", async () => {
   };
   try {
     expect(await get("/auth/me")).toEqual({ ok: true });
+    for (const path of ["/tasks/test/events", "/files/test/download"]) {
+      expect(new URL(authenticatedUrl(path)).search).toBe("");
+      const url = new URL(await resourceAccessUrl(path));
+      expect(url.searchParams.get("token")).toBeNull();
+      expect(url.searchParams.get("access_token")).toBe("scoped-ticket");
+      expect(url.href).not.toContain("token-a");
+    }
   } finally {
     client.defaults.adapter = original;
   }
-  for (const path of ["/tasks/test/events", "/files/test/download"])
-    expect(new URL(authenticatedUrl(path)).searchParams.get("token")).toBe(
-      "token-a",
-    );
+});
+
+it("discards a resource ticket if the account changes while it is being issued", async () => {
+  authStore.accept(authenticated);
+  let resolve!: (value: { data: { access_token: string } }) => void;
+  vi.spyOn(client, "post").mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const pending = resourceAccessUrl("/files/test/download");
+  authStore.accept({
+    ...authenticated,
+    access_token: "token-b",
+    user: { ...authenticated.user!, id: "user-b" },
+  });
+  resolve({ data: { access_token: "old-ticket" } });
+  await expect(pending).rejects.toMatchObject({ code: "SESSION_CHANGED" });
 });
 it("switches identity and ignores old pending history responses", async () => {
   const workspace = createWorkspace();
@@ -267,5 +299,34 @@ it("keeps the session when free entitlement requires following again", async () 
   } finally {
     client.defaults.adapter = original;
     authStore.close();
+  }
+});
+
+it("does not open a second login while the existing session is being restored", async () => {
+  const original = client.defaults.adapter;
+  let finish!: () => void;
+  client.defaults.adapter = async (config) =>
+    new Promise((resolve) => {
+      finish = () =>
+        resolve({
+          data: { data: authenticated.user },
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          config,
+        });
+    });
+  try {
+    const pending = authStore.restore();
+    expect(authStore.getState().restoring).toBe(true);
+    expect(authStore.requireLogin()).toBe(false);
+    expect(authStore.getState().modalOpen).toBe(false);
+    await act(async () => {});
+    finish();
+    await pending;
+    expect(authStore.getState().restoring).toBe(false);
+    expect(authStore.hasAccess()).toBe(true);
+  } finally {
+    client.defaults.adapter = original;
   }
 });

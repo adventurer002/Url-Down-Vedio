@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /Users/edgar/Desktop/项目/videohub_ai/frontend
+
+(node:26242) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/clips.test.tsx (75 tests) 3811ms
+
+ Test Files  1 passed (1)
+      Tests  75 passed (75)
+   Start at  17:48:47
+   Duration  4.94s (transform 282ms, setup 0ms, collect 497ms, tests 3.81s, environment 310ms, prepare 71ms)
+
+JUNIT report written to /Users/edgar/Desktop/项目/videohub_ai/backend/reviews/clips-auto-frontend-focused.xml

@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import type { Markmap } from "markmap-view";
 import type { MindMapResult } from "../types/api";
 import { treeToMarkdown, downloadText } from "../utils";
+import { serializeMindmapSvg } from "../lib/mindmapTheme";
 import Icon from "./Icon";
 export default function MindMapViewer({ result }: { result: MindMapResult }) {
   const svg = useRef<SVGSVGElement>(null),
     map = useRef<Markmap | undefined>(undefined);
   const [error, setError] = useState(""),
     [loading, setLoading] = useState(false),
+    [ready, setReady] = useState(false),
     [attempt, setAttempt] = useState(0);
   const markdown =
     result.markdown_export || treeToMarkdown(result.content_json);
@@ -23,35 +25,35 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
   }
   useEffect(() => {
     let disposed = false,
-      rendering = false;
+      rendering = false,
+      rendered = false;
+    setReady(false);
     async function render() {
       if (disposed || rendering || !sizeCanvas()) return;
       rendering = true;
       setLoading(true);
       setError("");
       try {
-        const [{ Transformer }, { Markmap }] = await Promise.all([
+        const [{ Transformer }, { createMindmap }] = await Promise.all([
           import("markmap-lib"),
-          import("markmap-view"),
+          import("../lib/mindmapRenderer"),
         ]);
         if (disposed || !svg.current || !sizeCanvas()) return;
         map.current?.destroy();
         const transformer = new Transformer();
         transformer.md.set({ html: false });
         const { root } = transformer.transform(markdown);
-        map.current = Markmap.create(
-          svg.current,
-          {
-            color: () => "#222222",
-            duration: 0,
-            autoFit: false,
-            maxWidth: 190,
-            paddingX: 14,
-            initialExpandLevel: 3,
-          },
-          root,
-        );
-        await map.current.fit();
+        const instance = createMindmap(svg.current, () => {
+          if (!disposed) setError("节点调整失败，请重新渲染。");
+        });
+        map.current = instance;
+        await instance.setData(root);
+        if (disposed || map.current !== instance) return;
+        await instance.fit();
+        if (!disposed) {
+          rendered = true;
+          setReady(true);
+        }
       } catch {
         if (!disposed)
           setError("导图暂时无法渲染，请重试；仍可导出 Markdown。");
@@ -61,8 +63,8 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
       }
     }
     const observer = new ResizeObserver(() => {
-      if (disposed || !sizeCanvas()) return;
-      if (map.current)
+      if (disposed || rendering || !sizeCanvas()) return;
+      if (map.current && rendered)
         void map.current.fit().catch(() => {
           if (!disposed) setError("画布调整失败，请重新渲染。");
         });
@@ -86,25 +88,21 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
       setError("画布调整失败，请重新渲染。");
     }
   }
-  function exportSvg() {
-    if (!svg.current || !map.current) return;
-    const clone = svg.current.cloneNode(true) as SVGSVGElement,
-      box = svg.current.getBoundingClientRect();
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    clone.setAttribute("width", String(Math.max(600, box.width)));
-    clone.setAttribute("height", String(Math.max(500, box.height)));
-    const style = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "style",
-    );
-    style.textContent =
-      ".markmap{font:14px sans-serif;color:#222}.markmap-foreign{line-height:1.5}.markmap-link{fill:none;stroke:#444}.markmap-node circle{fill:#fff;stroke:#222}.markmap-foreign p{margin:0} a{color:inherit}";
-    clone.prepend(style);
-    downloadText(
-      new XMLSerializer().serializeToString(clone),
-      "videohub-mindmap.svg",
-      "image/svg+xml;charset=utf-8",
-    );
+  async function exportSvg() {
+    if (!svg.current || !map.current || !ready) return;
+    const instance = map.current;
+    try {
+      await instance.renderData();
+      if (!svg.current || map.current !== instance) return;
+      downloadText(
+        serializeMindmapSvg(svg.current, instance.state.rect),
+        "videohub-mindmap.svg",
+        "image/svg+xml;charset=utf-8",
+      );
+    } catch {
+      if (map.current === instance)
+        setError("SVG 导出失败，请重新渲染；仍可导出 Markdown。");
+    }
   }
   return (
     <div className="mindmap-viewer">
@@ -114,6 +112,7 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
             className="icon-button"
             title="放大"
             aria-label="放大"
+            disabled={!ready || loading}
             onClick={() => void adjust(1.25)}
           >
             <Icon name="plus" size={17} />
@@ -122,6 +121,7 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
             className="icon-button"
             title="缩小"
             aria-label="缩小"
+            disabled={!ready || loading}
             onClick={() => void adjust(0.8)}
           >
             <Icon name="minus" size={17} />
@@ -130,6 +130,7 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
             className="icon-button"
             title="适应画布"
             aria-label="适应画布"
+            disabled={!ready || loading}
             onClick={() => void adjust()}
           >
             <Icon name="fit" size={17} />
@@ -153,8 +154,8 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
           <button
             className="export-button"
             title="下载 SVG 矢量图"
-            disabled={loading || !!error}
-            onClick={exportSvg}
+            disabled={!ready || loading || !!error}
+            onClick={() => void exportSvg()}
           >
             <Icon name="download" size={15} />
             <span>SVG</span>
@@ -175,7 +176,7 @@ export default function MindMapViewer({ result }: { result: MindMapResult }) {
       )}
       <svg
         ref={svg}
-        className="mindmap-svg"
+        className="mindmap-svg videohub-mindmap"
         viewBox="0 0 640 480"
         width="640"
         height="480"
