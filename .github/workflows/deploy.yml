@@ -109,5 +109,5 @@ jobs:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           CI_RUN_ID: ${{ steps.release.outputs.run_id }}
         run: |
-          printf 'Deployed commit: `%s`\n\nCI run: `%s`\n\nBackend checked; frontend staged pending website setup.\n' \
+          printf 'Deployed commit: `%s`\n\nCI run: `%s`\n\nBackend checked; frontend publication status is recorded in the deployment log.\n' \
             "$RELEASE_SHA" "$CI_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
