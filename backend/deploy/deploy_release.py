@@ -23,6 +23,7 @@ import urllib.request
 BASE = Path('/opt/videohub')
 STATE = Path('/var/lib/videohub-deploy')
 INCOMING = Path('/home/videohub-deploy/incoming')
+SITE = Path('/opt/1panel/www/sites/vedio.vip')
 UNITS = ['videohub-api.service', 'videohub-worker.service']
 TIMERS = ['videohub-cleanup.timer', 'videohub-reconcile.timer']
 JOBS = ['videohub-cleanup.service', 'videohub-reconcile.service']
@@ -82,6 +83,102 @@ def switch(target):
     temporary.replace(BASE / 'current')
 
 
+def publish_frontend(release, manifest):
+    """Mirror verified public files inside the existing /www mount and switch index.
+
+    No website yet: keep staging-only behavior. Existing site: failures fail deployment.
+    Private backend files and storage are never copied into the website.
+    """
+    if not SITE.exists():
+        return False
+    if SITE.is_symlink() or not SITE.is_dir():
+        raise ValueError('Website path must be an ordinary directory')
+    if not re.fullmatch('[0-9a-f]{40}', manifest.get('commit', '')):
+        raise ValueError('Invalid website release commit')
+    selected = {name.removeprefix('frontend/dist/'): digest
+                for name, digest in manifest['files'].items() if name.startswith('frontend/dist/')}
+    if 'index.html' not in selected:
+        raise ValueError('Frontend index is missing')
+    contents = {}
+    for name, digest in selected.items():
+        relative = PurePosixPath(name)
+        if relative.is_absolute() or '..' in relative.parts or str(relative) != name or any(
+                part.startswith('.') for part in relative.parts):
+            raise ValueError('Invalid public file path')
+        source = release / 'frontend/dist' / name
+        if source.is_symlink() or any(parent.is_symlink() for parent in source.parents if parent != release and release in parent.parents):
+            raise ValueError('Frontend source links are forbidden')
+        data = source.read_bytes()
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError('Frontend source checksum mismatch')
+        contents[name] = data
+    versions = SITE / '.videohub-releases'
+    if versions.is_symlink():
+        raise ValueError('Website versions directory cannot be a symlink')
+    versions.mkdir(mode=0o755, exist_ok=True)
+    versions.chmod(0o755)
+    target = versions / f'{manifest["commit"]}-{time.time_ns()}'
+    target.mkdir(mode=0o755)
+    target.chmod(0o755)
+    for name, data in contents.items():
+        path = target / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for parent in path.parents:
+            if parent == target:
+                break
+            parent.chmod(0o755)
+        path.write_bytes(data)
+        path.chmod(0o644)
+    # Keep hashed assets from the previous website for already-open browser tabs.
+    index = SITE / 'index'
+    if index.is_symlink():
+        old = index.resolve(strict=True)
+        if old.parent != versions:
+            raise ValueError('Existing website index points outside managed versions')
+    elif index.is_dir():
+        old = index
+    else:
+        raise ValueError('Website index directory does not exist')
+    old_assets = old / 'assets'
+    retained_bytes = sum(len(data) for data in contents.values())
+    if old_assets.is_dir() and not old_assets.is_symlink():
+        for source in old_assets.rglob('*'):
+            if source.is_symlink():
+                raise ValueError('Previous website assets contain links')
+            if source.is_file():
+                relative_asset = source.relative_to(old_assets)
+                if any(part.startswith('.') for part in relative_asset.parts) or not re.fullmatch(
+                        r'[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{6,}\.[A-Za-z0-9.]+', source.name):
+                    continue
+                path = target / 'assets' / relative_asset
+                if not path.exists():
+                    retained_bytes += source.stat().st_size
+                    if retained_bytes > MAX_BYTES:
+                        raise ValueError('Retained website assets exceed size limit; operator cleanup required')
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    for parent in path.parents:
+                        if parent == target:
+                            break
+                        parent.chmod(0o755)
+                    shutil.copyfile(source, path)
+                    path.chmod(0o644)
+    temporary = SITE / '.videohub-index.next'
+    temporary.unlink(missing_ok=True)
+    temporary.symlink_to(target.relative_to(SITE), target_is_directory=True)
+    original = None
+    if not index.is_symlink():
+        # One-time conversion from 1Panel's initial directory. Preserve it intact.
+        original = SITE / f'.videohub-initial-index-{time.time_ns()}'
+        index.rename(original)
+    try:
+        temporary.replace(index)
+    except Exception:
+        if original is not None and not index.exists() and not index.is_symlink():
+            original.rename(index)
+        raise
+    return True
+
+
 def healthy(started=None):
     deadline = time.monotonic() + 60
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -135,7 +232,8 @@ def deploy(commit, expected_digest):
         raise ValueError('Current release must be inside the managed releases directory')
     if old and json.loads((old / 'release.json').read_text())['commit'] == commit:
         healthy()
-        print('This version is already active; no migration or restart performed', flush=True)
+        published = publish_frontend(old, json.loads((old / 'release.json').read_text()))
+        print(f'This version is already active; frontend {"published" if published else "staged"}; no migration or restart performed', flush=True)
         return
     release = BASE / 'releases' / f'{commit}-{time.time_ns()}'
     release.mkdir(parents=True, mode=0o755)
@@ -195,9 +293,10 @@ def deploy(commit, expected_digest):
         started = int(time.time())
         run(['systemctl', 'start', *UNITS], timeout=90)
         healthy(started)
+        published = publish_frontend(release, manifest)
         run(['systemctl', 'start', *TIMERS], timeout=30)
         record(commit, 'success', previous=str(old) if old else None, backup=str(backup))
-        print(f'Deployment successful: {commit}; API ready and Worker ready; frontend staged only', flush=True)
+        print(f'Deployment successful: {commit}; API ready and Worker ready; frontend {"published" if published else "staged (no website configured)"}', flush=True)
     except Exception:
         # Do not let a failed new worker consume tasks while investigating.
         try:
@@ -215,6 +314,7 @@ def deploy(commit, expected_digest):
             started = int(time.time())
             run(['systemctl', 'start', *UNITS, *TIMERS], timeout=90)
             healthy(started)
+            publish_frontend(old, old_manifest)
             record(commit, 'rolled_back', previous=str(old))
         else:
             record(commit, 'manual_recovery_required', migration_attempted=migration_attempted)
