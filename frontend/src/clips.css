@@ -1,0 +1,528 @@
+.public-app .content-workspace .content-tabs.clip-enabled-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.public-app .clip-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 18px;
+}
+.public-app .clip-body {
+  padding: 24px 30px 30px;
+}
+.public-app .clip-intro {
+  font-size: 16px;
+  line-height: 1.9;
+  color: var(--content-text);
+  margin: 0 0 24px;
+}
+.public-app .clip-strategy {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.public-app .clip-strategy fieldset {
+  padding: 0;
+  border: 0;
+  margin: 0;
+  min-width: 0;
+}
+.public-app .clip-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 24px;
+}
+.public-app .clip-field :is(input, textarea, select) {
+  border: 1px solid var(--content-line);
+  border-radius: 8px;
+  background: white;
+  color: var(--content-ink);
+  padding: 10px 12px;
+  min-height: 44px;
+  width: 100%;
+  font-size: 16px;
+  font-weight: 400;
+}
+.public-app .clip-field textarea {
+  resize: vertical;
+}
+.public-app .clip-field small {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.8;
+  color: var(--content-muted);
+}
+.public-app .clip-duration {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 400;
+}
+.public-app .clip-duration input {
+  min-width: 0;
+  max-width: 140px;
+}
+.public-app .clip-form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  border-top: 1px solid var(--content-line);
+  padding-top: 20px;
+}
+.public-app .clip-form-actions p {
+  font-size: 13px;
+  color: var(--content-muted);
+  line-height: 1.8;
+  margin: 0;
+}
+.public-app .clip-note {
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #f5faf9;
+  color: var(--content-text);
+  font-size: 14px;
+  line-height: 1.9;
+  margin: 0 0 20px;
+}
+.public-app .clip-note p {
+  margin: 0 0 8px;
+}
+.public-app .clip-note button + button {
+  margin-left: 14px;
+}
+.public-app .clip-loading {
+  padding: 24px 0;
+  color: var(--content-muted);
+}
+.public-app .clip-new-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--accent-surface);
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+.public-app .clip-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+  font-size: 14px;
+}
+.public-app .clip-list-heading span {
+  color: var(--content-muted);
+  font-size: 13px;
+}
+.public-app .clip-candidates-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 24px;
+  align-items: start;
+}
+.public-app .clip-candidates {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.public-app .clip-candidate {
+  border: 1px solid var(--content-line);
+  border-radius: 10px;
+  padding: 18px 20px;
+  min-width: 0;
+}
+.public-app .clip-candidate.current {
+  border-left: 3px solid var(--accent-color);
+  padding-left: 18px;
+}
+.public-app .clip-candidate.selected {
+  border-color: var(--accent-color);
+  background: var(--accent-surface);
+}
+.public-app .clip-candidate-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.public-app .clip-candidate-title h3 {
+  flex: 1;
+  min-width: 0;
+}
+.public-app .clip-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-height: 36px;
+  flex: none;
+  margin: -3px 0 0 -8px;
+  cursor: pointer;
+}
+.public-app .clip-select input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-color);
+}
+.public-app .clip-select input:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 4px;
+}
+.public-app .clip-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 20px 0 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--content-line);
+  background: white;
+}
+.public-app .clip-selection-bar strong {
+  font-size: 16px;
+}
+.public-app .clip-selection-bar p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--content-muted);
+}
+.public-app .clip-selection-bar .button {
+  flex: none;
+}
+.public-app .clip-export-summary {
+  padding: 12px 16px;
+  background: var(--content-soft);
+  border-radius: 8px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.public-app .clip-export-summary ul {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.8;
+  font-size: 15px;
+}
+.public-app .clip-export-summary p {
+  font-size: 13px;
+  color: var(--content-muted);
+  margin: 10px 0 0;
+}
+.public-app .clip-delivery {
+  margin-top: 28px;
+}
+.public-app .clip-delivery:empty {
+  display: none;
+}
+.public-app .clip-delivery-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.public-app .clip-delivery-heading h3 {
+  font-size: 20px;
+  margin: 0;
+}
+.public-app .clip-delivery-heading p {
+  font-size: 14px;
+  color: var(--content-muted);
+  line-height: 1.8;
+  margin: 6px 0 0;
+}
+.public-app .clip-files {
+  display: grid;
+  gap: 12px;
+}
+.public-app .clip-file {
+  border: 1px solid var(--content-line);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.public-app .clip-file > div {
+  min-width: 0;
+}
+.public-app .clip-file h4 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  margin: 0 0 8px;
+}
+.public-app .clip-file .button {
+  flex: none;
+}
+.public-app :is(.clip-file-meta, .clip-file-expiry) {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--content-muted);
+  margin: 5px 0 0;
+}
+.public-app .clip-download-notice {
+  font-size: 14px;
+  color: var(--accent-color);
+  line-height: 1.8;
+}
+.public-app .clip-download-notice:empty {
+  display: none;
+}
+.public-app .clip-batch-link {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  margin: 18px 0 0;
+  color: var(--content-muted);
+}
+.public-app :is(.clip-candidate, .clip-detail, .clip-original-dialog) h3 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.7;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.public-app .clip-time {
+  color: var(--content-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+.public-app .clip-time > span {
+  font-size: 12px;
+  border: 1px solid var(--content-line);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 9px;
+  white-space: nowrap;
+}
+.public-app .clip-excerpt {
+  margin: 12px 0 8px;
+  font-size: 16px;
+  line-height: 1.9;
+  color: var(--content-text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.public-app .clip-candidate-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--content-muted);
+}
+.public-app .clip-candidate-actions > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.public-app .clip-candidate-actions button {
+  flex: none;
+  color: var(--accent-color);
+}
+.public-app .clip-detail {
+  position: sticky;
+  top: 20px;
+  background: var(--content-soft);
+  padding: 22px;
+  border-radius: 10px;
+  max-height: 72dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.public-app .clip-detail-label {
+  font-size: 13px;
+  color: var(--content-muted);
+  margin: 0 0 12px;
+}
+.public-app :is(.clip-detail, .clip-original-dialog) blockquote {
+  font-size: 17px;
+  line-height: 1.95;
+  margin: 18px 0;
+  color: var(--content-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.public-app .clip-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.public-app .clip-detail-actions :is(button, a) {
+  font-size: 14px;
+}
+.public-app .clip-copy-status {
+  color: var(--accent-color);
+  font-size: 13px;
+  min-height: 20px;
+  margin: 6px 0;
+}
+.public-app .clip-reason {
+  border-top: 1px solid var(--content-line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.public-app .clip-reason h4 {
+  margin: 0 0 5px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.public-app .clip-reason p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--content-muted);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.public-app .clip-original-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  border: 1px solid var(--content-line);
+  border-radius: 12px;
+  padding: 22px;
+  max-width: 620px;
+  width: calc(100% - 32px);
+  max-height: 85dvh;
+  overflow: auto;
+}
+.public-app .clip-original-dialog::backdrop {
+  background: #18181b55;
+}
+.public-app .clip-original-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.public-app .clip-original-dialog h2 {
+  font-size: 20px;
+  margin: 0;
+}
+.public-app .clip-original-dialog > header button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.public-app .clip-empty {
+  max-width: 660px;
+  padding: 30px 0;
+  margin: auto;
+  color: var(--content-text);
+}
+.public-app .clip-empty > svg {
+  color: var(--accent-color);
+  margin-bottom: 14px;
+}
+.public-app .clip-empty h3 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+.public-app .clip-empty p {
+  font-size: 16px;
+  line-height: 1.9;
+}
+@media (max-width: 1023px) {
+  .public-app .clip-candidates-layout {
+    grid-template-columns: 1fr;
+  }
+  .public-app .clip-detail {
+    display: none;
+  }
+}
+@media (max-width: 767px) {
+  .public-app .clip-select {
+    min-width: 44px;
+    min-height: 44px;
+    margin-top: -8px;
+  }
+  .public-app .clip-selection-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px 0 calc(14px + env(safe-area-inset-bottom));
+  }
+  .public-app .clip-review-selection.reading .clip-selection-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+  }
+  .public-app .clip-selection-bar p {
+    font-size: 12px;
+  }
+  .public-app .clip-delivery-heading {
+    flex-wrap: wrap;
+  }
+  .public-app .clip-file {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 14px;
+    gap: 14px;
+  }
+  .public-app .clip-body {
+    padding: 20px 16px 24px;
+  }
+  .public-app .clip-field {
+    margin-bottom: 20px;
+  }
+  .public-app .clip-form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .public-app .clip-form-actions button {
+    width: 100%;
+  }
+  .public-app .clip-candidate {
+    padding: 15px 14px;
+  }
+  .public-app .clip-candidate.current {
+    padding-left: 12px;
+  }
+  .public-app .clip-candidate-actions {
+    gap: 8px;
+  }
+  .public-app .clip-candidate-actions button {
+    font-size: 14px;
+    min-height: 44px;
+  }
+  .public-app .clip-new-result {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .public-app .clip-note {
+    padding: 12px;
+    font-size: 13px;
+  }
+  .public-app .clip-note .button {
+    width: 100%;
+    margin-bottom: 6px;
+  }
+  .public-app .clip-note button + button {
+    margin-left: 0;
+  }
+  .public-app .clip-original-dialog {
+    padding: 18px;
+  }
+  .public-app .clip-entry {
+    justify-content: flex-start;
+  }
+}

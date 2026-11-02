@@ -1,4 +1,5 @@
 import asyncio
+from app.infrastructure.timing import log_queue_wait, stage_timer
 from datetime import timedelta
 from uuid import UUID, uuid4
 
@@ -14,6 +15,7 @@ from app.infrastructure.queue.celery_app import celery_app
 from app.infrastructure.queue.progress_bus import ProgressBus
 from app.infrastructure.storage import LocalStorageAdapter, StorageAdapter
 from app.infrastructure.storage.cleanup import cleanup_expired_files
+from app.infrastructure.storage.retry import wait_for_storage
 from app.modules.download.adapter import DownloadAdapter, YtDlpDownloadAdapter
 from app.modules.media.repository import MediaRecord, MediaRepository
 from app.modules.media.service import safe_filename
@@ -32,6 +34,7 @@ async def execute_download(task_id: UUID, service: TaskService, media: MediaRepo
     if not await database_call(repository.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(repository.get, task_id)).status}
     task = await database_call(repository.get, task_id)
+    log_queue_wait(task)
     progress, status = 0, "running"
     promoted_key = None
     file_id = uuid4()
@@ -58,22 +61,27 @@ async def execute_download(task_id: UUID, service: TaskService, media: MediaRepo
 
     await publish(task)
     try:
-        await cleanup_expired_files(storage, media, repository)
-        with storage.lease():
-            if reuse_result is not None:
+        async def waiting():
+            await on_progress({"stage": "waiting_for_storage", "progress": progress})
+
+        await cleanup_expired_files(storage, media, repository, is_cancel_requested=cancelled, on_wait=waiting)
+        if reuse_result is not None:
+            async with wait_for_storage(storage.lease, is_cancel_requested=cancelled, on_wait=waiting):
                 reused = await reuse_result(task)
                 if reused:
                     task = await database_call(repository.complete_with, task_id, reused, lambda session: None)
                     await publish(task)
                     return {"task_id": str(task_id), "status": task.status}
-            file_limit = task.input_payload.get("allowance", {}).get("limits", {}).get("file_bytes", settings.MAX_FILE_SIZE_MB * 1024 * 1024)
-            # Input streams and merged output coexist. Keep the existing global lease.
-            storage.check_capacity((2 if "allowance" in task.input_payload else 1) * file_limit)
+        file_limit = task.input_payload.get("allowance", {}).get("limits", {}).get("file_bytes", settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+        # Input streams and merged output coexist, but admissions need only a short mutex.
+        async with wait_for_storage(lambda: storage.reservation(task_id, (2 if "allowance" in task.input_payload else 1) * file_limit),
+                is_cancel_requested=cancelled, on_wait=waiting):
             if await cancelled():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)
             directory = storage.create_task_directory(task_id)
-            output = await downloader.download(task.input_payload, directory, is_cancel_requested=cancelled,
-                                               on_progress=on_progress, check_capacity=storage.check_capacity)
+            with stage_timer("download", task_id):
+                output = await downloader.download(task.input_payload, directory, is_cancel_requested=cancelled,
+                                                   on_progress=on_progress, check_capacity=storage.check_capacity)
             if await cancelled():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)
             storage.check_capacity()
@@ -85,7 +93,8 @@ async def execute_download(task_id: UUID, service: TaskService, media: MediaRepo
             expires_at = utcnow() + timedelta(hours=settings.STORAGE_FILE_TTL_HOURS)
             media_record = MediaRecord(file_id, task_id, task.video_id, task.input_payload["preset_id"], promoted_key,
                                        safe_filename(task.input_payload.get("title", "video"), extension),
-                                       "audio/mpeg" if extension == "mp3" else "video/mp4", size, expires_at)
+                                       "audio/mpeg" if extension == "mp3" else "video/mp4", size, expires_at,
+                                       purpose="full_audio" if extension == "mp3" else "full_source")
             result = {"file_id": str(file_id), "download_url": f"/api/v1/files/{file_id}/download",
                       "filename": media_record.filename, "size_bytes": size, "expires_at": expires_at.isoformat()}
             task = await database_call(repository.complete_with, task_id, result,

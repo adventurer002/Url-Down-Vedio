@@ -5,10 +5,13 @@ from app.modules.video.repository import VideoRepository
 
 
 class VideoResolver:
-    def __init__(self, parser: VideoParser, repository: VideoRepository):
-        self.parser, self.repository = parser, repository
+    def __init__(self, parser: VideoParser, repository: VideoRepository, uploads=None):
+        self.parser, self.repository, self.uploads = parser, repository, uploads
 
-    async def resolve(self, url: str) -> dict:
+    async def resolve(self, url: str | None = None, *, upload_id=None, user_id=None) -> dict:
+        if upload_id is not None:
+            from app.modules.uploads.service import upload_service
+            return await (self.uploads or upload_service(self.repository.sessions)).resolve(upload_id, user_id)
         normalized = await validate_url(url)
         existing = await database_call(self.repository.find_by_url, normalized)
         if existing:

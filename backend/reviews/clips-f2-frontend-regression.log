@@ -1,0 +1,136 @@
+
+> videohub-web@0.1.0 test:unit /Users/edgar/Desktop/项目/videohub_ai/frontend
+> vitest run --reporter=default --reporter=junit --outputFile=../backend/reviews/clips-f2-frontend-regression.xml
+
+
+ RUN  v3.2.7 /Users/edgar/Desktop/项目/videohub_ai/frontend
+
+(node:17264) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17259) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17260) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17262) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17263) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17261) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17265) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/adminUsers.test.tsx (8 tests) 1735ms
+   ✓ filters users without conflating subscription, membership or disabled status  537ms
+   ✓ navigates from a filtered user list to details and retains filters on return  346ms
+   ✓ paginates lots and ledger independently and loads ledger only on demand  341ms
+   ✓ does not reuse a previous user's late allowance response  324ms
+ ✓ src/tests/adminExperience.test.tsx (11 tests) 2147ms
+   ✓ shows an animated loading region and skeleton instead of invented zero counts  320ms
+   ✓ keeps current rows visible with explicit refresh feedback until the response arrives  420ms
+ ✓ src/tests/adminLists.test.tsx (14 tests) 2426ms
+   ✓ submits task filters with explicit Beijing timezone and resets pagination  626ms
+   ✓ retains task filters and page when returning from a detail  337ms
+ ✓ src/tests/adminAuditStorage.test.tsx (19 tests) 3057ms
+   ✓ preserves historical accepted outcome beside current completed state and exposes read-only details  581ms
+   ✓ keeps audit filters while paginating and resets pagination on search  399ms
+   ✓ locks accepted cleanup to its original key after remount  356ms
+   ✓ locks outcome_unrecorded cleanup to its original key after remount  341ms
+(node:17312) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17314) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17316) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17318) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/adminWrites.test.tsx (24 tests) 4413ms
+   ✓ requires reason and explicit confirmation and sends the exact optimistic version  575ms
+   ✓ retains the original immutable request after a timeout and retries only on click  300ms
+   ✓ suppresses repeated submissions and preserves pending state when the dialog closes  336ms
+ ✓ src/tests/subscription.test.tsx (12 tests) 1077ms
+   ✓ renders the API catalog, switches addons and shows an unavailable purchase notice  414ms
+ ✓ src/tests/admin.test.tsx (14 tests) 1740ms
+ ✓ src/tests/marketing.test.tsx (18 tests) 1188ms
+ ✓ src/tests/knowledge.test.tsx (7 tests) 658ms
+(node:17320) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/tests/reactApp.test.tsx > deletes a history item and clears the remaining records without cancelling jobs
+Error: Error: Response for preflight has invalid HTTP status code 400
+    at Object.dispatchError (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/xhr/xhr-utils.js:62:19)
+    at EventEmitter.<anonymous> (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:655:18)
+    at EventEmitter.emit (node:events:521:24)
+    at Request.<anonymous> (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/xhr/xhr-utils.js:349:16)
+    at Request.emit (node:events:509:20)
+    at Request._processResponse (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/helpers/http-request.js:240:12)
+    at ClientRequest.<anonymous> (/Users/edgar/Desktop/项目/videohub_ai/frontend/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/helpers/http-request.js:107:12)
+    at Object.onceWrapper (node:events:631:12)
+    at ClientRequest.emit (node:events:509:20)
+    at HTTPParser.parserOnIncomingClient [as onIncoming] (node:_http_client:798:27) undefined
+
+(node:17324) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/frontendExperience.test.tsx (8 tests) 803ms
+   ✓ paginates long transcripts and searches all segments beyond the current page  489ms
+(node:17325) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/mindmapRenderer.test.ts (6 tests) 634ms
+   ✓ uses the real layout and preserves straight colored links through fold/unfold and resize  333ms
+ ✓ src/tests/mindmapViewer.test.tsx (3 tests) 299ms
+ ✓ src/tests/errorNotice.test.tsx (5 tests) 389ms
+ ✓ src/tests/auth.test.tsx (11 tests) 438ms
+(node:17337) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/logoLoop.test.tsx (2 tests) 279ms
+(node:17341) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/downloadSettings.test.tsx (2 tests) 139ms
+ ✓ src/tests/heroBackground.test.tsx (4 tests) 85ms
+ ✓ src/tests/clearHistoryConfirm.test.tsx (2 tests) 199ms
+ ✓ src/tests/workspaceResults.test.tsx (4 tests) 383ms
+(node:17361) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/apiUrl.test.ts (4 tests) 158ms
+(node:17354) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17362) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17357) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/taskPoller.test.ts (14 tests) 76ms
+(node:17365) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/foldText.test.tsx (3 tests) 46ms
+ ✓ src/tests/uploads.test.ts (13 tests) 203ms
+ ✓ src/tests/billingRefresh.test.tsx (6 tests) 99ms
+ ✓ src/tests/workspace.test.ts (10 tests) 21ms
+(node:17367) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/tests/client.test.ts (6 tests) 5ms
+ ✓ src/tests/reactApp.test.tsx (33 tests) 9912ms
+   ✓ parses a URL, navigates to the React workspace and retains metadata after refresh  1018ms
+   ✓ preserves the input and request ID on API errors and allows retry  307ms
+   ✓ reacts to SSE progress, fetches the completed result and exposes the controlled download  816ms
+   ✓ cancels an active task through the store and updates the React task card  607ms
+   ✓ restores a summary and transcript and switches workspace tabs  432ms
+   ✓ retries a failed result request and still loads its transcript  346ms
+   ✓ keeps cleanup in the admin area and settings permissions consistent for anonymous  396ms
+   ✓ keeps service health in the administrator page  540ms
+   ✓ keeps the confirmed quote on a transient submission failure and sends it once on retry  662ms
+   ✓ does not create a task when the user closes an allowance quote  356ms
+   ✓ opens saved transcript and summary in the workspace without depending on task history  643ms
+   ✓ navigates from the account menu to personal allowances and reuses task history  791ms
+ ✓ src/tests/clips.test.tsx (72 tests) 9931ms
+   ✓ does not create a task until consent; then registers one globally and reads completed candidates  917ms
+   ✓ blocks double confirmation while the original request is unresolved  394ms
+   ✓ persists only the uncertain quote ID and recovers the same consent after a lost ACK  503ms
+   ✓ offers an explicit fresh quote after server invalidation, without silently confirming another operation  436ms
+   ✓ F2 keeps selection separate from reading and freezes an explicit export confirmation  344ms
+   ✓ F2 recovers an ACK loss using the exact frozen quote and selection after reload  597ms
+   ✓ F2 settles export confirmation after unmount: success  302ms
+
+ Test Files  28 passed (28)
+      Tests  335 passed (335)
+   Start at  17:03:26
+   Duration  12.75s (transform 2.66s, setup 0ms, collect 15.30s, tests 42.54s, environment 15.14s, prepare 2.79s)
+
+JUNIT report written to /Users/edgar/Desktop/项目/videohub_ai/backend/reviews/clips-f2-frontend-regression.xml

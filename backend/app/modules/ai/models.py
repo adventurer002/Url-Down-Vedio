@@ -18,7 +18,7 @@ class AIResultType(str, Enum):
 class AIResult(Base):
     __tablename__ = "ai_results"
     __table_args__ = (
-        Index("uq_ai_results_cache", "source_content_hash", "result_type", "llm_model", "prompt_version", "output_language", unique=True),
+        Index("uq_ai_results_cache", "cache_scope", "source_content_hash", "result_type", "llm_model", "prompt_version", "output_language", unique=True),
         CheckConstraint("result_type IN ('summary', 'mindmap')", name="ck_ai_results_type"),
         CheckConstraint("input_tokens IS NULL OR input_tokens >= 0", name="ck_ai_input_tokens"),
         CheckConstraint("output_tokens IS NULL OR output_tokens >= 0", name="ck_ai_output_tokens"),
@@ -29,6 +29,7 @@ class AIResult(Base):
     task_id: Mapped[UUID | None] = mapped_column(ForeignKey("tasks.id"))
     transcript_id: Mapped[UUID] = mapped_column(ForeignKey("transcripts.id"), index=True)
     result_type: Mapped[AIResultType] = mapped_column(SAEnum(AIResultType, name="ai_result_type", validate_strings=True))
+    cache_scope: Mapped[str] = mapped_column(String(128), default="public", server_default="public")
     source_content_hash: Mapped[str] = mapped_column(String(64))
     llm_provider: Mapped[str] = mapped_column(String(64))
     llm_model: Mapped[str] = mapped_column(String(128))

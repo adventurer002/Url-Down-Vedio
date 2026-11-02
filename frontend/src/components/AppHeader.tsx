@@ -5,10 +5,12 @@ import { normalizeError } from "../api/client";
 import WeChatLoginModal from "./auth/WeChatLoginModal";
 import Icon from "./Icon";
 import StarBorder from "./StarBorder";
-import { useWorkspace } from "../hooks/useWorkspace";
+import { useWorkspaceStore, useWorkspaceValue } from "../hooks/useWorkspace";
 import { useBilling } from "../stores/billing";
+import MobileNavigation from "./MobileNavigation";
 export default function AppHeader() {
-  const store = useWorkspace();
+  const store = useWorkspaceStore();
+  const activeCount = useWorkspaceValue((workspace) => workspace.activeCount);
   const auth = useAuth();
   const billing = useBilling();
   const { pathname } = useLocation();
@@ -62,14 +64,20 @@ export default function AppHeader() {
           (pathname.startsWith("/video/") ? " workspace-header" : "")
         }
       >
-        <Link to="/" className="brand" aria-label="VideoHub 首页">
+        <a href="/" className="brand" aria-label="VideoHub 首页">
           <span className="brand-icon">
             <Icon name="play" size={20} />
           </span>
           VIDEOHUB<span className="brand-ai">AI</span>
-        </Link>
+        </a>
         <div className="header-right">
-          <Link className="library-nav" to="/library" aria-label="我的知识库">
+          <MobileNavigation />
+          <Link
+            className="library-nav"
+            to="/library"
+            aria-label="我的知识库"
+            aria-current={pathname === "/library" ? "page" : undefined}
+          >
             <Icon name="bookmark" size={17} />
             <span>知识库</span>
           </Link>
@@ -79,9 +87,10 @@ export default function AppHeader() {
               (pathname === "/subscription" ? " current" : "")
             }
             to="/subscription"
+            aria-current={pathname === "/subscription" ? "page" : undefined}
           >
             <Icon name="sparkles" size={16} />
-            <span>订阅与额度</span>
+            <span>订阅方案</span>
             {billing.data?.member && <small>会员</small>}
           </Link>
           <button
@@ -93,11 +102,13 @@ export default function AppHeader() {
           >
             <Icon name="history" size={18} />
             <span className="history-label">任务历史</span>
-            {store.activeCount > 0 && (
-              <span className="count">{store.activeCount}</span>
-            )}
+            {activeCount > 0 && <span className="count">{activeCount}</span>}
           </button>
-          {auth.user && authStore.hasAccess() ? (
+          {auth.restoring ? (
+            <span className="muted" role="status">
+              正在连接…
+            </span>
+          ) : auth.user && authStore.hasAccess() ? (
             <div className="account-menu" ref={menu}>
               <button
                 ref={trigger}
@@ -118,10 +129,18 @@ export default function AppHeader() {
                     </span>
                   </div>
                   <nav aria-label="账户选项">
-                    <Link to="/subscription">订阅与额度</Link>
+                    <Link
+                      to="/account"
+                      aria-current={
+                        pathname === "/account" ? "page" : undefined
+                      }
+                    >
+                      个人中心
+                    </Link>
+                    <Link to="/subscription">订阅方案</Link>
                     <Link to="/library">我的知识库</Link>
                     <Link to="/settings">设置</Link>
-                    <Link to="/help">使用帮助</Link>
+                    <a href="/help">使用帮助</a>
                     {auth.user.role === "admin" && (
                       <Link to="/admin">管理界面</Link>
                     )}

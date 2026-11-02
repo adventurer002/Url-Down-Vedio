@@ -11,13 +11,18 @@ import subprocess
 import time
 
 from app.core.exceptions import AppException
+from app.infrastructure.process_control import FileProcessControl, ProcessControl
 
 
-def directory_size(directory: Path) -> int:
+def directory_size(directory: Path, *, include_control_files: bool = True) -> int:
     total = 0
     for folder, dirs, files in os.walk(directory, followlinks=False):
         dirs[:] = [name for name in dirs if not (Path(folder) / name).is_symlink()]
+        if not include_control_files:
+            dirs[:] = [name for name in dirs if name != ".operations"]
         for name in files:
+            if not include_control_files and name == ".process.json":
+                continue
             try:
                 total += (Path(folder) / name).lstat().st_size
             except FileNotFoundError:
@@ -26,11 +31,17 @@ def directory_size(directory: Path) -> int:
 
 
 class ProcessRunner:
-    def __init__(self, timeout: float, max_bytes: int, interval: float = 0.5, term_grace: float = 3):
+    def __init__(self, timeout: float, max_bytes: int, interval: float = 0.5, term_grace: float = 3,
+                 control: ProcessControl | None = None):
         self.timeout = timeout
         self.max_bytes = max_bytes
         self.interval = interval
         self.term_grace = term_grace
+        self.control = control or FileProcessControl()
+
+    @staticmethod
+    def directory_stopped(directory: Path) -> bool:
+        return FileProcessControl().all_stopped(directory, ProcessRunner.group_exists)
 
     @staticmethod
     def group_exists(pgid: int) -> bool:
@@ -74,6 +85,7 @@ class ProcessRunner:
         buffer = bytearray()
         last = {}
         succeeded = False
+        receipt = None
         started = time.monotonic()
 
         async def consume():
@@ -113,7 +125,10 @@ class ProcessRunner:
                                 "SOURCE_RATE_LIMITED": "视频平台请求频率受限，请稍后重试",
                                 "SOURCE_NETWORK_UNAVAILABLE": "服务器暂时无法连接视频平台，请稍后重试",
                                 "PARSE_TIMEOUT": "视频平台连接或解析超时",
-                                "PARSE_FAILED": "视频平台解析失败"}
+                                "PARSE_FAILED": "视频平台解析失败",
+                                "UPLOAD_INVALID_MEDIA": "文件损坏或不是支持的媒体格式",
+                                "UPLOAD_PROBE_FAILED": "媒体校验失败",
+                                "CLIP_MEDIA_INVALID": "视频缺少有效音视频轨或精确时间轴"}
                     if code not in messages:
                         code = "DOWNLOAD_FAILED"
                     status = 503 if code in {"YTDLP_PROXY_INVALID", "YTDLP_RUNTIME_UNAVAILABLE", "SOURCE_RATE_LIMITED"} else 504 if code == "PARSE_TIMEOUT" else 502
@@ -125,16 +140,17 @@ class ProcessRunner:
         try:
             if await is_cancel_requested():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)
+            receipt = self.control.prepare(directory)
             process = subprocess.Popen(list(command), cwd=cwd, stdout=subprocess.PIPE,
                                        stderr=subprocess.DEVNULL, start_new_session=True)
-            (directory / ".process.json").write_text(json.dumps({"pgid": process.pid}), encoding="utf-8")
+            self.control.started(receipt, process.pid, directory)
             os.set_blocking(process.stdout.fileno(), False)
             while True:
                 tick = time.monotonic()
                 returncode = process.poll()
                 if time.monotonic() - started >= self.timeout:
                     raise AppException("DOWNLOAD_TIMEOUT", "下载超过总执行时限", 504)
-                if directory_size(directory) > self.max_bytes:
+                if directory_size(directory, include_control_files=False) > self.max_bytes:
                     raise AppException("FILE_TOO_LARGE", "文件超过任务体积上限", 413)
                 check_capacity()
                 async with asyncio.timeout(3):
@@ -147,6 +163,7 @@ class ProcessRunner:
                     if returncode != 0:
                         raise AppException("DOWNLOAD_FAILED", "下载进程异常退出", 502)
                     await self.stop_group(process)
+                    self.control.exited(receipt)
                     succeeded = True
                     return last
                 await asyncio.sleep(max(0, self.interval - (time.monotonic() - tick)))
@@ -156,7 +173,9 @@ class ProcessRunner:
             try:
                 if process is not None and not succeeded:
                     await self.stop_group(process)
-                if not succeeded:
+                if receipt is not None and not succeeded:
+                    self.control.exited(receipt)
+                if not succeeded and self.directory_stopped(directory):
                     shutil.rmtree(directory, ignore_errors=False) if directory.exists() else None
             finally:
                 if process is not None and process.stdout is not None:

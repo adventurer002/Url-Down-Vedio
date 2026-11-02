@@ -3,7 +3,11 @@ import { authApi, authStore, type LoginSession } from "../../stores/auth";
 import { normalizeError } from "../../api/client";
 import { useWorkspace } from "../../hooks/useWorkspace";
 
-export default function WeChatLoginModal() {
+export default function WeChatLoginModal({
+  loadHistory = true,
+}: {
+  loadHistory?: boolean;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const workspace = useWorkspace();
   const [session, setSession] = useState<LoginSession>();
@@ -31,7 +35,7 @@ export default function WeChatLoginModal() {
           authStore.accept(result);
           workspace.switchUser(result.user!.id);
           try {
-            await workspace.loadHistory();
+            if (loadHistory) await workspace.loadHistory();
           } catch {
             /* History can be retried separately; credentials are already saved. */
           }
@@ -73,7 +77,7 @@ export default function WeChatLoginModal() {
       dialog.current?.close();
       previous?.focus();
     };
-  }, [refresh, workspace]);
+  }, [refresh, workspace, loadHistory]);
   async function copy() {
     try {
       await navigator.clipboard.writeText(session!.verify_code);

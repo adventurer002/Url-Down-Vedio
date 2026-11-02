@@ -1,69 +1,67 @@
-import { authStore, useAuth } from "./stores/auth";
 import { lazy, Suspense, useEffect } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import AppHeader from "./components/AppHeader";
-import AppFooter from "./components/AppFooter";
-import TaskHistory from "./components/TaskHistory";
-import HomeView from "./views/HomeView";
-import { useWorkspace } from "./hooks/useWorkspace";
+import { useLocation } from "react-router-dom";
+import { authStore, useAuth } from "./stores/auth";
+import { useWorkspaceStore } from "./hooks/useWorkspace";
 import { billingStore } from "./stores/billing";
-const LibraryView = lazy(() => import("./views/LibraryView"));
-const SubscriptionView = lazy(() => import("./views/SubscriptionView"));
-const SettingsView = lazy(() => import("./views/SettingsView"));
-const AdminView = lazy(() => import("./views/AdminView"));
-const InfoView = lazy(() => import("./views/InfoView"));
-const VideoWorkspaceView = lazy(() => import("./views/VideoWorkspaceView"));
+import PageErrorBoundary from "./components/PageErrorBoundary";
 
-export default function App() {
-  const store = useWorkspace();
+import PublicApp from "./PublicApp";
+import { pageLabel } from "./utils/navigation";
+import { isMarketingPath } from "./marketing/routes";
+const AdminView = lazy(() => import("./views/AdminView"));
+const MarketingRoute = lazy(() => import("./marketing/ClientRoute"));
+
+function WorkspaceApp() {
   const auth = useAuth();
+  const store = useWorkspaceStore();
+  const { pathname } = useLocation();
   useEffect(() => {
     void authStore.restore();
   }, []);
   useEffect(() => {
+    if (auth.restoring || auth.restoreError) return;
     store.switchUser(auth.user?.id || null);
     billingStore.setUser(auth.user?.id || null);
-    if (auth.user?.status === "active") void billingStore.refresh();
-    if (auth.user && authStore.hasAccess())
-      void store.loadHistory().catch(() => {});
-  }, [store, auth.user?.id, auth.user?.status, auth.user?.is_subscribed]);
-  const { pathname } = useLocation();
+  }, [store, auth.user?.id, auth.restoring, auth.restoreError]);
+  const admin = pathname === "/admin" || pathname.startsWith("/admin/");
   useEffect(() => {
-    store.restore();
-    return store.stopAll;
-  }, [store]);
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (!admin) return;
+    let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (!robots) {
+      robots = document.createElement("meta");
+      robots.name = "robots";
+      document.head.appendChild(robots);
+    }
+    robots.content = "noindex,follow";
+    document
+      .querySelectorAll(
+        'link[rel="canonical"], script[type="application/ld+json"], meta[property^="og:"], meta[name^="twitter:"]',
+      )
+      .forEach((item) => item.remove());
+  }, [admin]);
   return (
-    <>
-      <AppHeader />
-      <main id="main">
-        <Suspense
-          fallback={
-            <p className="muted" role="status">
-              正在打开工作台…
-            </p>
-          }
-        >
-          <Routes>
-            <Route path="/" element={<HomeView />} />
-            <Route
-              path="/video/:id"
-              element={<VideoWorkspaceView key={pathname} />}
-            />
-            <Route path="/settings" element={<SettingsView />} />
-            <Route path="/library" element={<LibraryView />} />
-            <Route path="/subscription" element={<SubscriptionView />} />
-            <Route path="/admin" element={<AdminView />} />
-            <Route path="/help" element={<InfoView kind="help" />} />
-            <Route path="/privacy" element={<InfoView kind="privacy" />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </main>
-      {pathname !== "/" && <AppFooter />}
-      <TaskHistory />
-    </>
+    <PageErrorBoundary key={admin ? "admin" : "public"}>
+      <Suspense
+        fallback={
+          <div role="status" className="app-loading" aria-busy="true">
+            <span className="spinner" aria-hidden="true" />
+            正在打开{pageLabel(pathname)}…
+          </div>
+        }
+      >
+        {admin ? <AdminView /> : <PublicApp />}
+      </Suspense>
+    </PageErrorBoundary>
+  );
+}
+
+export default function App() {
+  const { pathname } = useLocation();
+  return isMarketingPath(pathname) ? (
+    <Suspense fallback={<p role="status">正在打开页面…</p>}>
+      <MarketingRoute path={pathname} />
+    </Suspense>
+  ) : (
+    <WorkspaceApp />
   );
 }

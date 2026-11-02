@@ -1,0 +1,191 @@
+/* Request errors live in a separate, non-blocking layer, never in page layout. */
+.notice-layer {
+  position: fixed;
+  inset: calc(8px + env(safe-area-inset-top, 0px))
+    calc(8px + env(safe-area-inset-right, 0px)) auto auto;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  width: min(
+    464px,
+    calc(
+      100vw - 8px - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  max-height: calc(
+    100dvh - 16px - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
+  margin: 0;
+  padding: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  background: transparent;
+  color: #18181b;
+  pointer-events: none;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+}
+.notice-layer[popover]:not(:popover-open) {
+  display: none;
+}
+.notice-layer::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+.floating-notice {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  flex-shrink: 0;
+  width: 100%;
+  margin: 0;
+  padding: 18px 44px 16px 18px;
+  box-sizing: border-box;
+  border: 1px solid #e9ded8;
+  border-radius: 12px;
+  background: #fff;
+  color: #66473b;
+  box-shadow:
+    0 8px 24px #30231b1a,
+    0 2px 5px #30231b08;
+  text-align: left;
+  pointer-events: auto;
+  animation: notice-enter 180ms ease-out;
+}
+.notice-item {
+  flex-shrink: 0;
+  min-width: 0;
+}
+.notice-symbol {
+  display: flex;
+  margin-top: 2px;
+  color: #a45a35;
+}
+.notice-content {
+  min-width: 0;
+}
+.floating-notice strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.floating-notice .error-guidance {
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #79716b;
+  overflow-wrap: anywhere;
+}
+.floating-notice .error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.floating-notice .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font: inherit;
+  color: #6a4c3e;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.floating-notice .error-details {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.75;
+  color: #8a817b;
+  overflow-wrap: anywhere;
+}
+.floating-notice .error-details summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 4px 0;
+}
+.floating-notice .error-details > div {
+  display: grid;
+  gap: 5px;
+  padding-top: 6px;
+}
+.floating-notice .error-details p {
+  margin: 0;
+  font: inherit;
+}
+.floating-notice code {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.notice-close {
+  position: absolute;
+  top: 9px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #8a817b;
+  cursor: pointer;
+}
+.notice-close:hover {
+  background: #f5f3f1;
+  color: #18181b;
+}
+.floating-notice :focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+.inline-notice {
+  position: relative;
+  padding-right: 44px;
+}
+@keyframes notice-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 600px) {
+  .notice-layer {
+    top: env(safe-area-inset-top, 0px);
+    right: env(safe-area-inset-right, 0px);
+    width: calc(
+      100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
+    );
+  }
+  .floating-notice {
+    padding: 16px 44px 14px 15px;
+    gap: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-notice {
+    animation: none;
+  }
+}
+.error-notice.inline-notice,
+.task-card .error-notice.inline-notice {
+  padding-right: 44px;
+}
+.inline-notice .notice-content > strong {
+  display: block;
+}

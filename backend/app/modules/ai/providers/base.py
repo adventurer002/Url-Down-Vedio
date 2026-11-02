@@ -10,11 +10,12 @@ from app.core.exceptions import AppException
 
 @dataclass(frozen=True)
 class LLMRequest:
-    purpose: Literal["summary", "map", "reduce", "mindmap", "question"]
+    purpose: Literal["summary", "map", "reduce", "mindmap", "question", "clip_map", "clip_rank"]
     context: dict
     schema: dict
     output_language: str
     source_basis: Literal["subtitle", "asr"]
+    max_output_tokens: int | None = None
 
 
 @dataclass(frozen=True)

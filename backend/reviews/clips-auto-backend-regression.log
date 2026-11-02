@@ -1,0 +1,48 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.1.1, pluggy-1.7.0
+rootdir: /Users/edgar/Desktop/项目/videohub_ai/backend
+configfile: pyproject.toml
+testpaths: tests
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 538 items
+
+tests/test_admin.py ........                                             [  1%]
+tests/test_admin_grants.py .......                                       [  2%]
+tests/test_admin_operations.py ......                                    [  3%]
+tests/test_admin_postgres.py ......                                      [  5%]
+tests/test_admin_status.py .....                                         [  5%]
+tests/test_admin_tasks.py .....                                          [  6%]
+tests/test_ai_module.py ....................                             [ 10%]
+tests/test_allowances.py ............................                    [ 15%]
+tests/test_allowances_postgres.py ...                                    [ 16%]
+tests/test_backend_followups.py .................                        [ 19%]
+tests/test_backend_followups_postgres.py .                               [ 19%]
+tests/test_clips.py ..........................                           [ 24%]
+tests/test_clips_auto.py ................                                [ 27%]
+tests/test_clips_celery.py .                                             [ 27%]
+tests/test_clips_postgres.py ...                                         [ 28%]
+tests/test_clips_r1.py ....................................              [ 34%]
+tests/test_clips_r2.py ......................                            [ 39%]
+tests/test_clips_r3.py ...............                                   [ 41%]
+tests/test_clips_r3_postgres.py .                                        [ 42%]
+tests/test_deployment.py ...............                                 [ 44%]
+tests/test_download.py ..................                                [ 48%]
+tests/test_health.py .....................                               [ 52%]
+tests/test_history_and_security.py ............................          [ 57%]
+tests/test_knowledge.py ...........                                      [ 59%]
+tests/test_marketing_content.py ..                                       [ 59%]
+tests/test_media_and_transcript.py ..................................... [ 66%]
+                                                                         [ 66%]
+tests/test_performance.py ...................                            [ 70%]
+tests/test_tasks.py ....................                                 [ 73%]
+tests/test_uploads.py .................................                  [ 79%]
+tests/test_uploads_celery.py ..                                          [ 80%]
+tests/test_uploads_postgres.py ....                                      [ 81%]
+tests/test_video_parse.py .............................................. [ 89%]
+...............                                                          [ 92%]
+tests/test_wechat_auth.py ..................                             [ 95%]
+tests/test_youtube_server_config.py .......................              [100%]
+
+- generated xml file: /Users/edgar/Desktop/项目/videohub_ai/backend/reviews/clips-auto-backend-regression.xml -
+======================= 538 passed in 318.32s (0:05:18) ========================

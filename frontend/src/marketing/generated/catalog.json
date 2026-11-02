@@ -1,0 +1,54 @@
+{
+  "version": "allowances-v1",
+  "currency": "CNY",
+  "products": {
+    "monthly": {
+      "name": "月会员",
+      "price_fen": 1990,
+      "asr_seconds": 18000,
+      "ai_generations": 100
+    },
+    "asr_120": {
+      "name": "120 分钟转写包",
+      "price_fen": 990,
+      "asr_seconds": 7200,
+      "ai_generations": 0
+    },
+    "ai_100": {
+      "name": "100 次 AI 包",
+      "price_fen": 990,
+      "asr_seconds": 0,
+      "ai_generations": 100
+    }
+  },
+  "trial": {
+    "asr_seconds": 1800,
+    "ai_generations": 5,
+    "valid_days": 30
+  },
+  "addon_valid_days": 30,
+  "rollover": false,
+  "free_daily_downloads": 2,
+  "free_limits": {
+    "video_seconds": 1200,
+    "file_bytes": 268435456,
+    "daily_egress_bytes": 1073741824,
+    "download_concurrency": 1
+  },
+  "member_limits": {
+    "video_seconds": 3600,
+    "file_bytes": 536870912,
+    "daily_egress_bytes": 5368709120,
+    "download_concurrency": 3
+  },
+  "max_text_chars": 60000,
+  "max_output_tokens_per_call": 4096,
+  "max_total_output_tokens": 16384,
+  "max_llm_calls": 16,
+  "asr_rounding": "完整音频按秒向上取整；字幕及转写缓存不扣分钟",
+  "cache_policy": "公共 AI 缓存首次获取扣 1 次；自己的相同结果免费",
+  "refund_policy": "正常交付后不支持无理由退款；重复支付、未交付及依法应退款情形除外",
+  "purchase_mode": "operator_grant_only",
+  "real_payment_enabled": false,
+  "worker_capacity_note": "账号额度不代表机器并行能力；当前 Solo 单 Worker 实际串行"
+}

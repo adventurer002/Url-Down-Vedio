@@ -1,0 +1,371 @@
+/* Workspace home: a single quiet input surface and a reserved footer banner. */
+/* The two input modes below retain this homepage's centered composition. */
+.public-app .home-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: calc(100svh - 88px);
+  padding-bottom: 28px;
+}
+.public-app .home-page.has-ad-slot {
+  padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+}
+.public-app .home-page .parse-form {
+  width: 100%;
+  max-width: 760px;
+}
+.public-app .home-page .url-field {
+  gap: 14px;
+  padding: 8px 8px 8px 20px;
+  border: 1px solid #e2e5ea;
+  border-radius: 18px;
+  background: #fffffffa;
+  box-shadow: 0 8px 28px -16px #18203324;
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+}
+.public-app .home-page .url-field:hover {
+  border-color: #cdd1d8;
+}
+.public-app .home-page .url-field:focus-within {
+  border-color: #9ca3af;
+  box-shadow:
+    0 0 0 3px #18181b08,
+    0 8px 28px -16px #18203324;
+}
+.public-app .home-page .url-field > svg {
+  color: #9197a3;
+  flex-shrink: 0;
+}
+.public-app .home-page .url-field input {
+  min-width: 0;
+  min-height: 50px;
+  padding: 12px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #18181b;
+  caret-color: #18181b;
+  font-size: 16px;
+  line-height: 1.5;
+}
+/* Override the app-wide green input outline; the outer frame keeps focus visible. */
+.public-app .home-page .url-field input:is(:focus, :focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+.public-app .home-page .url-field input::placeholder {
+  color: #9399a5;
+  opacity: 1;
+}
+.public-app .home-page .url-field .button {
+  flex-shrink: 0;
+  gap: 10px;
+  min-width: 132px;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: #18181b;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 550;
+}
+.public-app .home-page .url-field .button:hover:enabled {
+  background: #36363c;
+}
+.public-app .home-page .url-field .button:focus-visible {
+  outline-color: #52525b;
+  outline-offset: 3px;
+}
+.public-app .home-page .url-field .button:disabled {
+  background: #e7e9ee;
+  color: #7c828d;
+  opacity: 1;
+}
+.public-app .home-page .url-field:has(input[aria-invalid="true"]) {
+  border-color: #c38a8a;
+}
+.home-ad-slot {
+  position: fixed;
+  z-index: 12;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: min(560px, calc(100% - 32px));
+  min-height: calc(88px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  margin: 0;
+  border: 1px solid #eceef2;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: #fafbfc;
+  box-shadow: 0 -4px 24px -16px #11111130;
+}
+.home-ad-close {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #777e89;
+}
+.home-ad-close:hover {
+  background: #eceef2;
+  color: #27272a;
+}
+.public-app .home-ad-close:focus-visible {
+  outline-color: #52525b;
+  outline-offset: -4px;
+}
+.home-ad-label {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  padding: 1px 5px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  color: #9298a3;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.home-ad-placeholder {
+  color: #a0a6b0;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+@media (max-width: 700px) {
+  .public-app .home-page {
+    min-height: calc(100svh - 70px);
+    padding-bottom: 22px;
+  }
+  .public-app .home-page.has-ad-slot {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+  .public-app .home-page .url-field {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 8px 10px;
+    padding: 10px;
+    border-radius: 17px;
+  }
+  .public-app .home-page .url-field > svg {
+    width: 20px;
+    height: 20px;
+  }
+  .public-app .home-page .url-field input {
+    min-height: 44px;
+    padding: 10px 0;
+  }
+  .public-app .home-page .url-field .button {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 46px;
+    padding: 10px 16px;
+  }
+  .home-ad-slot {
+    min-height: calc(72px + env(safe-area-inset-bottom, 0px));
+    border-radius: 12px 12px 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-app .home-page .url-field {
+    transition: none;
+  }
+}
+
+/* Original centered homepage, with two inputs sharing the same hero. */
+.public-app .home-import-page {
+  padding-bottom: 28px;
+}
+.home-import-page .hero {
+  padding-top: 72px;
+  padding-bottom: 38px;
+}
+.home-import {
+  max-width: 760px;
+  margin: 32px auto 0;
+}
+.home-source-tabs {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.home-source-tabs > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 10px 22px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #727784;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  transition:
+    color 0.16s,
+    background-color 0.16s;
+}
+.home-source-tabs > button[aria-selected="true"],
+.home-source-tabs > button:hover:enabled {
+  color: #18181b;
+  background: #f5f6f8;
+}
+.home-source-tabs > button:disabled {
+  cursor: wait;
+}
+.public-app .home-import-page .parse-form {
+  margin: 0;
+}
+.home-input-note,
+.home-file-notes {
+  color: #777e8b;
+  font-size: 12px;
+  line-height: 1.85;
+  text-align: center;
+  margin: 12px 0 0;
+}
+.home-file-notes > p {
+  margin: 2px 0;
+}
+.home-file-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 210px;
+  padding: 22px 24px;
+  border: 1px dashed #cdd3dc;
+  border-radius: 16px;
+  color: #18181b;
+  text-align: center;
+  background: #f8f9fbcc;
+  transition:
+    border-color 0.16s,
+    background-color 0.16s;
+}
+.home-file-drop.dragging {
+  border-color: #0f766e;
+  background: #f0fdfa;
+}
+.home-upload-icon {
+  display: flex;
+  color: #0f766e;
+  margin-bottom: 2px;
+}
+.home-file-drop > strong {
+  font-size: 17px;
+  line-height: 1.6;
+  font-weight: 550;
+}
+.home-file-formats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: #777e8b;
+  line-height: 1.7;
+}
+.public-app .home-import-page .home-file-button {
+  min-height: 42px;
+  padding: 10px 24px;
+  margin-top: 4px;
+  border-radius: 10px;
+  background: #18181b;
+  color: white;
+  font-size: 14px;
+}
+.public-app .home-import-page .home-file-button:hover:enabled {
+  background: #36363c;
+}
+.home-change-file {
+  padding: 3px 4px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: #525866;
+}
+.home-change-file:hover:enabled {
+  color: #18181b;
+}
+.home-selected-file {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.home-import-page .platform-section {
+  margin: 0;
+  padding-bottom: 36px;
+}
+.public-app .home-import-page .home-ad-slot {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  min-height: 78px;
+  margin: auto auto 0;
+  border: 1px solid #eceef2;
+  border-radius: 12px;
+  box-shadow: none;
+}
+@media (max-width: 700px) {
+  .home-import-page .hero {
+    padding-top: 48px;
+    padding-bottom: 30px;
+  }
+  .home-import-page .hero-description {
+    font-size: 15px;
+    line-height: 1.9;
+  }
+  .home-import {
+    margin-top: 25px;
+  }
+  .home-source-tabs {
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .home-source-tabs > button {
+    padding: 10px 17px;
+    font-size: 14px;
+  }
+  .home-file-drop {
+    min-height: 210px;
+    padding: 22px 16px;
+  }
+  .home-file-drop > strong {
+    font-size: 16px;
+  }
+  .home-file-formats {
+    font-size: 11px;
+  }
+  .home-file-notes,
+  .home-input-note {
+    font-size: 11px;
+  }
+  .home-import-page .platform-section {
+    padding-bottom: 28px;
+  }
+  .public-app .home-import-page .home-ad-slot {
+    width: 100%;
+    min-height: 72px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-source-tabs > button,
+  .home-file-drop {
+    transition: none;
+  }
+}

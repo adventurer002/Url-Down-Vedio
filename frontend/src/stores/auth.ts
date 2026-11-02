@@ -32,9 +32,12 @@ let state = {
   user: null as AuthUser | null,
   modalOpen: false,
   message: "",
+  restoring: true,
+  restoreError: "",
 };
 const listeners = new Set<() => void>();
 let revision = 0;
+let restoreAttempt = 0;
 function update(patch: Partial<typeof state>) {
   state = { ...state, ...patch };
   listeners.forEach((listener) => listener());
@@ -51,6 +54,7 @@ export const authStore = {
     return Boolean(state.user && state.user.status === "active");
   },
   requireLogin() {
+    if (state.restoring || state.restoreError) return false;
     if (authStore.hasAccess()) return true;
     authStore.open();
     return false;
@@ -70,7 +74,14 @@ export const authStore = {
     } catch {
       /* Cookie remains available. */
     }
-    update({ token: result.access_token, user: result.user, message: "" });
+    update({
+      token: result.access_token,
+      user: result.user,
+      modalOpen: false,
+      message: "",
+      restoring: false,
+      restoreError: "",
+    });
   },
   clear(message = "") {
     revision++;
@@ -79,16 +90,27 @@ export const authStore = {
     } catch {
       /* Storage may be disabled. */
     }
-    update({ token: "", user: null, message });
+    update({
+      token: "",
+      user: null,
+      message,
+      restoring: false,
+      restoreError: "",
+    });
   },
   async restore() {
     const expected = revision;
+    const attempt = ++restoreAttempt;
+    update({ restoring: true, restoreError: "" });
     try {
       const user = await get<AuthUser>("/auth/me");
-      if (expected === revision) update({ user });
+      if (expected === revision && attempt === restoreAttempt)
+        update({ user, restoring: false, restoreError: "" });
     } catch (error) {
-      if (expected === revision && normalizeError(error).status === 401)
-        authStore.clear();
+      if (expected !== revision || attempt !== restoreAttempt) return;
+      const failure = normalizeError(error);
+      if (failure.status === 401) authStore.clear();
+      else update({ restoring: false, restoreError: failure.message });
     }
   },
   async logout() {

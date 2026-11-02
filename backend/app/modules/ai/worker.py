@@ -1,4 +1,5 @@
 import asyncio
+from app.infrastructure.timing import log_queue_wait, stage_timer
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -35,6 +36,7 @@ async def execute_ai(task_id, service, results, pipeline, provider):
     if not await database_call(tasks.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(tasks.get, task_id)).status}
     task = await database_call(tasks.get, task_id)
+    log_queue_wait(task)
     progress = 0
 
     async def publish(record, stage=None):
@@ -58,7 +60,8 @@ async def execute_ai(task_id, service, results, pipeline, provider):
         await publish(task)
         await database_call(tasks.mark_processing, task_id)
         async with asyncio.timeout(settings.AI_TASK_TIMEOUT_SECONDS):
-            transcript = await pipeline.acquire(task_id, lambda event: advance(int(event["progress"] * .4), event.get("stage")))
+            with stage_timer("transcript_acquire", task_id):
+                transcript = await pipeline.acquire(task_id, lambda event: advance(int(event["progress"] * .4), event.get("stage")))
             if "allowance" in task.input_payload:
                 from app.modules.ai.providers.bounded import BoundedLLMProvider
                 limits = task.input_payload["allowance"]["ai_limits"]
@@ -81,23 +84,28 @@ async def execute_ai(task_id, service, results, pipeline, provider):
                     value["summary_result_id"] = str(summary_id)
                 return value
 
-            cached = await database_call(results.find_cache, transcript.content_hash, kind, provider.model, version, language)
+            cache_scope = await database_call(results.scope_for, transcript, exact=task.input_payload.get("source_kind") == "transcript")
+            cached = await database_call(results.find_cache, transcript.content_hash, kind, provider.model, version, language, cache_scope)
+            expected = task.input_payload.get("reuse_result") if task.input_payload.get("source_kind") == "transcript" else None
+            if expected and (cached is None or str(cached.id) != expected["result_id"]):
+                raise AppException("AI_RESULT_NOT_FOUND", "已确认复用的 AI 结果不存在，请重新获取报价", 409)
             if cached:
-                summary_cached = await database_call(results.find_cache, transcript.content_hash, "summary", provider.model, summary_version, language)
+                summary_cached = await database_call(results.find_cache, transcript.content_hash, "summary", provider.model, summary_version, language, cache_scope)
                 task = await database_call(tasks.complete_with, task_id, delivered(cached, True,
                     summary_cached.id if kind == "mindmap" and summary_cached else None), lambda session: None)
             else:
-                summary_cache = await database_call(results.find_cache, transcript.content_hash, "summary", provider.model, summary_version, language)
+                summary_cache = await database_call(results.find_cache, transcript.content_hash, "summary", provider.model, summary_version, language, cache_scope)
                 if summary_cache:
                     summary = VideoSummarySchema.model_validate(summary_cache.content_json)
                     summary_id = summary_cache.id
                 else:
-                    generated = await Summarizer(provider).summarize(transcript, language, cancelled=cancelled,
-                        on_progress=lambda value: advance(40 + int(value * .45), "summary"))
+                    with stage_timer("summary", task_id):
+                        generated = await Summarizer(provider).summarize(transcript, language, cancelled=cancelled,
+                            on_progress=lambda value: advance(40 + int(value * .45), "summary"))
                     summary = generated.content
                     def store_summary(session):
                         return results.store(session, task_id, transcript, "summary", provider.name, provider.model,
-                            summary_version, language, summary.model_dump(), generated.usage)
+                            summary_version, language, summary.model_dump(), generated.usage, cache_scope=cache_scope)
                     if kind == "summary":
                         task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(store_summary(session)))
                     else:
@@ -107,10 +115,11 @@ async def execute_ai(task_id, service, results, pipeline, provider):
                     task = await database_call(tasks.complete_with, task_id, delivered(summary_cache, True), lambda session: None)
                 elif kind == "mindmap":
                     await advance(90, "mindmap")
-                    mapped = await MindMapGenerator(provider).generate(summary, language, cancelled=cancelled)
+                    with stage_timer("mindmap", task_id):
+                        mapped = await MindMapGenerator(provider).generate(summary, language, cancelled=cancelled)
                     task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(results.store(
                         session, task_id, transcript, "mindmap", provider.name, provider.model, version, language,
-                        mapped.content.model_dump(), mapped.usage, mapped.markdown), summary_id=summary_id))
+                        mapped.content.model_dump(), mapped.usage, mapped.markdown, cache_scope=cache_scope), summary_id=summary_id))
     except Exception as exc:
         code = exc.code if isinstance(exc, AppException) else "AI_TIMEOUT" if isinstance(exc, TimeoutError) else "AI_GENERATION_FAILED"
         message = exc.message if isinstance(exc, AppException) else "AI 任务超时" if isinstance(exc, TimeoutError) else "AI 生成失败"

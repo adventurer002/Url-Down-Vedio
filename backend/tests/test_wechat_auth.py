@@ -205,7 +205,11 @@ async def test_ownership_header_cookie_query_history_and_cancel(auth):
     assert (await auth.client.get(f'/api/v1/tasks/{anonymous.id}')).status_code == 200
     assert (await auth.client.get(f'/api/v1/tasks/{own.id}')).status_code == 403
     assert (await auth.client.get(f'/api/v1/tasks/{own.id}', params={'token':a['access_token']})).status_code == 403
-    response = await auth.client.get(f'/api/v1/tasks/{own.id}/events', params={'token':a['access_token']})
+    events = f'/api/v1/tasks/{own.id}/events'
+    assert (await auth.client.get(events, params={'token':a['access_token']})).status_code == 403
+    ticket = await auth.client.post(events + '/access', headers=headers)
+    assert ticket.status_code == 200 and 'no-store' in ticket.headers['cache-control']
+    response = await auth.client.get(events, params=ticket.json()['data'])
     assert response.status_code == 200 and 'event: progress' in response.text
     assert (await auth.client.get('/api/v1/auth/me', params={'token':a['access_token']})).status_code == 401
     assert (await auth.client.get('/api/v1/auth/me', headers={'Authorization':'Bearer invalid'})).status_code == 401
@@ -228,9 +232,45 @@ async def test_file_header_cookie_query_and_cross_user_denial(auth, storage, vid
     assert response.status_code == 200 and response.content == b'file'
     auth.client.cookies.clear()
     assert (await auth.client.get(path)).status_code == 403
-    assert (await auth.client.get(path, params={'token':a['access_token']})).content == b'file'
+    assert (await auth.client.get(path, params={'token':a['access_token']})).status_code == 403
+    ticket = await auth.client.post(path+'/access', headers={'Authorization':'Bearer '+a['access_token']})
+    assert ticket.status_code == 200 and 'no-store' in ticket.headers['cache-control']
+    assert (await auth.client.get(path, params=ticket.json()['data'])).content == b'file'
     auth.client.cookies.set('access_token', a['access_token'])
     assert (await auth.client.get(path)).status_code == 200
+    assert (await auth.client.post(path+'/access')).status_code == 200
+
+
+async def test_resource_tickets_are_owner_checked_scoped_expiring_and_revocable(auth, monkeypatch):
+    from app.modules.auth.tokens import decode_resource_identity
+    _, a = await login(auth)
+    _, b = await login(auth)
+    own = auth.repository.create('download', user_id=UUID(a['user']['id']))
+    other = auth.repository.create('download', user_id=UUID(b['user']['id']))
+    auth.repository.finish(own.id, 'completed', 100)
+    path = f'/api/v1/tasks/{own.id}/events'
+    assert (await auth.client.post(path+'/access')).status_code == 403  # Cookie B cannot mint A's ticket.
+    auth.client.cookies.clear()
+    assert (await auth.client.post(path+'/access')).status_code == 401
+    headers = {'Authorization': 'Bearer '+a['access_token']}
+    ticket = (await auth.client.post(path+'/access', headers=headers)).json()['data']['access_token']
+    claims = jwt.decode(ticket, settings.JWT_SECRET_KEY, algorithms=['HS256'], audience='videohub-resource')
+    assert 0 < claims['exp'] - datetime.now(timezone.utc).timestamp() <= 120
+    assert claims['exp'] - claims['iat'] == 120
+    assert ticket != a['access_token']
+    assert decode_resource_identity(ticket, 'task_events', own.id)[0] == UUID(a['user']['id'])
+    assert (await auth.client.get(path, params={'access_token': a['access_token']})).status_code == 401
+    assert (await auth.client.get(f'/api/v1/tasks/{other.id}/events', params={'access_token': ticket})).status_code == 401
+    assert (await auth.client.get(f'/api/v1/files/{own.id}/download', params={'access_token': ticket})).status_code == 401
+    assert (await auth.client.get('/api/v1/tasks/not-a-uuid/events', params={'access_token': ticket})).status_code == 401
+    assert (await auth.client.get('/api/v1/auth/me', headers={'Authorization':'Bearer '+ticket})).status_code == 401
+    assert (await auth.client.post(f'/api/v1/tasks/{own.id}/cancel', params={'access_token': ticket})).status_code == 403
+    expired = jwt.encode({**claims, 'exp': datetime.now(timezone.utc)-timedelta(seconds=1)}, settings.JWT_SECRET_KEY, algorithm='HS256')
+    assert (await auth.client.get(path, params={'access_token': expired})).status_code == 401
+    with auth.repository.sessions.begin() as session:
+        user = session.get(User, UUID(a['user']['id']))
+        user.auth_version += 1
+    assert (await auth.client.get(path, params={'access_token': ticket})).status_code == 401
 
 
 async def test_creation_gate_owner_before_dispatch_and_anonymous_compatibility(auth, monkeypatch):

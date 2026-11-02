@@ -31,6 +31,7 @@ from app.modules.tasks.router import get_history_service
 from app.modules.tasks.service import TaskService
 from app.modules.system.router import get_cleanup_service
 from app.modules.video.repository import VideoRepository
+from test_admin import admin_data, bootstrap, headers
 
 
 def history(repository, storage):
@@ -170,12 +171,12 @@ async def test_cleanup_freed_bytes_physical_expired_orphan_and_terminal_tmp(repo
     assert (await cleanup_expired_files(storage, MediaRepository(repository.sessions), repository))['freed_bytes'] == 0
 
 
-async def test_cleanup_endpoint_returns_bytes_and_unified_busy_error():
-    app = create_app()
+async def test_cleanup_endpoint_returns_bytes_and_unified_busy_error(admin_data):
+    bootstrap(admin_data)
+    app = admin_data.app
     service = Mock(); service.run.return_value = {'files':1,'temporary_directories':0,'orphan_files':0,'freed_bytes':1024,'used_bytes':0}
     app.dependency_overrides[get_cleanup_service] = lambda: service
-    app.dependency_overrides[optional_user] = lambda: SimpleNamespace(role="admin")
-    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test', headers=headers(admin_data)) as client:
         response = await client.post('/api/v1/system/cleanup')
         assert response.status_code == 200 and response.json()['data']['freed_bytes'] == 1024
         service.run.side_effect = AppException('STORAGE_BUSY','存储正在使用',503)

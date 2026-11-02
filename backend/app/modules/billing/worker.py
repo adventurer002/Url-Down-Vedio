@@ -14,7 +14,10 @@ def execute(task_id):
     identifier = UUID(task_id)
     task = tasks.get(identifier)
     try:
-        if task.input_payload.get("reuse_result"):
+        if task.task_type in {"ai_clip_plan", "clips_export"}:
+            from app.modules.clips.worker import clips_task
+            return clips_task.run(task_id)
+        if task.input_payload.get("reuse_result") and task.input_payload.get("source_kind") != "transcript":
             if tasks.start(identifier):
                 return tasks.complete_with(identifier, task.input_payload["reuse_result"], lambda session: None).status
             return tasks.get(identifier).status

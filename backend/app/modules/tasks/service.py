@@ -32,7 +32,7 @@ class TaskService:
 
     async def create(self, task_type: str = "simulate_progress", video_id: UUID | None = None,
                      input_payload: dict | None = None) -> TaskRecord:
-        if task_type not in {"simulate_progress", "download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap", "ai_question"} or self.dispatcher is None:
+        if task_type not in {"simulate_progress", "media_probe", "download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap", "ai_question", "ai_clip_plan", "clips_export"} or self.dispatcher is None:
             raise AppException("UNSUPPORTED_TASK_TYPE", "不支持该任务类型", 422)
         from app.modules.auth.dependencies import task_user_id
         task = await database_call(self.repository.create, task_type, video_id, input_payload,
@@ -41,10 +41,10 @@ class TaskService:
             await self.bus.publish(task.id, "queued", 0)
             async with asyncio.timeout(15):
                 await asyncio.to_thread(self.dispatcher.enqueue, task.id)
-            if "allowance" in task.input_payload:
+            if "allowance" in task.input_payload or task.task_type == "media_probe":
                 await database_call(self.repository.mark_dispatched, task.id)
         except Exception:
-            if "allowance" in task.input_payload:
+            if "allowance" in task.input_payload or task.task_type == "media_probe":
                 # Publish/ACK failure is ambiguous: an executing worker may already
                 # own the task. Leave its durable state intact for reconciliation.
                 return await database_call(self.repository.get, task.id)
@@ -103,6 +103,8 @@ class TaskService:
         data = asdict(task)
         data.pop("worker_pid", None)
         data.pop("worker_host", None)
+        data["input_payload"].pop("_execution_id", None)
+        data["input_payload"].pop("_clip_execution_mode", None)
         data["task_id"] = str(data.pop("id"))
         data.update(seq=0, stage=task.status, updated_at=(task.finished_at or task.started_at or task.created_at).isoformat())
         if snapshot and snapshot["status"] == task.status:
@@ -118,6 +120,21 @@ class TaskService:
 
         await self.bus.request_task_cancel(task_id, persist)
         return await self.get(task_id)
+
+    async def cancel_admin(self, task_id: UUID, persist_operation) -> dict:
+        """Persist CAS + audit first; Redis failure cannot undo that durable intent."""
+        result = await database_call(persist_operation)
+
+        async def persist():
+            task = await database_call(self.repository.get, task_id)
+            return task.cancel_requested and task.status in {"running", "processing"}
+
+        try:
+            await self.bus.request_task_cancel(task_id, persist)
+            pending = False
+        except AppException:
+            pending = True
+        return {**result, "notification_pending": pending}
 
     async def is_cancel_requested(self, task_id: UUID) -> bool:
         async def persisted():

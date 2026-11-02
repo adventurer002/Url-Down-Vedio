@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 from uuid import UUID
+from typing import Protocol
 
 from app.core.exceptions import AppException
 from app.infrastructure.process_runner import ProcessRunner
@@ -21,6 +22,11 @@ def select_audio_stream(video: ParsedVideo) -> dict:
     if not streams:
         raise AppException("AUDIO_STREAM_UNAVAILABLE", "视频没有可独立拉取的音轨，已阻止下载完整视频", 422)
     return max(streams, key=lambda item: positive_number(item.get("abr")) or positive_number(item.get("tbr")) or 0)
+
+
+class TranscriptionAudioProvider(Protocol):
+    async def acquire(self, payload: dict, directory: Path, **controls) -> Path: ...
+    async def acquire_local(self, source: Path, media_type: str, directory: Path, *, source_extension: str = "mp3", **controls) -> Path: ...
 
 
 class AudioAcquirer:
@@ -62,11 +68,30 @@ class AudioAcquirer:
                 raise AppException("FFMPEG_UNAVAILABLE", "服务端缺少 FFmpeg", 503)
             output = directory / "output.mp3"
             await controls["on_progress"]({"stage": "processing", "progress": 40})
-            await self.runner.run([ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                                   "-protocol_whitelist", "file,pipe,crypto", "-i", str(source),
-                                   "-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "192k", "-threads", "1", str(output)],
-                                  directory, cwd=Path(__file__).resolve().parents[3], **controls)
+            with self.storage.file_lock(source):
+                if not source.is_file():
+                    raise AppException("FILE_NOT_FOUND", "媒体缓存已过期，请重试", 404)
+                await self.runner.run([ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                                       "-protocol_whitelist", "file,pipe,crypto", "-i", str(source),
+                                       "-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "192k", "-threads", "1", str(output)],
+                                      directory, cwd=Path(__file__).resolve().parents[3], **controls)
             if not output.is_file() or not output.stat().st_size:
                 raise AppException("AUDIO_EXTRACTION_FAILED", "音频提取未生成有效文件", 502)
             return output
         return await YtDlpDownloadAdapter(self.runner).download({**payload, "preset_id": "audio_mp3", "_audio_only": True}, directory, **controls)
+
+    async def acquire_local(self, source: Path, media_type: str, directory: Path, *, source_extension: str = "mp3", **controls) -> Path:
+        if media_type == "audio" and source_extension != "m4a":
+            return source  # MP3 goes straight to the configured ASR adapter.
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise AppException("FFMPEG_UNAVAILABLE", "服务端缺少 FFmpeg", 503)
+        output = directory / "asr-audio.wav"
+        await self.runner.run([ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+            "-protocol_whitelist", "file,pipe", "-format_whitelist", "mov,matroska,webm,mp3",
+            "-i", str(source), "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000",
+            "-c:a", "pcm_s16le", "-threads", "1", str(output)], directory,
+            cwd=Path(__file__).resolve().parents[3], **controls)
+        if not output.is_file() or not output.stat().st_size:
+            raise AppException("AUDIO_EXTRACTION_FAILED", "媒体未能准备有效音频", 422)
+        return output

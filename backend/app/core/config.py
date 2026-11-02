@@ -38,9 +38,17 @@ class Settings(BaseSettings):
     YTDLP_PROXY: SecretStr = SecretStr("")
     YTDLP_JS_RUNTIME: Literal["disabled", "deno"] = "disabled"
     YTDLP_DENO_PATH: str = ""
+    VIDEO_PARSE_CACHE_TTL_SECONDS: int = Field(default=120, ge=0, le=600)
+    VIDEO_PARSE_CONCURRENCY: int = Field(default=2, ge=1, le=4)
     DOWNLOAD_TIMEOUT_SECONDS: int = Field(default=600, gt=0)
     MAX_FILE_SIZE_MB: int = Field(default=512, gt=0)
     STORAGE_MIN_FREE_MB: int = Field(default=256, ge=0)
+    UPLOAD_IDLE_TIMEOUT_SECONDS: int = Field(default=30, gt=0)
+    UPLOAD_TOTAL_TIMEOUT_SECONDS: int = Field(default=600, gt=0)
+    UPLOAD_SESSION_TTL_SECONDS: int = Field(default=3600, ge=60)
+    UPLOAD_PROBE_TIMEOUT_SECONDS: int = Field(default=20, gt=0)
+    UPLOAD_MAX_PENDING_PER_USER: int = Field(default=3, ge=1, le=10)
+    UPLOAD_MAX_PER_HOUR: int = Field(default=20, ge=1)
     TRANSCRIPT_CONTENT_VERSION: str = Field(default="v1", min_length=1, max_length=64)
     SUBTITLE_TIMEOUT_SECONDS: int = Field(default=45, gt=0)
     ASR_PROVIDER: Literal["auto", "openai_compatible", "qwen", "disabled", "mock"] = "auto"
@@ -49,6 +57,7 @@ class Settings(BaseSettings):
     ASR_MODEL: str = Field(default="whisper-1", min_length=1, max_length=128)
     ASR_TOTAL_TIMEOUT_SECONDS: int = Field(default=90, gt=0)
     ASR_MAX_UPLOAD_MB: int = Field(default=25, gt=0)
+    ASR_CHUNK_CONCURRENCY: int = Field(default=1, ge=1, le=2)
     ASR_MOCK_TEXT: str = "离线模拟转写内容（非真实识别结果）"
     LLM_PROVIDER: Literal["auto", "openai_compatible", "heuristic"] = "auto"
     LLM_API_BASE_URL: str = "https://api.openai.com/v1"
@@ -58,12 +67,29 @@ class Settings(BaseSettings):
     AI_TASK_TIMEOUT_SECONDS: int = Field(default=900, gt=0)
     LLM_CHUNK_CHARS: int = Field(default=12000, ge=256)
     LLM_MAX_CHUNKS: int = Field(default=64, ge=1, le=256)
+    LLM_CHUNK_CONCURRENCY: int = Field(default=2, ge=1, le=2)
     LLM_MAX_OUTPUT_TOKENS: int = Field(default=4096, ge=128, le=16384)
     SUMMARY_PROMPT_VERSION: str = Field(default="summary-v2", min_length=1, max_length=64)
     MINDMAP_PROMPT_VERSION: str = Field(default="mindmap-v2", min_length=1, max_length=64)
     MINDMAP_SCHEMA_VERSION: str = Field(default="tree-v1", min_length=1, max_length=32)
     LLM_INPUT_COST_PER_MILLION: Decimal | None = Field(default=None, ge=0)
     LLM_OUTPUT_COST_PER_MILLION: Decimal | None = Field(default=None, ge=0)
+
+    CLIPS_ENABLED: bool = False
+    CLIPS_PROMPT_VERSION: str = "clips-v1"
+    CLIPS_SCHEMA_VERSION: str = "clips-v1"
+    CLIPS_ANALYSIS_TIMEOUT_SECONDS: int = Field(default=900, gt=0)
+    CLIPS_EXPORT_TIMEOUT_SECONDS: int = Field(default=1800, gt=0)
+    CLIPS_RENDER_TIMEOUT_SECONDS: int = Field(default=180, gt=0)
+    CLIPS_EXPORT_MAX_TEMP_MB: int = Field(default=1536, gt=0)
+    CLIPS_EXPORT_MAX_TOTAL_SECONDS: int = Field(default=900, gt=0)
+    CLIPS_MAX_DAILY_EXPORTS: int = Field(default=10, ge=1)
+    CLIPS_MAX_DAILY_PLAN_EXPORTS: int = Field(default=3, ge=1)
+    CLIPS_TIMING_API_BASE_URL: str = ""
+    CLIPS_TIMING_API_KEY: SecretStr = SecretStr("")
+    CLIPS_TIMING_MODEL: str = ""
+    CLIPS_TIMING_TIMEOUT_SECONDS: int = Field(default=180, gt=0)
+    CLIPS_TIMING_MAX_AUDIO_SECONDS: int = Field(default=900, gt=0)
 
     @property
     def storage_path(self) -> Path:

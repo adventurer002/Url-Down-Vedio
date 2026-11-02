@@ -166,12 +166,12 @@ it("shows a quote before asking, cancels without creating a task, and retries th
     target: { value: "缓存键怎么设置？" },
   });
   fireEvent.click(screen.getByRole("button", { name: "确认额度并提问" }));
-  let modal = await screen.findByRole("dialog", { name: "确认本次额度" });
+  let modal = await screen.findByRole("region", { name: "确认本次额度" });
   expect(api.confirmQuote).not.toHaveBeenCalled();
   fireEvent.click(within(modal).getByRole("button", { name: "暂不开始" }));
   expect(store.tasks).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "确认额度并提问" }));
-  modal = await screen.findByRole("dialog", { name: "确认本次额度" });
+  modal = await screen.findByRole("region", { name: "确认本次额度" });
   vi.mocked(api.confirmQuote).mockRejectedValueOnce(
     new ApiError("NETWORK_ERROR", "确认失败"),
   );
@@ -272,14 +272,14 @@ it("removes a saved item and shows the empty state", async () => {
   vi.spyOn(api, "unsaveVideo").mockResolvedValue({ removed: true });
   mount(<LibraryView />);
   fireEvent.click(await screen.findByRole("button", { name: "缓存与事务" }));
-  await screen.findByRole("button", { name: "移出收藏" });
+  await screen.findByRole("button", { name: "移出知识库" });
   vi.mocked(api.library).mockResolvedValue({
     items: [],
     total: 0,
     limit: 20,
     offset: 0,
   });
-  fireEvent.click(screen.getByRole("button", { name: "移出收藏" }));
+  fireEvent.click(screen.getByRole("button", { name: "移出知识库" }));
   expect(await screen.findByText("从第一条收藏开始")).toBeTruthy();
   expect(api.unsaveVideo).toHaveBeenCalledWith("saved-1");
 });

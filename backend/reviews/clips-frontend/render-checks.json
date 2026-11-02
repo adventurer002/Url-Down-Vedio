@@ -1,0 +1,101 @@
+{
+  "kind": "design_prototype_only",
+  "business_api_calls": 0,
+  "checks": [
+    {
+      "check": "selection_and_confirmation",
+      "passed": true
+    },
+    {
+      "check": "candidates_width",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "check": "mobile_original_text_dialog",
+      "passed": true
+    },
+    {
+      "check": "candidates_width",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "check": "candidates_width",
+      "width": 768,
+      "passed": true
+    },
+    {
+      "check": "candidates_width",
+      "width": 1024,
+      "passed": true
+    },
+    {
+      "check": "candidates_width",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "check": "settings_320",
+      "passed": true
+    },
+    {
+      "check": "missing_source_does_not_block_cache_quote",
+      "passed": true
+    },
+    {
+      "check": "audio_analysis_without_video_export",
+      "passed": true
+    },
+    {
+      "check": "separate_result_files_and_expiry",
+      "passed": true
+    },
+    {
+      "check": "generating",
+      "passed": true
+    },
+    {
+      "check": "empty",
+      "passed": true
+    },
+    {
+      "check": "javascript_errors",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "check": "mobile_footer_activates_after_content_without_covering_first_selection",
+      "passed": true
+    },
+    {
+      "check": "all_states_320",
+      "state": "settings",
+      "passed": true
+    },
+    {
+      "check": "all_states_320",
+      "state": "candidates",
+      "passed": true
+    },
+    {
+      "check": "all_states_320",
+      "state": "generating",
+      "passed": true
+    },
+    {
+      "check": "all_states_320",
+      "state": "results",
+      "passed": true
+    },
+    {
+      "check": "all_states_320",
+      "state": "empty",
+      "passed": true
+    },
+    {
+      "check": "audio_cannot_show_video_results",
+      "passed": true
+    }
+  ]
+}

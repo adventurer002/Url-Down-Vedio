@@ -1,0 +1,408 @@
+/* A single example connects the four capabilities to the same source. */
+.m-landing-site .m-showcase {
+  position: relative;
+  max-width: 1160px;
+  padding: 44px 40px 64px;
+}
+.m-anchor-alias {
+  position: absolute;
+  top: 0;
+}
+.m-showcase-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.m-showcase-heading h2 > span {
+  display: inline-block;
+}
+.m-landing-site .m-showcase-heading p {
+  margin-top: 14px;
+  font-size: 15px;
+  color: #62626b;
+}
+.m-showcase-heading > a {
+  flex: none;
+}
+.m-showcase-window {
+  border: 1px solid #e4e4e9;
+  border-radius: 24px;
+  background: #fff;
+}
+.m-showcase-source {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 28px;
+}
+.m-showcase-poster {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  aspect-ratio: 16 / 9;
+  border-radius: 7px;
+  background: #111113;
+  color: white !important;
+}
+.m-showcase-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  opacity: 0.35;
+}
+.m-showcase-poster svg {
+  position: relative;
+  fill: currentColor;
+}
+.m-showcase-source h3 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.m-showcase-source p {
+  font-size: 13px;
+  color: #62626b;
+}
+.m-showcase-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-inline: 28px;
+  border-top: 1px solid #ededf0;
+  border-bottom: 1px solid #ededf0;
+}
+.m-showcase-tabs > button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #62626b;
+  font-size: 15px;
+}
+.m-showcase-tabs > button[aria-selected="true"] {
+  border-bottom-color: #111113;
+  color: #111113;
+  font-weight: 600;
+}
+.m-showcase-tabs > button:hover {
+  color: #111113;
+  background: #f6f6f8;
+}
+.m-showcase-tabs > button:focus-visible {
+  outline-offset: -5px;
+}
+/* Inactive panels reserve their natural space; only the active one is exposed. */
+.m-showcase-panels {
+  display: grid;
+}
+.m-showcase-panel {
+  display: grid;
+  grid-area: 1 / 1;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 32px;
+  padding: 32px;
+  min-width: 0;
+  align-items: start;
+  align-content: start;
+}
+.m-showcase-panel[aria-hidden="true"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.m-showcase-panel:focus-visible {
+  outline-offset: -5px;
+}
+.m-showcase-description h3 {
+  font-size: 23px;
+  line-height: 1.5;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.m-landing-site .m-showcase-description p {
+  font-size: 15px;
+  line-height: 1.85;
+  margin-top: 14px;
+  color: #62626b;
+}
+.m-showcase-description small {
+  display: block;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #62626b;
+}
+.m-showcase-output {
+  min-width: 0;
+  border-left: 1px solid #ededf0;
+  padding-left: 32px;
+  align-self: stretch;
+}
+.m-showcase-chapters {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.m-showcase-chapters li,
+.m-showcase-transcript p {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  font-size: 15px;
+  line-height: 1.85;
+}
+.m-showcase-chapters li + li,
+.m-showcase-transcript p + p {
+  margin-top: 22px;
+}
+.m-showcase-output a:has(time),
+.m-showcase-transcript a {
+  color: #4b4b55;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.m-showcase-transcript span {
+  color: #4b4b55;
+}
+.m-showcase-download > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 200px;
+  object-fit: contain;
+  background: #f6f6f8;
+  border-radius: 10px;
+}
+.m-showcase-download > a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 0;
+  min-height: 56px;
+  font-size: 15px;
+}
+.m-showcase-download > a > span {
+  flex: 1;
+}
+.m-showcase-download small {
+  display: block;
+  color: #62626b;
+  font-size: 13px;
+}
+.m-showcase-map {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+.m-showcase-map-root {
+  border: 1px solid #d7d7df;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  background: #f6f6f8;
+  max-width: 90px;
+  text-wrap: balance;
+}
+.m-showcase-branches {
+  position: relative;
+  border-left: 1px solid #d7d7df;
+  padding-left: 20px;
+}
+.m-showcase-branches::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -25px;
+  width: 24px;
+  height: 1px;
+  background: #d7d7df;
+}
+.m-showcase-branches details + details {
+  margin-top: 12px;
+}
+.m-showcase-branches summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  min-height: 48px;
+  border: 1px solid #e4e4e9;
+  border-radius: 9px;
+  font-size: 15px;
+  line-height: 1.6;
+  list-style: none;
+  cursor: pointer;
+}
+.m-showcase-branches summary::-webkit-details-marker {
+  display: none;
+}
+.m-showcase-branches summary::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -21px;
+  width: 20px;
+  height: 1px;
+  background: #d7d7df;
+}
+.m-node-toggle {
+  flex: none;
+}
+.m-showcase-branches details[open] .m-node-toggle {
+  transform: rotate(45deg);
+}
+.m-showcase-branches details[open] > summary {
+  background: #f6f6f8;
+}
+.m-landing-site .m-showcase-branches details > div {
+  padding: 12px 4px 8px;
+  font-size: 14px;
+  line-height: 1.85;
+  color: #4b4b55;
+}
+.m-showcase-branches p + p {
+  margin-top: 12px;
+}
+.m-showcase-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  border-top: 1px solid #ededf0;
+  padding: 12px 32px;
+}
+.m-showcase-footer > span,
+.m-showcase-source-note {
+  color: #62626b;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.m-landing-site .m-showcase-source-note {
+  margin-top: 14px;
+}
+.m-showcase-source-note a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+@media (max-width: 900px) {
+  .m-landing-site .m-showcase {
+    padding: 36px 24px 48px;
+  }
+  .m-showcase-heading {
+    display: block;
+    margin-bottom: 20px;
+  }
+  .m-showcase-heading > a {
+    margin-top: 10px;
+  }
+  .m-showcase-panel {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px;
+  }
+  @supports (grid-template-rows: subgrid) {
+    .m-showcase-panels {
+      grid-template-rows: auto auto;
+    }
+    .m-showcase-panel {
+      grid-area: 1 / 1 / 3 / 2;
+      grid-template-rows: subgrid;
+    }
+  }
+  .m-showcase-output {
+    border-left: 0;
+    border-top: 1px solid #ededf0;
+    padding: 24px 0 0;
+  }
+  .m-showcase-description small {
+    margin-top: 8px;
+  }
+  .m-showcase-description h3 {
+    font-size: 21px;
+  }
+  .m-showcase-description p {
+    margin-top: 10px;
+  }
+}
+@media (max-width: 700px) {
+  .m-landing-site .m-showcase {
+    padding: 28px 20px 40px;
+  }
+  .m-showcase-heading h2 > span {
+    white-space: nowrap;
+  }
+  .m-showcase-source {
+    gap: 12px;
+    padding: 18px;
+  }
+  .m-showcase-poster {
+    width: 60px;
+  }
+  .m-showcase-source h3 {
+    font-size: 15px;
+  }
+  .m-showcase-source p {
+    font-size: 12px;
+  }
+  .m-showcase-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 4px 12px;
+  }
+  .m-showcase-tabs > button {
+    min-height: 48px;
+    font-size: 14px;
+  }
+  .m-showcase-panel {
+    padding: 22px 18px;
+    gap: 20px;
+  }
+  .m-showcase-output {
+    padding-top: 20px;
+  }
+  .m-showcase-map {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .m-showcase-map-root {
+    justify-self: start;
+    max-width: none;
+    padding: 10px 8px;
+  }
+  .m-showcase-branches {
+    margin-left: 16px;
+    padding-left: 16px;
+  }
+  .m-showcase-branches::before {
+    top: -17px;
+    left: -1px;
+    width: 1px;
+    height: 16px;
+  }
+  .m-showcase-branches summary {
+    padding: 10px;
+    font-size: 14px;
+    gap: 8px;
+  }
+  .m-showcase-branches summary::before {
+    left: -17px;
+    width: 16px;
+  }
+  .m-showcase-footer {
+    padding: 12px 18px;
+  }
+}

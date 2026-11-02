@@ -1,5 +1,4 @@
 import asyncio
-from dataclasses import asdict
 import json
 import secrets
 from uuid import UUID, uuid4
@@ -10,6 +9,7 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.auth.qr import get_qr_provider
 from app.modules.auth.tokens import issue_token
+from app.modules.auth.repository import public_user
 from app.modules.tasks.service import database_call
 
 TTL = 300
@@ -28,6 +28,7 @@ local state = cjson.decode(raw)
 if state.status ~= 'pending' then return 0 end
 state.status = 'authenticated'
 state.user_id = ARGV[2]
+state.auth_version = tonumber(ARGV[3])
 redis.call('SET', KEYS[1], cjson.encode(state), 'KEEPTTL')
 redis.call('DEL', KEYS[2])
 return 1
@@ -65,11 +66,13 @@ class AuthService:
         return {"scene_id": scene_id, "mode": settings.WECHAT_MP_MODE, "qr_url": qr_url,
                 "verify_code": code, "expires_in": TTL}
 
-    async def user(self, user_id):
+    async def user(self, user_id, auth_version=None):
         # DB remains authoritative, including when the Redis invalidation marker expires.
         user = await database_call(self.users.get, user_id)
         if user is None or user.status != "active":
             raise AppException("INVALID_TOKEN", "用户不存在或已停用", 401)
+        if auth_version is not None and user.auth_version != auth_version:
+            raise AppException("INVALID_TOKEN", "登录凭证已失效，请重新登录", 401)
         if not user.is_subscribed and not settings.ALLOWANCES_ENABLED:
             raise AppException("WECHAT_UNSUBSCRIBED", "请重新关注公众号后登录", 401)
         return user
@@ -81,8 +84,8 @@ class AuthService:
         state = json.loads(raw)
         if state["status"] != "authenticated":
             return {"status": "pending"}
-        user = await self.user(UUID(state["user_id"]))
-        return {"status": "authenticated", "access_token": issue_token(user.id), "user": asdict(user)}
+        user = await self.user(UUID(state["user_id"]), state.get("auth_version", 0))
+        return {"status": "authenticated", "access_token": issue_token(user.id, user.auth_version), "user": public_user(user)}
 
     async def subscription(self, openid, subscribed, login=False):
         user = await database_call(self.users.subscription, openid, subscribed, login)
@@ -107,7 +110,7 @@ class AuthService:
         if user.status != "active":
             return False
         return bool(await redis_call(self.redis.eval, AUTHENTICATE, 2,
-            f"wechat:session:{scene_id}", f"wechat:code:{code}", scene_id, str(user.id)))
+            f"wechat:session:{scene_id}", f"wechat:code:{code}", scene_id, str(user.id), user.auth_version))
 
     async def authenticate_scene(self, openid, scene_id):
         try:

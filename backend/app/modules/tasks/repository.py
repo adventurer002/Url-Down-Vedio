@@ -4,7 +4,7 @@ from uuid import UUID
 import os
 import socket
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import sessionmaker
 
 from app.core.exceptions import AppException
@@ -45,6 +45,36 @@ def record(task: Task) -> TaskRecord:
 
 
 class TaskRepository:
+    @staticmethod
+    def completed_owned_ids(user_id):
+        """Query contract for module-owned artifacts; callers need not access Task models."""
+        return select(Task.id).where(Task.user_id == user_id, Task.status == TaskStatus.completed)
+
+    def clip_render_counts(self, session, user_id, plan_id):
+        from app.modules.billing.policy import BEIJING
+        start = utcnow().astimezone(BEIJING).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        mode = Task.input_payload["_clip_execution_mode"].as_string()
+        legacy_render = Task.input_payload["reuse_result"]["clip_export_id"].as_string().is_(None)
+        rendered = or_(mode.in_(("reserved", "render")), mode.is_(None) & legacy_render)
+        total, plan = session.execute(select(func.count(), func.coalesce(func.sum(case(
+            (Task.input_payload["plan_id"].as_string() == str(plan_id), 1), else_=0)), 0)).where(
+                Task.user_id == user_id, Task.task_type == "clips_export", Task.started_at >= start, rendered)).one()
+        return total, plan
+
+    def clip_execution_mode(self, task_id, mode):
+        if mode not in {"cache", "render"}:
+            raise ValueError("invalid clip execution mode")
+        with self.sessions.begin() as session:
+            task = self._lock_task(session, task_id)
+            if task.status not in (TaskStatus.running, TaskStatus.processing) or task.cancel_requested:
+                raise AppException("TASK_CANCELLED", "任务已取消", 409)
+            previous = task.input_payload.get("_clip_execution_mode")
+            if previous == "render" and mode != "render":
+                raise ValueError("real work cannot be refunded as cache")
+            if previous == "cache" and mode != "cache":
+                raise AppException("CLIP_REQUOTE_REQUIRED", "缓存已失效，请重新报价", 409)
+            task.input_payload = {**task.input_payload, "_clip_execution_mode": mode}
+
     def __init__(self, sessions: sessionmaker):
         self.sessions = sessions
 
@@ -65,7 +95,7 @@ class TaskRepository:
             return
         owned = False
         if task.status == TaskStatus.completed and task.result_payload:
-            fields = [(name, task.result_payload[name]) for name in ("answer_id", "result_id", "file_id", "transcript_id") if name in task.result_payload]
+            fields = [(name, task.result_payload[name]) for name in ("clip_export_id", "clip_plan_id", "answer_id", "result_id", "file_id", "transcript_id") if name in task.result_payload]
             if fields:
                 name, value = fields[0]
                 from sqlalchemy import or_
@@ -75,6 +105,8 @@ class TaskRepository:
                 owned = session.scalar(select(Task.id).where(Task.user_id == task.user_id,
                     Task.id != task.id, Task.status == TaskStatus.completed,
                     reference).limit(1)) is not None
+        if task.task_type == "ai_clip_plan" and (task.result_payload or {}).get("outcome") == "no_highlights":
+            owned = True  # Explicit no-delivery policy for clips only; release all held allowance.
         if task.status in {TaskStatus.completed, TaskStatus.failed, TaskStatus.cancelled, TaskStatus.expired}:
             self._billing().finalize(session, record(task), task.status == TaskStatus.completed, owned)
 
@@ -82,10 +114,23 @@ class TaskRepository:
                expires_at: datetime | None = None, user_id: UUID | None = None) -> TaskRecord:
         with self.sessions.begin() as session:
             quote = None
-            if settings.ALLOWANCES_ENABLED and task_type != "simulate_progress":
+            probe_upload = None
+            if task_type == "media_probe":
+                from app.modules.uploads.repository import UploadRepository
+                probe_upload = UploadRepository(self.sessions)
+                previous = probe_upload.bind_probe(session, UUID(input_payload["upload_id"]), user_id)
+                if previous:
+                    return record(session.get(Task, previous))
+            if settings.ALLOWANCES_ENABLED and task_type not in {"simulate_progress", "media_probe"}:
                 quote = self._billing().bind_quote(session, user_id, input_payload or {}, task_type)
                 if quote.task_id:
                     return record(session.get(Task, quote.task_id))
+                if task_type == "clips_export":
+                    previous = session.scalar(select(Task.id).where(Task.user_id == user_id,
+                        Task.task_type == "clips_export", Task.status.in_(ACTIVE_STATUSES),
+                        Task.input_payload["export_key"].as_string() == input_payload["export_key"]).limit(1))
+                    if previous:
+                        raise AppException("CLIP_EXPORT_IN_PROGRESS", "相同切片导出已在排队或执行中", 409)
                 pending = session.scalar(select(func.count()).select_from(Task).where(Task.user_id == user_id, Task.status.in_(ACTIVE_STATUSES)))
                 if pending >= 10:
                     raise AppException("TOO_MANY_TASKS", "最多保留 10 个排队或执行中的任务", 429)
@@ -96,6 +141,8 @@ class TaskRepository:
             task = Task(user_id=user_id, task_type=task_type, video_id=video_id, input_payload=input_payload or {}, expires_at=expires_at)
             session.add(task)
             session.flush()
+            if probe_upload:
+                probe_upload.bind_probe(session, UUID(input_payload["upload_id"]), user_id, task.id)
             if quote:
                 quote.task_id = task.id
             return record(task)
@@ -121,8 +168,12 @@ class TaskRepository:
             return session.execute(update(Task).where(*conditions).values(history_hidden=True)).rowcount
 
     def has_result_grant(self, field: str, result_ids: list[UUID], user_id: UUID | None) -> bool:
-        if field not in {"file_id", "transcript_id", "result_id"}:
+        if field not in {"file_id", "transcript_id", "result_id", "clip_plan_id", "clip_export_id"}:
             raise ValueError("unsupported result reference")
+        if field == "file_id":
+            from app.modules.clips.repository import ClipRepository
+            if ClipRepository(self.sessions).can_read_file(user_id, result_ids):
+                return True
         from sqlalchemy import or_
         with self.sessions() as session:
             owners = [] if settings.ALLOWANCES_ENABLED else [Task.user_id.is_(None)]
@@ -143,7 +194,7 @@ class TaskRepository:
                 raise AppException("TASK_NOT_FOUND", "任务不存在", 404)
             return record(task)
 
-    def start(self, task_id: UUID) -> bool:
+    def start(self, task_id: UUID, *, execution_id: str | None = None, clip_cache_ready=False) -> bool:
         with self.sessions.begin() as session:
             task = self._lock_task(session, task_id)
             if task.status != TaskStatus.queued or task.cancel_requested:
@@ -156,7 +207,9 @@ class TaskRepository:
                 task.error_code, task.error_message = "TASK_EXPIRED", "任务已过期"
                 self._settle(session, task)
                 return False
-            if settings.ALLOWANCES_ENABLED and task.task_type != "simulate_progress":
+            if task.task_type == "clips_export":
+                task.input_payload = {**task.input_payload, "_clip_execution_mode": "cache" if clip_cache_ready or task.input_payload.get("reuse_result") or task.input_payload.get("reuse_assets") else "reserved"}
+            if settings.ALLOWANCES_ENABLED and task.task_type not in {"simulate_progress", "media_probe"}:
                 reason = self._billing().admit(session, record(task))
                 if reason:
                     task.wait_reason = reason
@@ -166,6 +219,8 @@ class TaskRepository:
             task.wait_reason = None
             task.status, task.started_at = TaskStatus.running, utcnow()
             task.worker_pid, task.worker_host = os.getpid(), socket.gethostname()
+            if execution_id is not None:
+                task.input_payload = {**task.input_payload, "_execution_id": execution_id}
             task.attempts += 1
             session.flush()
             return True
@@ -178,25 +233,85 @@ class TaskRepository:
 
     def request_cancel(self, task_id: UUID) -> TaskRecord:
         with self.sessions.begin() as session:
-            self._lock_task(session, task_id)
-            # Check the status in UPDATE, never rely on a prior SELECT.
-            session.execute(update(Task).where(Task.id == task_id, Task.status == TaskStatus.queued).values(
-                status=TaskStatus.cancelled, cancel_requested=True, finished_at=utcnow(),
-                error_code="TASK_CANCELLED", error_message="任务已取消"))
-            session.execute(update(Task).where(
-                Task.id == task_id, Task.status.in_((TaskStatus.running, TaskStatus.processing))
-            ).values(cancel_requested=True))
-            session.flush()
-            task = session.get(Task, task_id, populate_existing=True)
-            self._settle(session, task)
-        return self.get(task_id)
+            return self.request_cancel_in_transaction(session, task_id)
+
+    def request_cancel_in_transaction(self, session, task_id, before_change=None):
+        """Same CAS/settlement contract, participating in an administrative audit transaction."""
+        original = self._lock_task(session, task_id)
+        if before_change:
+            before_change(record(original))
+        session.execute(update(Task).where(Task.id == task_id, Task.status == TaskStatus.queued).values(
+            status=TaskStatus.cancelled, cancel_requested=True, finished_at=utcnow(),
+            error_code="TASK_CANCELLED", error_message="任务已取消"))
+        session.execute(update(Task).where(
+            Task.id == task_id, Task.status.in_((TaskStatus.running, TaskStatus.processing))
+        ).values(cancel_requested=True))
+        session.flush()
+        task = session.get(Task, task_id, populate_existing=True)
+        self._settle(session, task)
+        return record(task)
+
+    def admin_detail(self, session, task_id):
+        task = session.get(Task, task_id, populate_existing=True)
+        if task is None:
+            raise AppException("TASK_NOT_FOUND", "任务不存在", 404)
+        return self.admin_record(task)
+
+    @staticmethod
+    def admin_record(task):
+        data = {name: getattr(task, name) for name in (
+            "user_id", "video_id", "task_type", "progress", "error_code", "wait_reason", "attempts",
+            "cancel_requested", "history_hidden", "created_at", "started_at", "finished_at", "expires_at")}
+        data.update(task_id=task.id, status=task.status.value)
+        references = {}
+        for name in ("clip_export_id", "clip_plan_id", "file_id", "transcript_id", "result_id", "summary_result_id", "answer_id"):
+            try:
+                references[name] = str(UUID((task.result_payload or {})[name]))
+            except (KeyError, ValueError, TypeError, AttributeError):
+                pass
+        data["result_references"] = references
+        instant = utcnow()
+        aware = lambda value: value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+        data["queue_seconds"] = max(0, (aware(task.started_at or task.finished_at or instant) - aware(task.created_at)).total_seconds())
+        data["execution_seconds"] = max(0, (aware(task.finished_at or instant) - aware(task.started_at)).total_seconds()) if task.started_at else None
+        return data
+
+    def admin_list(self, session, limit, offset, user_id=None, status=None, task_type=None, since=None, until=None):
+        conditions = []
+        for column, value in ((Task.user_id, user_id), (Task.status, status), (Task.task_type, task_type)):
+            if value is not None:
+                conditions.append(column == value)
+        if since is not None:
+            conditions.append(Task.created_at >= since)
+        if until is not None:
+            conditions.append(Task.created_at < until)
+        total = session.scalar(select(func.count()).select_from(Task).where(*conditions))
+        items = session.scalars(select(Task).where(*conditions)
+            .order_by(Task.created_at.desc(), Task.id.desc()).limit(limit).offset(offset))
+        return {"items": [self.admin_record(item) for item in items], "total": total, "limit": limit, "offset": offset}
+
+    def status_map(self, session, task_ids):
+        if not task_ids:
+            return {}
+        return {str(identifier): status.value for identifier, status in session.execute(
+            select(Task.id, Task.status).where(Task.id.in_(task_ids)))}
+
+    def admin_statistics(self, session, day_start):
+        counts = {status.value: 0 for status in TaskStatus}
+        counts.update({status.value: count for status, count in session.execute(
+            select(Task.status, func.count()).group_by(Task.status))})
+        return {"by_status": counts, "total": sum(counts.values()),
+                "created_today": session.scalar(select(func.count()).select_from(Task).where(Task.created_at >= day_start))}
 
     def finish(self, task_id: UUID, status: str, progress: int, result_payload: dict | None = None,
-               error_code: str | None = None, error_message: str | None = None) -> TaskRecord:
+               error_code: str | None = None, error_message: str | None = None,
+               *, expected_execution_id: str | None = None) -> TaskRecord:
         if status not in {"completed", "failed", "cancelled", "expired"}:
             raise ValueError("finish requires a terminal status")
         with self.sessions.begin() as session:
-            self._lock_task(session, task_id)
+            current = self._lock_task(session, task_id)
+            if expected_execution_id is not None and current.input_payload.get("_execution_id") != expected_execution_id:
+                return record(current)
             condition = [Task.id == task_id, Task.status.in_(ACTIVE_STATUSES)]
             if status in {"completed", "failed"}:
                 condition.append(Task.cancel_requested.is_(False))
@@ -209,8 +324,10 @@ class TaskRepository:
             ).values(status=TaskStatus.cancelled, progress=progress, finished_at=utcnow(),
                      result_payload=None, error_code="TASK_CANCELLED", error_message="任务已取消"))
             session.flush()
-            self._settle(session, session.get(Task, task_id, populate_existing=True))
-        return self.get(task_id)
+            final = session.get(Task, task_id, populate_existing=True)
+            self._settle(session, final)
+            result = record(final)
+        return result
 
     def perform_if_active(self, task_id: UUID, writer):
         """Serialize intermediate module writes against cancellation without completing the parent."""
@@ -232,7 +349,10 @@ class TaskRepository:
             if changed:
                 result = write_result(session)
                 if isinstance(result, dict):
-                    session.execute(update(Task).where(Task.id == task_id).values(result_payload=result))
+                    values = {"result_payload": result}
+                    if result.get("video_id") and session.get(Task, task_id).task_type == "media_probe":
+                        values["video_id"] = UUID(result["video_id"])
+                    session.execute(update(Task).where(Task.id == task_id).values(**values))
                 session.flush()
                 self._settle(session, session.get(Task, task_id, populate_existing=True))
         task = self.get(task_id)
@@ -293,3 +413,17 @@ class TaskRepository:
                     else:
                         return task.result_payload
         return None
+
+    def has_active_upload(self, upload_id):
+        from sqlalchemy import or_, and_
+        with self.sessions() as session:
+            return session.scalar(select(Task.id).where(
+                Task.input_payload["upload_id"].as_string() == str(upload_id),
+                or_(Task.status.in_((TaskStatus.running, TaskStatus.processing)),
+                    and_(Task.status == TaskStatus.queued, or_(Task.expires_at.is_(None), Task.expires_at > utcnow())))
+            ).limit(1)) is not None
+
+    def upload_task_ids(self, upload_id):
+        with self.sessions() as session:
+            return list(session.scalars(select(Task.id).where(
+                Task.input_payload["upload_id"].as_string() == str(upload_id))))

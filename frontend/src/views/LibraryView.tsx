@@ -1,3 +1,4 @@
+import { fromHistory, sourceLabel } from "../lib/content";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -16,8 +17,8 @@ export default function LibraryView() {
   const { user } = useAuth();
   return (
     <div className="library-page">
-      <Link className="back-link" to="/">
-        ← 返回首页
+      <Link className="back-link" to="/app">
+        ← 返回工作台
       </Link>
       <header className="library-heading">
         <span className="eyebrow">YOUR KNOWLEDGE, CONNECTED</span>
@@ -102,16 +103,12 @@ function LibrarySpace({ userId }: { userId: string }) {
       reader.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }, [detail?.id]);
   function savedVideo(item: LibraryDetail): SavedVideo {
-    return {
-      key: `${item.video.platform}_${item.video.platform_video_id}`,
-      url: item.video.source_url,
-      metadata: {
-        ...item.video,
-        has_subtitles: item.source_type === "subtitle",
-        download_options: [],
-      },
-      partial: true,
+    const content = fromHistory(item.video);
+    content.results = {
+      transcriptId: item.transcript_id,
+      summaryId: item.result_id || undefined,
     };
+    return content;
   }
   async function remove() {
     if (pending || !detail) return;
@@ -187,10 +184,10 @@ function LibrarySpace({ userId }: { userId: string }) {
           <p>
             {query || tag
               ? "换一个关键词，或清除标签再试。"
-              : "在视频工作台获取文稿后，点击“收藏到知识库”。"}
+              : "在内容工作台获取文稿后，点击“收藏到知识库”。"}
           </p>
-          <Link className="button secondary" to="/">
-            去探索视频
+          <Link className="button secondary" to="/app">
+            导入第一份内容
           </Link>
         </div>
       )}
@@ -204,7 +201,7 @@ function LibrarySpace({ userId }: { userId: string }) {
           >
             <div className="library-card-top">
               <span>
-                {item.video.platform} ·{" "}
+                {sourceLabel(savedVideo(item as LibraryDetail))} ·{" "}
                 {item.source_type === "asr" ? "语音转写" : "平台字幕"}
               </span>
               <time>{dateLabel(item.updated_at)}</time>
@@ -282,16 +279,28 @@ function LibrarySpace({ userId }: { userId: string }) {
               disabled={pending}
               onClick={() => void remove()}
             >
-              {pending ? "正在移除…" : "移出收藏"}
+              {pending ? "正在移除…" : "移出知识库"}
             </button>
             <Link
-              to={"/video/" + savedVideo(detail).key}
+              to={
+                "/video/" +
+                encodeURIComponent(savedVideo(detail).key) +
+                "?" +
+                new URLSearchParams({
+                  tab: detail.result_id ? "summary" : "transcript",
+                  transcript: detail.transcript_id,
+                  ...(detail.result_id ? { result: detail.result_id } : {}),
+                })
+              }
               onClick={() => {
                 const video = savedVideo(detail);
-                store.remember(video.url, video.metadata, true);
+                store.rememberContent(detail.video, {
+                  transcriptId: detail.transcript_id,
+                  summaryId: detail.result_id || undefined,
+                });
               }}
             >
-              打开视频工作台 →
+              打开内容工作台
             </Link>
           </div>
           {detail.summary_text && (

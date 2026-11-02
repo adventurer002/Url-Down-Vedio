@@ -1,5 +1,7 @@
 # 额度制首版：会员、转写分钟和 AI 次数
 
+本文保留额度首版的历史交付范围。当前管理员发放、审计与新的 CLI --reason 要求见 [ADMIN_BACKEND_MVP.md](ADMIN_BACKEND_MVP.md)。
+
 本阶段仅修改 backend/，不接真实支付，不修改前端，不建设积分钱包。公开售价为首版产品标准，
 当前只能由操作人通过服务端命令发放权益；此命令不代表支付已核验，不向浏览器提供发放接口。
 
@@ -100,7 +102,8 @@ curl --max-time 5 -H "Authorization: Bearer $TOKEN" "$BASE/billing/ledger"
 
 ```sh
 uv run python -m app.modules.billing.manage grant \
-  --user-id '替换为用户UUID' --product monthly --key 'manual-membership-001' --actor 'operator-name'
+  --user-id '替换为用户UUID' --product monthly --key 'manual-membership-001' \
+  --actor 'operator-name' --reason '人工发放月会员权益'
 ```
 
 product 还可用 asr_120、ai_100。key 是必填幂等键，重复执行不重复发放，不同请求复用同键拒绝。
