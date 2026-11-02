@@ -22,9 +22,8 @@ storage/files/*
 # Package manager caches are local, never release inputs.
 .pnpm-store/
 
-# 前端开发辅助目录（截图文档、构建产物，不入库）
+# 前端开发辅助目录（截图文档，不入库）
 frontend/docs/
-frontend/build/
 
 # 本地运行时数据与 agent 工作目录
 storage/uploads/
