@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import time
+from urllib.parse import urlsplit
 
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -30,12 +31,35 @@ class Flight:
 
 
 class MetadataCache:
-    def __init__(self, ttl: float, concurrency: int, *, max_bytes=8 * 1024 * 1024, max_entries=64, max_pending=32):
+    def __init__(self, ttl: float, concurrency: int, *, max_bytes=8 * 1024 * 1024, max_entries=64, max_pending=32,
+                 failure_cooldown: float = 30):
         self.ttl, self.max_bytes, self.max_entries, self.max_pending = ttl, max_bytes, max_entries, max_pending
         self.entries = OrderedDict()
         self.bytes = 0
         self.flights: dict[str, Flight] = {}
         self.slots = asyncio.Semaphore(concurrency)
+        self.failure_cooldown = failure_cooldown
+        # Host-wide backoff prevents changing video IDs from hammering a blocked
+        # platform. Store only sanitized fields, never exceptions/tracebacks.
+        self.failures = OrderedDict()
+
+    def check_cooldown(self, host):
+        now = time.monotonic()
+        for candidate, failure in list(self.failures.items()):
+            if failure[0] <= now:
+                self.failures.pop(candidate)
+        failure = self.failures.get(host)
+        if failure:
+            raise AppException(*failure[1:])
+
+    def remember_failure(self, host, error):
+        if not self.failure_cooldown or error.code not in {"SOURCE_ACCESS_RESTRICTED", "SOURCE_RATE_LIMITED"}:
+            return
+        self.failures.pop(host, None)
+        while len(self.failures) >= 64:
+            self.failures.popitem(last=False)
+        self.failures[host] = (time.monotonic() + self.failure_cooldown,
+                               error.code, error.message, error.status_code)
 
     def discard(self, key):
         _, blob = self.entries.pop(key)
@@ -66,6 +90,8 @@ class MetadataCache:
         if blob is not None:
             logger.info("performance stage=metadata_cache outcome=hit")
             return ParsedVideo(**json.loads(blob))
+        host = urlsplit(url).hostname
+        self.check_cooldown(host)
         flight = self.flights.get(url)
         if flight is not None and flight.retiring:
             await flight.closed.wait()
@@ -76,8 +102,14 @@ class MetadataCache:
 
             async def extract():
                 async with self.slots:
-                    with stage_timer("metadata_parse"):
-                        video = await parser.parse(url)
+                    # A request may have queued before another URL was blocked.
+                    self.check_cooldown(host)
+                    try:
+                        with stage_timer("metadata_parse"):
+                            video = await parser.parse(url)
+                    except AppException as error:
+                        self.remember_failure(host, error)
+                        raise
                     value = json.dumps(asdict(video), ensure_ascii=False).encode("utf-8")
                     self.put(url, value)
                     return value
@@ -111,10 +143,11 @@ def loop_cache() -> MetadataCache:
     loop = asyncio.get_running_loop()
     signature = (settings.VIDEO_PARSE_CACHE_TTL_SECONDS, settings.VIDEO_PARSE_CONCURRENCY,
                  hashlib.sha256(settings.YTDLP_PROXY.get_secret_value().encode()).digest(),
-                 settings.YTDLP_JS_RUNTIME, settings.YTDLP_DENO_PATH)
+                 settings.YTDLP_JS_RUNTIME, settings.YTDLP_DENO_PATH,
+                 settings.VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS)
     current = getattr(loop, "_videohub_metadata_cache", None)
     if current is None or current[0] != signature:
-        current = (signature, MetadataCache(signature[0], signature[1]))
+        current = (signature, MetadataCache(signature[0], signature[1], failure_cooldown=signature[-1]))
         # The loop owns its state; no global references retain closed Celery/test loops.
         loop._videohub_metadata_cache = current
     return current[1]

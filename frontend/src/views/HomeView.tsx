@@ -372,14 +372,30 @@ export default function HomeView() {
                   onDismiss={() => setError(null)}
                 >
                   {mode === "url" && (
-                    <button
-                      className="text-button"
-                      type="button"
-                      disabled={loading}
-                      onClick={() => void submit()}
-                    >
-                      保留链接，重新尝试
-                    </button>
+                    <>
+                      {[
+                        "SOURCE_ACCESS_RESTRICTED",
+                        "SOURCE_RATE_LIMITED",
+                        "SOURCE_NETWORK_UNAVAILABLE",
+                      ].includes(error?.code || "") && (
+                        <button
+                          className="text-button"
+                          type="button"
+                          disabled={loading}
+                          onClick={() => changeMode("file")}
+                        >
+                          改用上传文件
+                        </button>
+                      )}
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={loading}
+                        onClick={() => void submit()}
+                      >
+                        保留链接，重新尝试
+                      </button>
+                    </>
                   )}
                 </ErrorNotice>
               </div>

@@ -63,7 +63,8 @@ def map_extraction_error(exc: Exception) -> AppException:
     detail = str(exc).lower()
     if isinstance(exc, TimeoutError) or "timed out" in detail or "timeout" in detail:
         return AppException("PARSE_TIMEOUT", "视频元数据解析超时，请稍后重试", 504)
-    if any(text in detail for text in ("confirm you're not a bot", "confirm you’re not a bot", "http error 403", "captcha")):
+    if any(text in detail for text in ("confirm you're not a bot", "confirm you’re not a bot", "http error 403",
+                                       "http error 412", "captcha", "触发哔哩哔哩安全风控", "request is blocked (-352)")):
         return AppException("SOURCE_ACCESS_RESTRICTED", "视频平台要求额外验证或限制了服务器访问，请稍后重试", 502)
     if any(text in detail for text in ("http error 429", "too many requests", "rate limit")):
         return AppException("SOURCE_RATE_LIMITED", "视频平台请求频率受限，请稍后重试", 503)

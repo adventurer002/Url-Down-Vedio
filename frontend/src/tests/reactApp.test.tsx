@@ -256,6 +256,31 @@ it("reacts to SSE progress, fetches the completed result and exposes the control
   expect(FakeSource.instances[0]!.close).toHaveBeenCalled();
 });
 
+it("offers file upload after platform restrictions and preserves the video URL", async () => {
+  vi.spyOn(api, "parse").mockRejectedValue(
+    new ApiError(
+      "SOURCE_ACCESS_RESTRICTED",
+      "平台限制访问",
+      "req_restricted",
+      502,
+    ),
+  );
+  mount();
+  const url = "https://www.bilibili.com/video/BV1g2JX6nESP?t=3.6";
+  fireEvent.change(screen.getByRole("textbox", { name: "视频链接" }), {
+    target: { value: url },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "开始解析" }));
+  fireEvent.click(await screen.findByRole("button", { name: "改用上传文件" }));
+  expect(screen.getByRole("button", { name: "选择文件" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "视频链接" }));
+  expect(
+    (screen.getByRole("textbox", { name: "视频链接" }) as HTMLInputElement)
+      .value,
+  ).toBe(url);
+  expect(api.parse).toHaveBeenCalledOnce();
+});
+
 it("cancels an active task through the store and updates the React task card", async () => {
   vi.spyOn(api, "create").mockResolvedValue({
     task_id: "job-1",
