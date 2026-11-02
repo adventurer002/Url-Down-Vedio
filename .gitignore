@@ -32,5 +32,7 @@ storage/.locks/
 
 # 前端过程性文档与中间产物（不入库）
 frontend/*.md
-frontend/content/
+frontend/content/*
+# 自制公开示例是测试与内容导出的输入源码，需要进入仓库。
+!frontend/content/knowledge-loop.json
 frontend/scripts/
