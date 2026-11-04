@@ -14,10 +14,12 @@ from urllib.parse import urlsplit
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.core.security import validate_url
+from app.core.security import validate_source_url as validate_url
 from app.infrastructure.timing import stage_timer
 from app.modules.video.parsers.base import ParsedVideo, VideoParser
 from app.modules.video.parsers.ytdlp import YtDlpParser
+from app.modules.video.parsers.links import canonical_link
+from app.modules.video.parsers.operations import metadata_budget, source_operation
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +107,9 @@ class MetadataCache:
                     # A request may have queued before another URL was blocked.
                     self.check_cooldown(host)
                     try:
-                        with stage_timer("metadata_parse"):
-                            video = await parser.parse(url)
+                        async with source_operation(url, timeout=30, metadata=True):
+                            with stage_timer("metadata_parse"):
+                                video = await parser.parse(url)
                     except AppException as error:
                         self.remember_failure(host, error)
                         raise
@@ -144,10 +147,13 @@ def loop_cache() -> MetadataCache:
     signature = (settings.VIDEO_PARSE_CACHE_TTL_SECONDS, settings.VIDEO_PARSE_CONCURRENCY,
                  hashlib.sha256(settings.YTDLP_PROXY.get_secret_value().encode()).digest(),
                  settings.YTDLP_JS_RUNTIME, settings.YTDLP_DENO_PATH,
-                 settings.VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS)
+                 settings.VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS, settings.VIDEO_EGRESS_MODE,
+                 hashlib.sha256(settings.YOUTUBE_PROXY.get_secret_value().encode()).digest(),
+                 settings.VIDEO_EGRESS_POLICY_VERSION, settings.YOUTUBE_DNS_MODE)
     current = getattr(loop, "_videohub_metadata_cache", None)
     if current is None or current[0] != signature:
-        current = (signature, MetadataCache(signature[0], signature[1], failure_cooldown=signature[-1]))
+        cooldown = settings.VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS if settings.VIDEO_EGRESS_MODE == "legacy" else 0
+        current = (signature, MetadataCache(signature[0], signature[1], failure_cooldown=cooldown))
         # The loop owns its state; no global references retain closed Celery/test loops.
         loop._videohub_metadata_cache = current
     return current[1]
@@ -160,10 +166,11 @@ class CachedVideoParser:
 
     async def parse(self, url: str) -> ParsedVideo:
         try:
-            async with asyncio.timeout(self.timeout):
-                # Revalidate DNS even on a hit, without caching the security decision.
-                normalized = await validate_url(url)
-                return await (self.cache or loop_cache()).parse(normalized, self.parser)
+            with metadata_budget(self.timeout):
+                async with asyncio.timeout(self.timeout):
+                    # Revalidate DNS even on a hit, without caching the security decision.
+                    normalized = await validate_url(canonical_link(url))
+                    return await (self.cache or loop_cache()).parse(normalized, self.parser)
         except TimeoutError:
             raise AppException("PARSE_TIMEOUT", "视频解析或排队超过总执行时限", 504) from None
 

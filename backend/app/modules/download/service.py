@@ -1,7 +1,7 @@
 from app.core.exceptions import AppException
 from app.core.security import validate_url
 from app.infrastructure.storage.base import StorageAdapter
-from app.modules.download.presets import PRESETS
+from app.modules.download.presets import PRESETS, source_selection
 from app.modules.tasks.service import TaskService, database_call
 from app.modules.video.parsers.base import VideoParser
 from app.modules.video.repository import VideoRepository
@@ -21,7 +21,10 @@ class DownloadService:
         if preset_id not in {item.id for item in aggregate_download_options(video)}:
             raise AppException("PRESET_UNAVAILABLE", "当前视频不提供所选下载档位", 422)
         video_id = await database_call(self.videos.get_or_create, video, normalized)
-        return await self.tasks.create("download", video_id=video_id, input_payload={
+        payload = {
             "url": normalized, "preset_id": preset_id, "title": video.title,
             "platform": video.platform, "platform_video_id": video.platform_video_id,
-        })
+        }
+        if preset_id == "video_source_mp4":
+            payload["source_selection"] = source_selection(video)
+        return await self.tasks.create("download", video_id=video_id, input_payload=payload)

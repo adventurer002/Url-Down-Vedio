@@ -7,6 +7,10 @@ from app.core.exceptions import AppException
 from app.infrastructure.process_runner import ProcessRunner
 from app.modules.transcript.data import TranscriptData
 from app.modules.transcript.subtitle_parser import parse_subtitle
+from app.core.config import settings
+from app.modules.video.parsers.links import canonical_link, resolve_short_link
+from app.modules.video.parsers.operations import source_operation
+import asyncio
 
 
 class SubtitleProvider(Protocol):
@@ -18,6 +22,20 @@ class YtDlpSubtitleProvider:
         self.runner = runner
 
     async def fetch(self, payload: dict, directory: Path, **controls) -> TranscriptData | None:
+        if settings.VIDEO_EGRESS_MODE == "platform":
+            try:
+                async with asyncio.timeout(self.runner.timeout):
+                    async with source_operation(canonical_link(payload["url"]), timeout=self.runner.timeout,
+                            cancelled=controls.get("is_cancel_requested")) as lease:
+                        async with asyncio.timeout(lease.metadata_remaining):
+                            url = await resolve_short_link(canonical_link(payload["url"]), cancelled=controls.get("is_cancel_requested"))
+                        return await self._fetch({**payload, "url": url}, directory,
+                            on_source_ready=lease.metadata_ready, source_metadata_timeout=lease.metadata_remaining, **controls)
+            except TimeoutError:
+                raise AppException("SUBTITLE_FETCH_FAILED", "字幕获取超过总执行时限", 504) from None
+        return await self._fetch(payload, directory, **controls)
+
+    async def _fetch(self, payload, directory, **controls):
         result = await self.runner.run([sys.executable, "-m", "app.modules.transcript.subtitle_child",
                                         json.dumps(payload), str(directory)], directory,
                                        cwd=Path(__file__).resolve().parents[3], **controls)

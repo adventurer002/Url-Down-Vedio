@@ -259,8 +259,12 @@ def test_hls_cannot_fall_back_to_network_ffmpeg():
     assert hls.FFmpegFD is original
 
 
-@pytest.mark.parametrize("preset_id", ["video_480_mp4", "audio_mp3"])
-def test_real_ytdlp_transfer_and_ffmpeg_remux(tmp_path, monkeypatch, preset_id):
+@pytest.mark.parametrize("preset_id,source_kind,dimensions", [
+    ("video_480_mp4", "muxed", "640x480"), ("audio_mp3", "muxed", "640x480"),
+    ("video_source_mp4", "douyin", "540x960"), ("video_source_mp4", "bilibili", "854x356"),
+    ("video_source_mp4", "youtube", "480x658"),
+])
+def test_real_ytdlp_transfer_and_ffmpeg_remux(tmp_path, monkeypatch, preset_id, source_kind, dimensions):
     """Actual HTTP transfer and FFmpeg; only extractor/DNS fixture is substituted."""
     from functools import partial
     from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -270,7 +274,7 @@ def test_real_ytdlp_transfer_and_ffmpeg_remux(tmp_path, monkeypatch, preset_id):
     if not ffmpeg or not ffprobe:
         pytest.skip("FFmpeg integration test requires ffmpeg and ffprobe")
     fixture = tmp_path / "fixture.mp4"
-    subprocess.run([ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=640x480:r=10",
+    subprocess.run([ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"color=c=blue:s={dimensions}:r=10",
                     "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "0.5", "-c:v", "libx264", "-threads", "1",
                     "-c:a", "aac", "-shortest", str(fixture)], check=True, timeout=15)
 
@@ -298,6 +302,27 @@ def test_real_ytdlp_transfer_and_ffmpeg_remux(tmp_path, monkeypatch, preset_id):
     info = {"id": "fixture", "extractor_key": "Youtube", "title": "fixture", "duration": 0.5,
             "formats": [{"format_id": "480", "url": base + "/fixture.mp4", "protocol": "http", "ext": "mp4",
                          "height": 480, "width": 640, "vcodec": "avc1.64001e", "acodec": "mp4a.40.2"}]}
+    platform = "youtube"
+    selection = {}
+    if preset_id == "video_source_mp4":
+        from app.core.config import settings
+        from app.modules.download.presets import source_selection
+        from app.modules.video.parsers.ytdlp import metadata_from_info
+        monkeypatch.setattr(settings, "VIDEO_EGRESS_MODE", "platform")
+        platform = source_kind
+        info["extractor_key"] = source_kind.title()
+        width, height = map(int, dimensions.split("x"))
+        info["formats"][0].update(width=width, height=height, acodec="unknown")
+        if source_kind != "douyin":
+            for name, arguments in [("video.mp4", ["-map", "0:v", "-c:v", "copy"]),
+                                    ("audio.m4a", ["-map", "0:a", "-c:a", "copy"])]:
+                subprocess.run([ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-i", str(fixture),
+                                *arguments, str(tmp_path / name)], check=True, timeout=15)
+            info["formats"][0].update(url=base + "/video.mp4", acodec="none")
+            info["formats"].append({"format_id": "audio", "url": base + "/audio.m4a", "protocol": "http",
+                                    "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2"})
+        selection["source_selection"] = source_selection(metadata_from_info(info))
+        monkeypatch.setattr(child, "extract_source", lambda downloader, url: info)
     original = child.guarded_downloader
 
     def factory(guard, options, *, metadata_only=True):
@@ -312,13 +337,18 @@ def test_real_ytdlp_transfer_and_ffmpeg_remux(tmp_path, monkeypatch, preset_id):
     directory.mkdir()
     values = []
     try:
-        child.download({"url": base + "/watch", "preset_id": preset_id, "platform": "youtube",
-                        "platform_video_id": "fixture"}, directory, values.append)
+        child.download({"url": base + "/watch", "preset_id": preset_id, "platform": platform,
+                        "platform_video_id": "fixture", **selection}, directory, values.append)
         output = directory / ("output.mp3" if preset_id == "audio_mp3" else "output.mp4")
         assert output.is_file() and output.stat().st_size > 0
         probe = subprocess.run([ffprobe, "-v", "error", "-show_streams", "-of", "json", str(output)],
                                capture_output=True, text=True, check=True, timeout=5)
         assert {item["codec_name"] for item in json.loads(probe.stdout)["streams"]} == ({"mp3"} if preset_id == "audio_mp3" else {"h264", "aac"})
+        if preset_id == "video_source_mp4":
+            stream = next(item for item in json.loads(probe.stdout)["streams"] if item["codec_type"] == "video")
+            assert (stream["width"], stream["height"]) == tuple(map(int, dimensions.split("x")))
+        subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-xerror", "-i", str(output),
+                        "-f", "null", "-"], check=True, capture_output=True, timeout=10)
         assert values[-1]["progress"] == 99
     finally:
         server.shutdown()

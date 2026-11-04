@@ -1,0 +1,23 @@
+# Optional unprivileged deployment. Install under ~/.config/systemd/user/ as
+# videohub-youtube-proxy.service; enable lingering for the owning account.
+[Unit]
+Description=VideoHub dedicated YouTube egress (user service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/.local/state/videohub-youtube
+UMask=0077
+ExecStartPre=%h/.local/lib/videohub-youtube/mihomo -t -d %h/.local/state/videohub-youtube -f %h/.config/videohub-youtube/proxy.yaml
+ExecStart=%h/.local/lib/videohub-youtube/mihomo -d %h/.local/state/videohub-youtube -f %h/.config/videohub-youtube/proxy.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=20
+TimeoutStopSec=20
+NoNewPrivileges=true
+MemoryMax=256M
+TasksMax=64
+LimitNOFILE=1024
+
+[Install]
+WantedBy=default.target

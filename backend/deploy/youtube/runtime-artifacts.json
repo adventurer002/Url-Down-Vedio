@@ -1,0 +1,15 @@
+{
+  "architecture": "linux-x86_64",
+  "mihomo": {
+    "version": "1.19.33",
+    "release": "https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.33",
+    "url": "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-compatible-v1.19.33.gz",
+    "sha256": "386508bfb1c72c43b6a0eda73708ecdce82546581b0ebcb16366c53757c622b6"
+  },
+  "deno": {
+    "version": "2.9.8",
+    "release": "https://github.com/denoland/deno/releases/tag/v2.9.8",
+    "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-unknown-linux-gnu.zip",
+    "sha256": "e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609"
+  }
+}

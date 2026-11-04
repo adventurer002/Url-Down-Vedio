@@ -86,3 +86,18 @@ async def validate_url(url: str) -> str:
     except OSError:
         raise AppException("INVALID_URL", "目标域名无法解析") from None
     return normalized
+
+
+async def validate_source_url(url: str) -> str:
+    from app.core.config import settings
+    from app.modules.video.parsers.links import platform_for
+
+    normalized, host, port = normalize_url(url)
+    if (settings.VIDEO_EGRESS_MODE == "platform" and settings.YOUTUBE_DNS_MODE == "proxy_doh"
+            and platform_for(normalized) == "youtube"):
+        from app.modules.video.parsers.runtime import server_proxy
+        from app.modules.video.parsers.youtube_dns import resolve_public
+        results = await resolve_public(host, port, server_proxy(normalized))
+        check_dns_results(results)
+        return normalized
+    return await validate_url(normalized)

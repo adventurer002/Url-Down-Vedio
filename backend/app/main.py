@@ -14,14 +14,18 @@ from app.core.exceptions import AppException
 from app.core.response import error_response
 from app.infrastructure.database.session import engine, readiness_engine
 from app.infrastructure.queue.redis_client import redis_client
+from app.modules.video.parsers.youtube_dns import api_dns_connections
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await redis_client.aclose()
-    await readiness_engine.dispose()
-    engine.dispose()
+    async with api_dns_connections():
+        try:
+            yield
+        finally:
+            await redis_client.aclose()
+            await readiness_engine.dispose()
+            engine.dispose()
 
 
 def create_app() -> FastAPI:

@@ -1,0 +1,30 @@
+# Optional standalone proxy. Not installed or enabled by the release scripts.
+# Supply a verified Mihomo binary and private config before enabling this unit.
+[Unit]
+Description=VideoHub dedicated YouTube egress
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/usr/local/bin/mihomo
+ConditionPathExists=/etc/videohub/youtube-proxy.yaml
+
+[Service]
+DynamicUser=yes
+StateDirectory=videohub-youtube-proxy
+UMask=0077
+LoadCredential=proxy.yaml:/etc/videohub/youtube-proxy.yaml
+ExecStartPre=/usr/local/bin/mihomo -t -d /var/lib/videohub-youtube-proxy -f %d/proxy.yaml
+ExecStart=/usr/local/bin/mihomo -d /var/lib/videohub-youtube-proxy -f %d/proxy.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=20
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=256M
+TasksMax=64
+LimitNOFILE=1024
+
+[Install]
+WantedBy=multi-user.target

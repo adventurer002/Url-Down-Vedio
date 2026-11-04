@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     YTDLP_PROXY: SecretStr = SecretStr("")
     YTDLP_JS_RUNTIME: Literal["disabled", "deno"] = "disabled"
     YTDLP_DENO_PATH: str = ""
+    VIDEO_EGRESS_MODE: Literal["legacy", "platform"] = "legacy"
+    YOUTUBE_PROXY: SecretStr = SecretStr("")
+    YOUTUBE_DNS_MODE: Literal["system", "proxy_doh"] = "system"
+    VIDEO_EGRESS_POLICY_VERSION: str = Field(default="v1", pattern=r"^[A-Za-z0-9_-]{1,32}$")
+    SOURCE_FAILURE_THRESHOLD: int = Field(default=3, ge=1, le=20)
+    SOURCE_FAILURE_WINDOW_SECONDS: int = Field(default=60, ge=1, le=600)
+    SOURCE_COOLDOWN_SECONDS: int = Field(default=300, ge=1, le=600)
     VIDEO_PARSE_CACHE_TTL_SECONDS: int = Field(default=120, ge=0, le=600)
     VIDEO_PARSE_CONCURRENCY: int = Field(default=2, ge=1, le=4)
     VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS: int = Field(default=30, ge=0, le=300)

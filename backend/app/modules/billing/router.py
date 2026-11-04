@@ -36,7 +36,7 @@ from app.modules.video.sources import AIInputRequest
 class QuoteRequest(AIInputRequest):
     model_config = ConfigDict(extra="forbid")
     action: Literal["download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap"]
-    preset_id: Literal["video_1080_mp4", "video_720_mp4", "video_480_mp4", "audio_mp3"] = "video_720_mp4"
+    preset_id: Literal["video_1080_mp4", "video_720_mp4", "video_480_mp4", "video_source_mp4", "audio_mp3"] = "video_720_mp4"
     language: str = Field(default="zh", pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$", max_length=32)
 
 

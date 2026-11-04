@@ -1,5 +1,15 @@
 # VideoHub AI backend
 
+三平台取源改造：总体设计见 [服务端方案](MULTIPLATFORM_SERVER_PLAN.md)，本地阶段 A 的出口分流、共享冷却、诊断与验收边界见 [阶段 A 交付](MULTIPLATFORM_A.md)。默认保持 legacy 配置，尚未部署生产。
+
+B 站专用 WBI/匿名取源、分 P 兼容、受控备用和真实服务器探测见 [阶段 B 交付](MULTIPLATFORM_B.md)。代码与单样本服务器直连元数据解析通过；完整媒体下载未验收，尚未启用生产。
+
+YouTube 专用适配器、服务器独立代理、Deno/EJS 与加密 DNS 见 [阶段 C 交付](MULTIPLATFORM_C.md)。后端 712 项测试通过。正式 Linux 服务账号在隔离模拟登录环境完成单样本 MP3、480p、运行中取消、归属隔离及代理与隔离应用重启后的下载验收。公开字幕、多日样本、整机重启和长期生产配置仍待验证，应用代码尚未发布。
+
+抖音专用适配器、精选页链接识别、原画幅 MP4 与报价快照见 [阶段 D 记录](MULTIPLATFORM_D.md)。后端全量 760 项测试通过。服务器样本访问受限，完整下载尚待验收，D 为部分完成状态。
+
+阶段 E 的后端全量 786 项测试通过，72 小时隔离实测已由服务器托管，样本、统计门槛、测试会员审计及报告位置见 [阶段 E 记录](MULTIPLATFORM_E.md)。首批 B 站完整音频和视频已产生结果，最终发布资格仍待多日观察及发布检查。
+
 智能切片修复：R1 的运行/清理安全见 [CLIPS_R1.md](CLIPS_R1.md)；R2 的匹配、频率、来源与媒体边界见 [CLIPS_R2.md](CLIPS_R2.md)；R3 的单片缓存、共享文件关联与迁移 0012 见 [CLIPS_R3.md](CLIPS_R3.md)。最终全量回归 522 项通过；启用新版前执行 `uv run alembic upgrade head`。
 
 智能切片阶段 A 后端：候选分析、精细定位、最多 5 条视频整批导出、权限/额度/清理，见 [CLIPS_V1.md](CLIPS_V1.md)。默认关闭，通过服务端 `CLIPS_ENABLED` 显式启用；精准导出需独立配置支持真实分段时间戳的模型，配置示例见 `clips.env.example`。
@@ -36,7 +46,7 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```sh
 curl --max-time 40 -X POST http://127.0.0.1:8000/api/v1/videos/parse \
   -H 'Content-Type: application/json' \
-  -d '{"url":"https://www.youtube.com/watch?v=BaW_jenozKc"}'
+  -d '{"url":"https://www.youtube.com/watch?v=aqz-KE-bpKQ"}'
 
 curl -i --max-time 5 -X POST http://127.0.0.1:8000/api/v1/videos/parse \
   -H 'Content-Type: application/json' -d '{"url":"http://127.0.0.1/private"}'

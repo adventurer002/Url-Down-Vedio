@@ -1,0 +1,81 @@
+{
+  "checked_at": "2026-11-04T17:05:23.136938+00:00",
+  "status": "running_waiting_for_next_observation_day",
+  "linux_account": "videohub",
+  "actual_uid": 998,
+  "service": {
+    "name": "videohub-e-acceptance.service",
+    "active": true,
+    "enabled": true,
+    "memory_max_bytes": 2147483648,
+    "cpu_quota_percent": 150,
+    "tasks_max": 128
+  },
+  "initial_bundle_sha256": "41a63bb12d41b6eae6fb51948de97444b2dc6c778a93040ad1bc97e1314cb26c",
+  "installer_sha256": "7e9111cd31c97eebb36154e66affc473e7cafc6fd61965900a336f5a538f6645",
+  "operator_current_sha256": "35d84a62c33efba3a49050f33178553d9c190709662bc9e654b2e71ef6f5309d",
+  "manifest_sha256": "7c15c97d2f010c886dadd11d2ebc65f90d956af18f969691639ac0795ba0a02d",
+  "source_hashes_match_local_application": true,
+  "application_source_count": 158,
+  "private_state_mode": "0700",
+  "public_report_mode": "0644",
+  "deployment_account_private_config_readable": false,
+  "report_path": "/opt/videohub/acceptance/e-41a63bb12d41b6ea/reports/current.json",
+  "member_grant_audit": {
+    "audit_id": "83af487a-282e-46e3-943d-a6fdce5d4ab0",
+    "payment_verified": false,
+    "isolated_only": true
+  },
+  "login_mode": "isolated_development_mock",
+  "paid_model_calls": false,
+  "checks": {
+    "service_account": true,
+    "cancellation": true,
+    "cancellation_seconds": 0.616,
+    "telemetry": true,
+    "owner_isolation": true,
+    "completed_state": true
+  },
+  "observation_count": 63,
+  "production_application_changed": false,
+  "production_release": "dfef7d5420e406e54625b3ef5788a324e8459913-1793650947008269408",
+  "operator_updates": [
+    {
+      "from": "031ba68d0ca8619db4028516fec2dddb16b362a995db28479b284b3a116f893c",
+      "to": "7200e2a684faad761fc6f7c49946e3ffeee47ce2ba228bba7d7de089437834a3",
+      "reason": "explicit_public_report_mode_with_strict_umask",
+      "same_campaign_and_membership": true
+    },
+    {
+      "status": "repaired_and_restarted",
+      "old_operator_sha256": "7200e2a684faad761fc6f7c49946e3ffeee47ce2ba228bba7d7de089437834a3",
+      "new_operator_sha256": "35d84a62c33efba3a49050f33178553d9c190709662bc9e654b2e71ef6f5309d",
+      "same_campaign_and_membership": true,
+      "reason": "recorded_safety_failures_remain_release_blocking"
+    }
+  ],
+  "remaining_requirements": [
+    "72_hour_window",
+    "remaining_20_bilibili_and_20_youtube_samples",
+    "douyin_additional_preregistered_samples_and_source_capability",
+    "known_public_subtitles",
+    "host_reboot_acceptance",
+    "exact_ci_release_artifact_and_production_configuration"
+  ],
+  "latest_backend_tests": {
+    "command": "uv run pytest",
+    "passed": 786,
+    "seconds": 313.23
+  },
+  "latest_stage_e_tests": {
+    "passed": 26,
+    "seconds": 5.15
+  },
+  "first_batch_complete": true,
+  "successful_media_files": 32,
+  "verification_file_bytes": 539522743,
+  "no_interrupted_sample_results": true,
+  "known_youtube_sample_media_hashes_match_c": true,
+  "tested_final_source_bundle_sha256": "2cbfa913fef9b7ed8325c570a6f87ef3e523e35a6ba7a128cf8aae2223f7cda8",
+  "tested_final_source_bundle_path": "/home/videohub-deploy/bootstrap/acceptance-e/backend-final.tar.gz"
+}

@@ -7,8 +7,11 @@ import sys
 from yt_dlp.utils import DownloadError
 
 from app.core.exceptions import AppException
+from app.core.config import settings
+from app.modules.video.parsers.dispatch import extract_source, prepare_source_subtitle
+from app.modules.video.parsers.links import platform_for
 from app.modules.video.parsers.runtime import server_proxy
-from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info, map_extraction_error
+from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info, map_extraction_error, source_failure
 from app.modules.video.parsers.ytdlp_worker import NetworkGuard, guarded_downloader
 
 
@@ -28,23 +31,26 @@ def select_language(info: dict, requested: str | None) -> str | None:
 
 
 def fetch(payload: dict, directory: Path, emit):
-    proxy = server_proxy()
+    proxy = server_proxy(payload["url"])
     guard = NetworkGuard(proxy)
+    if settings.VIDEO_EGRESS_MODE == "platform":
+        guard.platform = platform_for(payload["url"])
     with guard.installed():
         guard.check_url(payload["url"])
-        options = extraction_options(proxy)
+        options = extraction_options(proxy, url=payload["url"])
         # Bilibili (and some other extractors) only query subtitle tracks on request.
         # The metadata-only downloader still forbids all file/media writes.
         options["listsubtitles"] = True
         with guarded_downloader(guard, options) as parser:
-            info = parser.extract_info(payload["url"], download=False)
+            info = extract_source(parser, payload["url"])
         if guard.violation:
             raise guard.violation
         video = metadata_from_info(info)
         if (video.platform, video.platform_video_id) != (payload["platform"], payload["platform_video_id"]):
             raise AppException("VIDEO_ID_CHANGED", "视频身份发生变化", 422)
+        emit({"_source_metadata_ready": True})
         for source in ("subtitles", "automatic_captions"):
-            info[source] = {key: [track for track in tracks if track.get("ext") in {"vtt", "srt", "json3"}]
+            info[source] = {key: [track for track in tracks if track.get("ext") in {"vtt", "srt", "json3", "bilibili_json"}]
                             for key, tracks in (info.get(source) or {}).items()}
         selected = select_language(info, payload.get("language"))
         if selected is None:
@@ -55,6 +61,10 @@ def fetch(payload: dict, directory: Path, emit):
                        outtmpl=str(directory / "subtitle.%(ext)s"), ignore_no_formats_error=True,
                        postprocessors=[], fixup="never")
         with guarded_downloader(guard, options, metadata_only=False) as downloader:
+            for source in ("subtitles", "automatic_captions"):
+                if selected in info[source]:
+                    info[source] = {selected: [prepare_source_subtitle(downloader, payload["url"], track)
+                                              for track in info[source][selected][:1]]}
             downloader.process_ie_result(info, download=True)
         if guard.violation:
             raise guard.violation
@@ -82,7 +92,7 @@ def main():
             code = map_extraction_error(exc).code
         else:
             code = "SUBTITLE_FETCH_FAILED"
-        emit({"error_code": code})
+        emit({"error_code": code, "source_failure": source_failure(exc)})
         raise SystemExit(1)
 
 

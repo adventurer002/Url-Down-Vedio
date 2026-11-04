@@ -1,0 +1,42 @@
+{
+  "checked_at": "2026-11-03T13:18:20.201520+00:00",
+  "mode": "isolated_metadata_probe",
+  "egress": "direct",
+  "production_changed": false,
+  "download_verified": false,
+  "sample_url": "https://www.bilibili.com/video/BV1g2JX6nESP?t=3.6",
+  "dependency_source": "locked_public_uv_cache",
+  "adapter_sha256": "f134fc6228412d485bbf3034c2f9fffa0477a04133dae7bd22151edd795d4524",
+  "code": "OK",
+  "platform": "bilibili",
+  "video_id": "BV1g2JX6nESP",
+  "duration": 1188,
+  "formats": 9,
+  "subtitle_languages": [],
+  "elapsed_seconds": 0.826,
+  "api_observations": [
+    {
+      "stage": "session",
+      "api_code": 0
+    },
+    {
+      "stage": "view",
+      "api_code": 0
+    },
+    {
+      "stage": "wbi",
+      "api_code": -101
+    },
+    {
+      "stage": "play",
+      "api_code": 0,
+      "timelength_ms": 1187371,
+      "is_preview": false,
+      "expected_duration_seconds": 1188
+    },
+    {
+      "stage": "subtitle",
+      "api_code": 0
+    }
+  ]
+}
