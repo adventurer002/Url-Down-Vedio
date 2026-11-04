@@ -2,6 +2,16 @@ import type { ApiError } from "../api/client";
 
 export function errorPresentation(error: Pick<ApiError, "code" | "message">) {
   const { code, message } = error;
+  if (code === "SOURCE_COOLDOWN")
+    return {
+      message: "视频平台暂时冷却中",
+      suggestion: "请稍后重试，或上传你有权使用的音视频文件继续处理。",
+    };
+  if (code === "SOURCE_EGRESS_UNAVAILABLE")
+    return {
+      message: "这个平台的链接导入暂不可用",
+      suggestion: "可以改用上传文件；若持续不可用，请联系管理员。",
+    };
   if (
     [
       "UPLOAD_NO_AUDIO",

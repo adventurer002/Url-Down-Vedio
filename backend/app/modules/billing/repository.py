@@ -303,6 +303,9 @@ class AllowanceRepository:
                         raise AppException("CLIP_RENDER_LIMIT", "今日切片渲染次数已达上限", 429)
             if payload.get("reuse_result"):
                 quota["asr_seconds"], quota["ai_generations"] = 0, 0
+            if payload.get("source_selection"):
+                quota["source_selection"] = {**payload["source_selection"],
+                    "max_source_bytes": min(limits["file_bytes"], settings.MAX_FILE_SIZE_MB * 1024**2)}
             quote = AllowanceQuote(id=uuid4(), user_id=user_id, task_type=task_type,
                 payload={**payload, "allowance": quota}, expires_at=now() + timedelta(minutes=15))
             session.add(quote)

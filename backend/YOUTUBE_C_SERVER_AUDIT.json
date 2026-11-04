@@ -1,0 +1,322 @@
+{
+  "checked_at": "2026-11-04T04:12:59.162797+00:00",
+  "audit_account": "videohub-deploy",
+  "formal_application_account": "videohub",
+  "service_account_checked": true,
+  "binaries": {
+    "mihomo": {
+      "present": true,
+      "sha256_verified": true,
+      "permissions": "0o700"
+    },
+    "deno": {
+      "present": true,
+      "sha256_verified": true,
+      "permissions": "0o700"
+    }
+  },
+  "proxy_service": {
+    "name": "videohub-youtube-proxy.service",
+    "scope": "user",
+    "active": true,
+    "enabled": true,
+    "linger": true,
+    "loopback_listener_present": true
+  },
+  "private_file_permissions": {
+    "proxy.yaml": "0o600",
+    "client.json": "0o600",
+    "verified-binaries.json": "0o600"
+  },
+  "production_release": "dfef7d5420e406e54625b3ef5788a324e8459913-1793650947008269408",
+  "api_live": true,
+  "production_application_changed": false,
+  "youtube_network_probe_performed_in_this_audit": false,
+  "metadata_verified": true,
+  "proxy_restart_metadata_verified": true,
+  "evidence": [
+    "YOUTUBE_C_SERVER_PROBE.json",
+    "YOUTUBE_C_AFTER_PROXY_RESTART.json",
+    "YOUTUBE_C_NETWORK_DIAGNOSTIC.json",
+    "YOUTUBE_C_AFTER_DNS_FIX.json",
+    "YOUTUBE_C_HTTP_CELERY_PROBE.json"
+  ],
+  "standalone_verified": true,
+  "restart_verified": false,
+  "download_verified": true,
+  "egress_origin": "one_existing_mac_clash_node_copied_to_server",
+  "blocking_requirements": [
+    "persistent_production_service_account_runtime_and_configuration",
+    "known_public_subtitle_sample_acceptance",
+    "preregistered_multiday_sample_gate",
+    "host_reboot_recovery_acceptance",
+    "application_release_via_existing_ci_cd"
+  ],
+  "ui_validation_blocker": "1Panel root terminal is visibly connected. Automation keyboard operations produce no terminal echo, and browser DOM/keyboard commands time out. Login is not the current blocker.",
+  "ui_rechecked_at": "2026-11-04T05:57:06.303883+00:00",
+  "isolated_acceptance_staged": {
+    "root_launcher": "/home/videohub-deploy/bootstrap/youtube-c-acceptance/bootstrap.py",
+    "launcher_sha256": "480da9b8bafb85bee1ad9be96ce03aa58ff0aaeebb9b289092f88a4af2e47458",
+    "bundle_sha256": "046f97c446be7ef109e09a14f6672c00b1ebe7b0fbaa8674d5c9e02f6f94c746",
+    "result_path": "/opt/videohub/acceptance/reports/youtube-c-current.json",
+    "started": true,
+    "first_attempt": "preparation_failed",
+    "report_parent_permissions_corrected": true,
+    "restart_pending": false,
+    "bootstrap_sha256": "480da9b8bafb85bee1ad9be96ce03aa58ff0aaeebb9b289092f88a4af2e47458",
+    "status": "passed"
+  },
+  "service_account_offline_runtime_verified": true,
+  "isolated_authenticated_login_verified": true,
+  "initial_authenticated_pipeline_attempt": {
+    "checked_at": "2026-11-04T06:20:08.305138+00:00",
+    "production_application_changed": false,
+    "status": "failed",
+    "phases": [
+      {
+        "checked_at": "2026-11-04T06:20:10.852252+00:00",
+        "account": "videohub",
+        "actual_uid": 998,
+        "service_account_checked": true,
+        "isolated_redis_db": 15,
+        "mode": "isolated_authenticated_http_celery_solo",
+        "preset": "audio_mp3",
+        "production_application_changed": false,
+        "paid_model_calls": false,
+        "auth_required": true,
+        "allowances_enabled": true,
+        "login_mode": "isolated_development_mock",
+        "download_verified": false,
+        "cancellation_verified": false,
+        "schema_cleaned": true,
+        "preflight": {
+          "yt_dlp_version": "2026.8.19",
+          "egress": "server_proxy",
+          "metadata_verified": false,
+          "download_verified": false,
+          "checks": [
+            {
+              "name": "egress_configuration",
+              "passed": true,
+              "code": "OK",
+              "message": "服务端出口配置有效；客户端无需提供代理"
+            },
+            {
+              "name": "javascript_runtime",
+              "passed": true,
+              "code": "OK",
+              "message": "Deno / EJS 离线脚本执行通过，远程组件保持关闭"
+            },
+            {
+              "name": "ffmpeg",
+              "passed": true,
+              "code": "OK",
+              "message": "FFmpeg 可用"
+            }
+          ],
+          "egress_mode": "platform",
+          "policy_version": "v1",
+          "standalone_verified": false,
+          "restart_verified": false,
+          "platform": "youtube",
+          "dns_mode": "proxy_doh",
+          "deno_version": "2.9.8",
+          "ejs_version": "0.8.0",
+          "ejs_verified": true,
+          "sandbox_verified": true,
+          "ffmpeg_version": "4.4.2-0ubuntu0.22.04.1",
+          "ffmpeg_features": {
+            "fps_mode": false,
+            "vsync": true,
+            "render_verified": false
+          },
+          "render_notice": "当前切片命令所需 fps_mode 参数未验证可用；需单独验证兼容或升级，不能仅凭元数据检查开放成片",
+          "passed": true
+        },
+        "login_verified": true,
+        "code": "ACCEPTANCE_FAILED",
+        "failure": "DNS_TIMEOUT",
+        "exception_type": "AssertionError",
+        "after_proxy_restart": false
+      }
+    ],
+    "finished_at": "2026-11-04T06:20:17.917599+00:00",
+    "retained_private_directories": [
+      "/opt/videohub/acceptance/youtube-c-bxvczzj3"
+    ]
+  },
+  "latest_backend_tests": {
+    "passed": 712,
+    "seconds": 309.42,
+    "command": "uv run pytest"
+  },
+  "connect_timeout_adjustment": {
+    "dns_connect_seconds": 5,
+    "dns_read_seconds": 2,
+    "dns_lookup_budget_seconds": 8,
+    "metadata_budget_seconds": 26
+  },
+  "node_validation": {
+    "alternative_clash_node_access_restricted": true,
+    "original_node_restored": false,
+    "latest_guarded_metadata_code": "OK",
+    "single_node_subscription_dependency": true,
+    "long_term_egress_verified": false,
+    "current_selected_node_type": "anytls",
+    "full_media_verified": true
+  },
+  "last_full_pipeline_report": "YOUTUBE_C_HTTP_CELERY_PROBE.json",
+  "pooled_dns_network_probe": {
+    "checks": [
+      {
+        "operation": "parse_admission",
+        "code": "OK",
+        "seconds": 1.671
+      },
+      {
+        "operation": "quote_admission",
+        "code": "OK",
+        "seconds": 0.483
+      }
+    ],
+    "answer_cache_enabled": false
+  },
+  "current_pipeline_acceptance": {
+    "status": "passed",
+    "started_at": "2026-11-04T13:03:14.853659+00:00",
+    "finished_at": "2026-11-04T13:07:31.983865+00:00",
+    "account": "videohub",
+    "actual_uid": 998,
+    "login_mode": "isolated_development_mock",
+    "auth_required": true,
+    "allowances_enabled": true,
+    "paid_model_calls": false,
+    "latest_metadata_http_verified": true,
+    "latest_metadata_attempts": [
+      "OK",
+      "OK"
+    ],
+    "quote_passed": true,
+    "celery_task_created": true,
+    "full_download_verified": true,
+    "cancellation_verified": true,
+    "cancel_transfer_started_bytes": 148534,
+    "cancel_seconds": 0.619,
+    "ownership_verified": true,
+    "completed_state_preserved": true,
+    "full_decode_verified": true,
+    "proxy_and_isolated_application_restart_download_verified": true,
+    "host_reboot_verified": false,
+    "network_diagnostic_pending": false,
+    "updated_launcher_pending": false,
+    "latest_worker_failure": null,
+    "application_source_file_count": 157,
+    "sample_count": 1,
+    "platform_video_id": "aqz-KE-bpKQ",
+    "media": [
+      {
+        "preset": "audio_mp3",
+        "task_seconds": 40.019,
+        "file_bytes": 15232868,
+        "duration": 634.67102,
+        "tracks": [
+          "audio"
+        ],
+        "file_sha256": "5743676505fb7e5552a2d228920cb4cb899ab6d04c40ea49a98793578f563a4f",
+        "after_proxy_restart": false
+      },
+      {
+        "preset": "video_480_mp4",
+        "task_seconds": 163.779,
+        "file_bytes": 38895635,
+        "duration": 634.625,
+        "tracks": [
+          "audio",
+          "video"
+        ],
+        "file_sha256": "f922c0572962e1e64b998cc9ad63fd75b6dce1e059ab1df0e059d1dc2fe3b181",
+        "after_proxy_restart": true
+      }
+    ],
+    "schema_cleanup_verified": true,
+    "source_hashes_matched_application_at_c_delivery": true
+  },
+  "network_diagnostic": "YOUTUBE_C_NETWORK_DIAGNOSTIC.json",
+  "proxy_internal_encrypted_dns": {
+    "enabled": true,
+    "listener": "127.0.0.1:17894",
+    "via_existing_egress": true,
+    "private_ranges_rejected": true,
+    "certificate_validation": true
+  },
+  "latest_metadata_after_dns_fix": "YOUTUBE_C_AFTER_DNS_FIX.json",
+  "current_egress_node": {
+    "type": "anytls",
+    "origin": "existing_mac_clash_configuration",
+    "metadata_verified": true,
+    "metadata_seconds": 8.097,
+    "strict_certificate_validation": true,
+    "full_media_verified": true,
+    "existing_subscription_dependency": true,
+    "automatic_node_rotation_configured": false
+  },
+  "worker_source_preflight": {
+    "stage": "format_processing_without_download",
+    "metadata": "OK",
+    "formats": [
+      {
+        "preset": "video_480_mp4",
+        "ext": "mp4",
+        "protocol": "m3u8_native"
+      },
+      {
+        "preset": "video_480_mp4",
+        "ext": "m4a",
+        "protocol": "https"
+      },
+      {
+        "preset": "audio_mp3",
+        "ext": "m4a",
+        "protocol": "https"
+      }
+    ],
+    "code": "OK",
+    "sdk_requests": 3,
+    "dns_requests": 4
+  },
+  "standalone_verification_scope": "single_sample_isolated_formal_linux_service_account_server_proxy",
+  "restart_verification_scope": "host_reboot_not_tested",
+  "proxy_and_isolated_application_restart_download_verified": true,
+  "cleanup_verification": {
+    "old_private_directory_removed": true,
+    "temporary_candidate_json_removed": true,
+    "main_private_config_and_rollback_backups_retained": true,
+    "isolated_redis_residue_fully_removed": false,
+    "redis_flush_performed": false
+  },
+  "latest_targeted_tests": {
+    "passed": 107,
+    "seconds": 6.52,
+    "scope": "youtube_and_health"
+  },
+  "remaining_unverified": [
+    "known_public_subtitles",
+    "at_least_30_preregistered_samples_per_platform_over_at_least_3_days",
+    "host_reboot",
+    "production_login",
+    "production_persistent_runtime_and_configuration",
+    "ffmpeg_4_4_2_clip_render_compatibility"
+  ],
+  "delivery_verified_at": "2026-11-04T13:16:26.376899+00:00",
+  "delivery_verification_scope": [
+    "server_proxy_active_and_enabled",
+    "linger_enabled",
+    "private_files_mode_0600",
+    "production_release_target",
+    "server_and_local_report_json_equal",
+    "both_phase_full_application_source_hashes_match",
+    "old_private_directory_absent",
+    "temporary_candidate_absent"
+  ],
+  "code_snapshot_phase": "C_before_subsequent_D_shared_code_changes"
+}

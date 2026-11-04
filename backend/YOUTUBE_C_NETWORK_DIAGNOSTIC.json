@@ -1,0 +1,209 @@
+{
+  "uid": 998,
+  "checks": [
+    {
+      "name": "local_proxy_tcp",
+      "code": "OK",
+      "seconds": 0.0
+    },
+    {
+      "name": "youtube_connectivity",
+      "code": "ConnectError",
+      "exception_types": [
+        "ConnectError",
+        "ConnectError"
+      ],
+      "seconds": 5.023,
+      "transport_events": [
+        {
+          "event": "connection.connect_tcp.started",
+          "seconds": 0.02
+        },
+        {
+          "event": "connection.connect_tcp.complete",
+          "seconds": 0.021
+        },
+        {
+          "event": "http11.send_request_headers.started",
+          "seconds": 0.021
+        },
+        {
+          "event": "http11.send_request_headers.complete",
+          "seconds": 0.021
+        },
+        {
+          "event": "http11.send_request_body.started",
+          "seconds": 0.021
+        },
+        {
+          "event": "http11.send_request_body.complete",
+          "seconds": 0.021
+        },
+        {
+          "event": "http11.receive_response_headers.started",
+          "seconds": 0.021
+        },
+        {
+          "event": "http11.receive_response_headers.complete",
+          "seconds": 0.022
+        },
+        {
+          "event": "proxy.start_tls.started",
+          "seconds": 0.022
+        },
+        {
+          "event": "proxy.start_tls.failed",
+          "seconds": 5.022
+        }
+      ]
+    },
+    {
+      "name": "doh_a",
+      "code": "OK",
+      "http_status": 200,
+      "public_address_count": 8,
+      "seconds": 1.199,
+      "transport_events": [
+        {
+          "event": "connection.connect_tcp.started",
+          "seconds": 0.003
+        },
+        {
+          "event": "connection.connect_tcp.complete",
+          "seconds": 0.003
+        },
+        {
+          "event": "http11.send_request_headers.started",
+          "seconds": 0.004
+        },
+        {
+          "event": "http11.send_request_headers.complete",
+          "seconds": 0.004
+        },
+        {
+          "event": "http11.send_request_body.started",
+          "seconds": 0.004
+        },
+        {
+          "event": "http11.send_request_body.complete",
+          "seconds": 0.004
+        },
+        {
+          "event": "http11.receive_response_headers.started",
+          "seconds": 0.004
+        },
+        {
+          "event": "http11.receive_response_headers.complete",
+          "seconds": 0.004
+        },
+        {
+          "event": "proxy.start_tls.started",
+          "seconds": 0.004
+        },
+        {
+          "event": "proxy.start_tls.complete",
+          "seconds": 0.952
+        },
+        {
+          "event": "http11.send_request_headers.started",
+          "seconds": 0.952
+        },
+        {
+          "event": "http11.send_request_headers.complete",
+          "seconds": 0.952
+        },
+        {
+          "event": "http11.send_request_body.started",
+          "seconds": 0.952
+        },
+        {
+          "event": "http11.send_request_body.complete",
+          "seconds": 0.952
+        },
+        {
+          "event": "http11.receive_response_headers.started",
+          "seconds": 0.952
+        },
+        {
+          "event": "http11.receive_response_headers.complete",
+          "seconds": 1.197
+        },
+        {
+          "event": "http11.receive_response_body.started",
+          "seconds": 1.198
+        },
+        {
+          "event": "http11.receive_response_body.complete",
+          "seconds": 1.198
+        },
+        {
+          "event": "http11.response_closed.started",
+          "seconds": 1.199
+        },
+        {
+          "event": "http11.response_closed.complete",
+          "seconds": 1.199
+        }
+      ]
+    },
+    {
+      "name": "doh_aaaa",
+      "code": "OK",
+      "http_status": 200,
+      "public_address_count": 8,
+      "seconds": 0.247,
+      "transport_events": [
+        {
+          "event": "http11.send_request_headers.started",
+          "seconds": 0.001
+        },
+        {
+          "event": "http11.send_request_headers.complete",
+          "seconds": 0.001
+        },
+        {
+          "event": "http11.send_request_body.started",
+          "seconds": 0.001
+        },
+        {
+          "event": "http11.send_request_body.complete",
+          "seconds": 0.001
+        },
+        {
+          "event": "http11.receive_response_headers.started",
+          "seconds": 0.001
+        },
+        {
+          "event": "http11.receive_response_headers.complete",
+          "seconds": 0.246
+        },
+        {
+          "event": "http11.receive_response_body.started",
+          "seconds": 0.246
+        },
+        {
+          "event": "http11.receive_response_body.complete",
+          "seconds": 0.246
+        },
+        {
+          "event": "http11.response_closed.started",
+          "seconds": 0.247
+        },
+        {
+          "event": "http11.response_closed.complete",
+          "seconds": 0.247
+        }
+      ]
+    },
+    {
+      "name": "application_validation_first",
+      "code": "DNS_TIMEOUT",
+      "seconds": 3.107
+    },
+    {
+      "name": "application_validation_reuse",
+      "code": "OK",
+      "seconds": 1.791
+    }
+  ]
+}

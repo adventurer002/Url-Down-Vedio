@@ -9,16 +9,22 @@ from dataclasses import asdict
 import json
 import socket
 import sys
+import time
 import urllib.request
 from urllib.parse import urlsplit
 
 from yt_dlp import YoutubeDL
+from yt_dlp.networking import Request
 from yt_dlp.networking._urllib import RedirectHandler, UrllibRH
 
 from app.core.exceptions import AppException
+from app.core.config import settings
+from app.modules.video.parsers.dispatch import extract_source
+from app.modules.video.parsers.links import platform_for
 from app.modules.video.parsers.runtime import server_proxy
+from app.modules.video.parsers.youtube_dns import PublicDnsResolver
 from app.core.security import check_dns_results, normalize_url
-from app.modules.video.parsers.ytdlp import extraction_options, map_extraction_error, metadata_from_info
+from app.modules.video.parsers.ytdlp import extraction_options, map_extraction_error, metadata_from_info, source_failure
 
 
 class NetworkGuard:
@@ -26,15 +32,28 @@ class NetworkGuard:
         self.resolve = socket.getaddrinfo
         self.violation: AppException | None = None
         self.proxy_address = None
+        self.platform = None
+        self.request_limit = None
+        self.request_count = 0
+        self.request_deadline = None
+        self.public_dns: PublicDnsResolver | None = None
         if proxy:
             parts = urlsplit(proxy)
             if parts.scheme not in {"http", "socks4", "socks4a", "socks5", "socks5h"} or not parts.hostname:
                 raise AppException("PARSE_FAILED", "服务端代理配置无效", 502)
             self.proxy_address = (parts.hostname.lower(), parts.port or (80 if parts.scheme == "http" else 1080))
+            if settings.VIDEO_EGRESS_MODE == "platform" and settings.YOUTUBE_DNS_MODE == "proxy_doh":
+                from app.modules.video.parsers.youtube_dns import ProxiedDnsResolver
+                self.public_dns = ProxiedDnsResolver(proxy, self.resolve, parts.hostname,
+                    deadline=lambda: self.request_deadline)
+                self.resolve = self.public_dns.getaddrinfo
 
     def check_url(self, url: str) -> None:
         try:
             _, host, port = normalize_url(url)
+            target_platform = platform_for(url)
+            if self.platform and target_platform != "other" and target_platform != self.platform:
+                raise AppException("UNSUPPORTED_URL", "取源请求不能跨平台更换网络策略", 422)
             check_dns_results(self.resolve(host, port, type=socket.SOCK_STREAM))
         except AppException as exc:
             self.violation = exc
@@ -56,16 +75,42 @@ class NetworkGuard:
         return results
 
     @contextmanager
+    def request_budget(self, limit):
+        previous, previous_deadline = self.request_limit, self.request_deadline
+        previous_dns_limit = self.public_dns.request_limit if self.public_dns else None
+        if self.public_dns:
+            self.public_dns.request_limit = self.public_dns.requests + 32
+        self.request_limit = self.request_count + limit
+        self.request_deadline = time.monotonic() + 26
+        try:
+            yield
+        finally:
+            self.request_limit = previous
+            self.request_deadline = previous_deadline
+            if self.public_dns:
+                self.public_dns.request_limit = previous_dns_limit
+
+    def before_request(self):
+        if self.request_deadline is not None and time.monotonic() >= self.request_deadline:
+            raise AppException("PARSE_TIMEOUT", "取源超过总请求预算", 504)
+        if self.request_limit is not None and self.request_count >= self.request_limit:
+            raise AppException("PARSE_FAILED", "取源达到请求次数上限", 502)
+        self.request_count += 1
+
+    @contextmanager
     def installed(self):
         socket.getaddrinfo = self.getaddrinfo
         try:
             yield
         finally:
-            socket.getaddrinfo = self.resolve
+            socket.getaddrinfo = self.public_dns.original if self.public_dns else self.resolve
+            if self.public_dns:
+                self.public_dns.close()
 
 
 def guarded_downloader(guard: NetworkGuard, options: dict, *, metadata_only: bool = True):
     class PublicRedirectHandler(RedirectHandler):
+        max_redirections = 5
         def redirect_request(self, request, fp, code, message, headers, new_url):
             guard.check_url(new_url)
             return super().redirect_request(request, fp, code, message, headers, new_url)
@@ -74,6 +119,7 @@ def guarded_downloader(guard: NetworkGuard, options: dict, *, metadata_only: boo
         handler_order = 50
 
         def http_request(self, request):
+            getattr(guard, "before_request", lambda: None)()
             guard.check_url(request.full_url)
             return request
 
@@ -96,11 +142,22 @@ def guarded_downloader(guard: NetworkGuard, options: dict, *, metadata_only: boo
             return opener
 
     class MetadataYoutubeDL(YoutubeDL):
+        def source_budget(self, limit):
+            return guard.request_budget(limit)
+
         def build_request_director(self, handlers, preferences=None):
             # No requests/curl/FTP/WebSocket handler can bypass this policy.
             return super().build_request_director([PublicUrllibRH])
 
         def urlopen(self, request):
+            deadline = getattr(guard, "request_deadline", None)
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise AppException("PARSE_TIMEOUT", "取源超过总请求预算", 504)
+                if isinstance(request, str):
+                    request = Request(request)
+                request.extensions["timeout"] = min(5, remaining, request.extensions.get("timeout", 5))
             url = request if isinstance(request, str) else getattr(request, "url", None) or request.full_url
             guard.check_url(url)
             return super().urlopen(request)
@@ -130,25 +187,30 @@ def guarded_downloader(guard: NetworkGuard, options: dict, *, metadata_only: boo
 
 def extract_metadata(url: str, proxy: str | None = None) -> dict:
     guard = NetworkGuard(proxy)
+    if settings.VIDEO_EGRESS_MODE == "platform":
+        guard.platform = platform_for(url)
     try:
         with guard.installed():
             guard.check_url(url)
-            options = extraction_options(proxy)
+            options = extraction_options(proxy, url=url)
             options["listsubtitles"] = True
             with guarded_downloader(guard, options) as downloader:
-                info = downloader.extract_info(url, download=False)
+                info = extract_source(downloader, url)
             if guard.violation:
                 raise guard.violation
             return {"data": asdict(metadata_from_info(info))}
     except Exception as exc:
         error = guard.violation or map_extraction_error(exc)
-        return {"error": error.code}
+        result = {"error": error.code, "source_failure": source_failure(exc) if not guard.violation else None}
+        if getattr(exc, "source_stage", None) in {"session", "view", "wbi", "play", "subtitle"}:
+            result["source_stage"] = exc.source_stage
+        return result
 
 
 def main():
     try:
         with redirect_stdout(sys.stderr):
-            result = extract_metadata(sys.argv[1], server_proxy())
+            result = extract_metadata(sys.argv[1], server_proxy(sys.argv[1]))
     except Exception as exc:
         result = {"error": map_extraction_error(exc).code}
     # Extractor diagnostic output must never corrupt the protocol or reach clients.

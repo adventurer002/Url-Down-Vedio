@@ -1,0 +1,50 @@
+# PRIVATE TEMPLATE. Not a working proxy until a provider-confirmed node is added.
+# Server destination: /etc/videohub/youtube-proxy.yaml, root:root 0600.
+# No subscriptions, passwords or real node settings belong in this repository.
+mixed-port: 17892
+bind-address: 127.0.0.1
+allow-lan: false
+mode: rule
+log-level: warning
+external-controller: ""
+authentication:
+  - "REPLACE_USER:REPLACE_PASSWORD"
+tun:
+  enable: false
+dns:
+  enable: true
+  listen: 127.0.0.1:17894
+  enhanced-mode: redir-host
+  ipv6: true
+  use-system-hosts: false
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  # Bootstrap the operator's proxy node separately from source-domain lookups.
+  proxy-server-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://223.5.5.5/dns-query#YOUTUBE
+profile:
+  store-selected: true
+  store-fake-ip: false
+proxies: [] # Insert the provider-confirmed node here in the private server file.
+proxy-groups:
+  - name: YOUTUBE
+    type: select
+    proxies:
+      - REPLACE_WITH_PROVIDER_CONFIRMED_NODE_NAME
+rules:
+  - IP-CIDR,0.0.0.0/8,REJECT
+  - IP-CIDR,10.0.0.0/8,REJECT
+  - IP-CIDR,100.64.0.0/10,REJECT
+  - IP-CIDR,127.0.0.0/8,REJECT
+  - IP-CIDR,169.254.0.0/16,REJECT
+  - IP-CIDR,172.16.0.0/12,REJECT
+  - IP-CIDR,192.168.0.0/16,REJECT
+  - IP-CIDR,198.18.0.0/15,REJECT
+  - IP-CIDR6,::1/128,REJECT
+  - IP-CIDR6,fc00::/7,REJECT
+  - IP-CIDR6,fe80::/10,REJECT
+  - MATCH,YOUTUBE

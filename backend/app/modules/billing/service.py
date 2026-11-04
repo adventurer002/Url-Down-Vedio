@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.billing.policy import seconds
 from app.modules.tasks.service import database_call
+from app.modules.video.parsers.operations import metadata_budget
 
 
 class AllowanceDispatcher:
@@ -20,20 +21,24 @@ class BillingService:
 
     async def quote(self, user_id, url, action, preset_id, language, *, upload_id=None, transcript_id=None):
         from app.modules.video.sources import resolve_input
-        if upload_id is not None and action not in {"transcription", "ai_summary", "ai_mindmap"}:
-            raise AppException("UPLOAD_ACTION_UNSUPPORTED", "上传文件支持转写、总结和思维导图；问答通过已有文稿创建", 422)
-        if transcript_id is not None:
-            if url is not None or upload_id is not None or action not in {"ai_summary", "ai_mindmap"}:
-                raise AppException("TRANSCRIPT_ACTION_UNSUPPORTED", "已有文稿仅支持总结或思维导图，且不能同时提供其他来源", 422)
-            payload = await self._transcript_source(transcript_id, user_id)
-            duration = 0
-        else:
-            payload = await resolve_input(self.resolver, url, upload_id, user_id)
-            metadata = await database_call(self.videos.history_metadata, [UUID(payload["video_id"])])
-            duration = payload.get("duration_seconds") or seconds(metadata[UUID(payload["video_id"])]["duration"])
-        payload.update(duration_seconds=duration, preset_id=preset_id if action == "download" else "audio_mp3",
-            language=None if action.startswith("ai_") else language,
-            output_language=language or "zh", content_version=payload.get("content_version", settings.TRANSCRIPT_CONTENT_VERSION))
+        with metadata_budget():
+            if upload_id is not None and action not in {"transcription", "ai_summary", "ai_mindmap"}:
+                raise AppException("UPLOAD_ACTION_UNSUPPORTED", "上传文件支持转写、总结和思维导图；问答通过已有文稿创建", 422)
+            if transcript_id is not None:
+                if url is not None or upload_id is not None or action not in {"ai_summary", "ai_mindmap"}:
+                    raise AppException("TRANSCRIPT_ACTION_UNSUPPORTED", "已有文稿仅支持总结或思维导图，且不能同时提供其他来源", 422)
+                payload = await self._transcript_source(transcript_id, user_id)
+                duration = 0
+            else:
+                payload = await resolve_input(self.resolver, url, upload_id, user_id)
+                metadata = await database_call(self.videos.history_metadata, [UUID(payload["video_id"])])
+                duration = payload.get("duration_seconds") or seconds(metadata[UUID(payload["video_id"])]["duration"])
+            payload.update(duration_seconds=duration, preset_id=preset_id if action == "download" else "audio_mp3",
+                language=None if action.startswith("ai_") else language,
+                output_language=language or "zh", content_version=payload.get("content_version", settings.TRANSCRIPT_CONTENT_VERSION))
+            if action == "download" and preset_id == "video_source_mp4":
+                payload["source_selection"] = await self.resolver.download_selection(payload)
+                payload["duration_seconds"] = seconds(payload["source_selection"]["duration"])
         if action.startswith("ai_"):
             from app.modules.ai.providers import get_llm_provider
             if transcript_id is not None:

@@ -14,8 +14,11 @@ from app.core.config import settings
 
 from app.core.exceptions import AppException
 from app.modules.video.parsers.runtime import server_proxy
-from app.modules.download.presets import select_streams
-from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info, map_extraction_error
+from app.modules.video.parsers.dispatch import extract_source
+from app.modules.video.parsers.links import platform_for
+from app.modules.download.presets import select_streams, source_selection
+from app.modules.video.service import positive_number
+from app.modules.video.parsers.ytdlp import extraction_options, metadata_from_info, map_extraction_error, source_failure
 from app.modules.video.parsers.ytdlp_worker import NetworkGuard, guarded_downloader
 
 
@@ -64,14 +67,16 @@ def download(payload: dict, directory: Path, emit) -> None:
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         raise AppException("FFMPEG_UNAVAILABLE", "服务端缺少 FFmpeg", 503)
-    proxy = server_proxy()
+    proxy = server_proxy(payload["url"])
     guard = NetworkGuard(proxy)
+    if settings.VIDEO_EGRESS_MODE == "platform":
+        guard.platform = platform_for(payload["url"])
     last_emit = 0.0
     with guard.installed(), native_network_only():
         guard.check_url(payload["url"])
-        options = extraction_options(proxy)
+        options = extraction_options(proxy, url=payload["url"])
         with guarded_downloader(guard, options) as parser:
-            info = parser.extract_info(payload["url"], download=False)
+            info = extract_source(parser, payload["url"])
         if guard.violation:
             raise guard.violation
         video = metadata_from_info(info)
@@ -81,29 +86,39 @@ def download(payload: dict, directory: Path, emit) -> None:
                 raise AppException("VIDEO_TOO_LONG", "实际视频时长超过任务限制", 422)
         if (video.platform, video.platform_video_id) != (payload["platform"], payload["platform_video_id"]):
             raise AppException("VIDEO_ID_CHANGED", "视频身份发生变化", 422)
+        if payload.get("preset_id") == "video_source_mp4" and source_selection(video) != payload.get("source_selection"):
+            raise AppException("SOURCE_SELECTION_CHANGED", "源画幅或格式发生变化，请重新报价", 409)
+        emit({"_source_metadata_ready": True})
         if payload.get("_audio_only"):
             from app.modules.media.audio import select_audio_stream
             streams = [select_audio_stream(video)]
         else:
             streams = select_streams(video, payload["preset_id"])
         sources = []
+        source_limit = min(settings.MAX_FILE_SIZE_MB * 1024 * 1024,
+                           payload.get("allowance", {}).get("limits", {}).get("file_bytes", settings.MAX_FILE_SIZE_MB * 1024 * 1024),
+                           payload.get("allowance", {}).get("source_selection", {}).get("max_source_bytes", settings.MAX_FILE_SIZE_MB * 1024 * 1024))
+        known_total = sum(positive_number(item.get("filesize")) or positive_number(item.get("filesize_approx")) or 0
+                          for item in streams)
+        if known_total > source_limit:
+            raise AppException("FILE_TOO_LARGE", "源文件合计超过体积上限", 413)
+        downloaded_sources_bytes = 0
         for index, stream in enumerate(streams):
             extension = stream.get("ext")
             if extension not in {"mp4", "m4a", "webm", "mkv", "mov", "flv", "ts", "aac", "mp3", "ogg", "opus", "wav"}:
                 raise AppException("PRESET_UNAVAILABLE", "不支持源容器", 422)
             source = directory / f"source_{index}.{extension}"
-            known_size = stream.get("filesize") or stream.get("filesize_approx")
-            if isinstance(known_size, (int, float)) and known_size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
-                raise AppException("FILE_TOO_LARGE", "源文件超过体积上限", 413)
-
             def progress_hook(event, index=index):
                 nonlocal last_emit
+                downloaded = positive_number(event.get("downloaded_bytes")) or 0
+                if downloaded_sources_bytes + downloaded > source_limit:
+                    raise AppException("FILE_TOO_LARGE", "源文件合计超过体积上限", 413)
                 now = time.monotonic()
                 if now - last_emit < 0.5 and event.get("status") != "finished":
                     return
                 last_emit = now
-                total = event.get("total_bytes") or event.get("total_bytes_estimate")
-                ratio = min(1, event.get("downloaded_bytes", 0) / total) if total else 0
+                total = positive_number(event.get("total_bytes")) or positive_number(event.get("total_bytes_estimate"))
+                ratio = min(1, downloaded / total) if total else 0
                 emit({"stage": "downloading", "progress": min(85, int((index + ratio) / len(streams) * 85))})
 
             download_options = {**options, "skip_download": False, "simulate": False,
@@ -111,7 +126,7 @@ def download(payload: dict, directory: Path, emit) -> None:
                                 "postprocessors": [], "hls_prefer_native": True,
                                 "concurrent_fragment_downloads": 1, "skip_unavailable_fragments": False,
                                 "progress_hooks": [progress_hook], "overwrites": False,
-                                "max_filesize": settings.MAX_FILE_SIZE_MB * 1024 * 1024}
+                                "max_filesize": source_limit}
             # Each selected stream is downloaded separately; there is no network FFmpeg fallback.
             with guarded_downloader(guard, download_options, metadata_only=False) as downloader:
                 single = {**info, **stream, "formats": [stream]}
@@ -122,6 +137,9 @@ def download(payload: dict, directory: Path, emit) -> None:
                 raise guard.violation
             if source.is_symlink() or not source.is_file():
                 raise AppException("DOWNLOAD_FAILED", "源媒体下载失败", 502)
+            downloaded_sources_bytes += source.stat().st_size
+            if downloaded_sources_bytes > source_limit:
+                raise AppException("FILE_TOO_LARGE", "源文件合计超过体积上限", 413)
             sources.append(source)
         emit({"stage": "processing", "progress": 90})
         extension = "mp3" if payload["preset_id"] == "audio_mp3" else "mp4"
@@ -152,7 +170,7 @@ def main():
             code = map_extraction_error(exc).code
         else:
             code = "DOWNLOAD_FAILED"
-        emit({"error_code": code})
+        emit({"error_code": code, "source_failure": source_failure(exc)})
         raise SystemExit(1)
 
 

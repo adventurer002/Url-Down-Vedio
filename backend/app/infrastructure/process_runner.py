@@ -80,16 +80,18 @@ class ProcessRunner:
     async def run(self, command: Sequence[str], directory: Path, *, cwd: Path,
                   is_cancel_requested: Callable[[], Awaitable[bool]],
                   on_progress: Callable[[dict], Awaitable[None]],
-                  check_capacity: Callable[[], None] = lambda: None) -> dict:
+                  check_capacity: Callable[[], None] = lambda: None,
+                  on_source_ready=None, source_metadata_timeout: float = 30) -> dict:
         process = None
         buffer = bytearray()
         last = {}
         succeeded = False
         receipt = None
         started = time.monotonic()
+        source_ready = False
 
         async def consume():
-            nonlocal last
+            nonlocal last, source_ready
             # Bound both work per tick and total pending data to prevent pipe abuse.
             for _ in range(16):
                 try:
@@ -110,20 +112,31 @@ class ProcessRunner:
                         continue
                 except (ValueError, UnicodeError):
                     continue
+                if event.get("_source_metadata_ready") is True:
+                    if not source_ready and on_source_ready is not None:
+                        await on_source_ready()
+                    source_ready = True
+                    continue  # Private protocol events never become progress/SSE/results.
                 if "error_code" in event:
                     code = event["error_code"]
                     messages = {"VIDEO_TOO_LONG": "实际视频时长超过任务限制", "DURATION_REQUIRED": "无法确认实际视频时长",
                                 "SSRF_BLOCKED": "禁止访问非公开网络地址", "INVALID_URL": "目标 URL 无效",
+                                "DNS_TIMEOUT": "YouTube DNS 查询超时，请稍后重试",
                                 "UNSUPPORTED_URL": "视频不受支持", "PRESET_UNAVAILABLE": "视频已不提供所选档位",
                                 "DOWNLOAD_TIMEOUT": "下载或转换超时", "FILE_TOO_LARGE": "文件超过任务体积上限",
                                 "FFMPEG_UNAVAILABLE": "服务端缺少 FFmpeg", "VIDEO_ID_CHANGED": "视频身份发生变化",
                                 "AUDIO_STREAM_UNAVAILABLE": "没有独立音轨，已阻止下载完整视频",
                                 "SUBTITLE_FETCH_FAILED": "字幕获取失败", "SUBTITLE_TOO_LARGE": "字幕文件超过大小限制",
+                                "SUBTITLE_INVALID": "字幕格式或时间轴无效",
                                 "YTDLP_PROXY_INVALID": "服务器视频网络出口配置无效，请联系管理员",
                                 "YTDLP_RUNTIME_UNAVAILABLE": "服务器视频解析运行时不可用，请联系管理员",
                                 "SOURCE_ACCESS_RESTRICTED": "视频平台要求额外验证或限制了服务器访问，请稍后重试",
                                 "SOURCE_RATE_LIMITED": "视频平台请求频率受限，请稍后重试",
                                 "SOURCE_NETWORK_UNAVAILABLE": "服务器暂时无法连接视频平台，请稍后重试",
+                                "SOURCE_FORMATS_UNAVAILABLE": "视频平台公开接口结构暂不兼容，请稍后重试或上传文件",
+                                "SOURCE_RESPONSE_TOO_LARGE": "视频平台响应超过大小限制",
+                                "SOURCE_SELECTION_CHANGED": "源画幅或格式发生变化，请重新报价",
+                                "SOURCE_EGRESS_UNAVAILABLE": "服务器尚未配置独立的 YouTube 出口，可改用上传文件",
                                 "PARSE_TIMEOUT": "视频平台连接或解析超时",
                                 "PARSE_FAILED": "视频平台解析失败",
                                 "UPLOAD_INVALID_MEDIA": "文件损坏或不是支持的媒体格式",
@@ -131,8 +144,11 @@ class ProcessRunner:
                                 "CLIP_MEDIA_INVALID": "视频缺少有效音视频轨或精确时间轴"}
                     if code not in messages:
                         code = "DOWNLOAD_FAILED"
-                    status = 503 if code in {"YTDLP_PROXY_INVALID", "YTDLP_RUNTIME_UNAVAILABLE", "SOURCE_RATE_LIMITED"} else 504 if code == "PARSE_TIMEOUT" else 502
-                    raise AppException(code, messages.get(code, "视频下载失败"), status)
+                    status = 503 if code in {"YTDLP_PROXY_INVALID", "YTDLP_RUNTIME_UNAVAILABLE", "SOURCE_RATE_LIMITED", "SOURCE_EGRESS_UNAVAILABLE"} else 504 if code in {"PARSE_TIMEOUT", "DNS_TIMEOUT"} else 502
+                    error = AppException(code, messages.get(code, "视频下载失败"), status)
+                    if event.get("source_failure") in {"restricted", "rate_limited"}:
+                        error.source_failure = event["source_failure"]
+                    raise error
                 if isinstance(event.get("progress"), int) and 0 <= event["progress"] <= 100:
                     await on_progress(event)
                 last = event
@@ -157,6 +173,8 @@ class ProcessRunner:
                     if await is_cancel_requested():
                         raise AppException("TASK_CANCELLED", "任务已取消", 409)
                     await consume()
+                if on_source_ready is not None and not source_ready and time.monotonic() - started >= source_metadata_timeout:
+                    raise AppException("PARSE_TIMEOUT", "视频元数据提取超过执行时限", 504)
                 if time.monotonic() - started >= self.timeout:
                     raise AppException("DOWNLOAD_TIMEOUT", "下载超过总执行时限", 504)
                 if returncode is not None:

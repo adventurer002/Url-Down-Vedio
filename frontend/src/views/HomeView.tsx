@@ -7,6 +7,7 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { useBilling } from "../stores/billing";
 import { validateFile, isSending } from "../stores/uploads";
 import { filesize } from "../utils";
+import { extractVideoLink } from "../utils/videoLink";
 import ErrorNotice from "../components/ErrorNotice";
 import Icon from "../components/Icon";
 import HeroBackground from "../components/HeroBackground";
@@ -68,7 +69,7 @@ export default function HomeView() {
       fileInput.current?.click();
       return;
     }
-    const input = url.trim();
+    let input = url.trim();
     if (mode === "url") {
       if (!input) {
         setError(new ApiError("VIDEO_URL_REQUIRED", "请先粘贴视频链接"));
@@ -76,12 +77,9 @@ export default function HomeView() {
         return;
       }
       try {
-        const parsed = new URL(input);
-        if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
-      } catch {
-        setError(
-          new ApiError("INVALID_URL", "请输入完整的 http 或 https 视频链接。"),
-        );
+        input = extractVideoLink(input);
+      } catch (cause) {
+        setError(normalizeError(cause));
         return;
       }
     }
@@ -377,6 +375,8 @@ export default function HomeView() {
                         "SOURCE_ACCESS_RESTRICTED",
                         "SOURCE_RATE_LIMITED",
                         "SOURCE_NETWORK_UNAVAILABLE",
+                        "SOURCE_COOLDOWN",
+                        "SOURCE_EGRESS_UNAVAILABLE",
                       ].includes(error?.code || "") && (
                         <button
                           className="text-button"

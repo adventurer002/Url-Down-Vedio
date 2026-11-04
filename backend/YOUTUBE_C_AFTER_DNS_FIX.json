@@ -1,0 +1,74 @@
+{
+  "checked_at": "2026-11-04T12:31:38.133212+00:00",
+  "mode": "isolated_server_preflight",
+  "account": "videohub-deploy",
+  "service_account_checked": false,
+  "production_application_changed": false,
+  "download_verified": false,
+  "standalone_verified": false,
+  "youtube_network_probe_performed": true,
+  "metadata_verified": true,
+  "code_hashes": {
+    "app/modules/video/parsers/youtube.py": "c195ecc8bdd6f9aff3bbf5a8243ce0ddf8af50c3e9010004e9fd998493019633",
+    "app/modules/video/parsers/youtube_dns.py": "46a340676082bddb73ff954e6c838c9e2a94807c35fff6322ca22be24919af7d",
+    "app/modules/video/parsers/youtube_runtime.py": "35769bd354230af732366a1daf808b7bb7c0bb3f9a2183baec7d7dd033196364",
+    "app/modules/video/parsers/ytdlp_worker.py": "07309f843d02d015505001788a1e2058eaadc9530f8c79a24f845f6bb1e09eb6",
+    "app/modules/video/parsers/ytdlp.py": "6b19c142c75ae20bef966f17517f4a96b64c999fca0da3128ad3cbec1cc2f7e0",
+    "app/core/security.py": "1e8dc5b52a9c453a296364b53234553bad785d94fea4b888662f967e484defa3"
+  },
+  "configuration": {
+    "yt_dlp_version": "2026.8.19",
+    "egress": "server_proxy",
+    "metadata_verified": false,
+    "download_verified": false,
+    "checks": [
+      {
+        "name": "egress_configuration",
+        "passed": true,
+        "code": "OK",
+        "message": "服务端出口配置有效；客户端无需提供代理"
+      },
+      {
+        "name": "javascript_runtime",
+        "passed": true,
+        "code": "OK",
+        "message": "Deno / EJS 离线脚本执行通过，远程组件保持关闭"
+      },
+      {
+        "name": "ffmpeg",
+        "passed": true,
+        "code": "OK",
+        "message": "FFmpeg 可用"
+      }
+    ],
+    "egress_mode": "platform",
+    "policy_version": "v1",
+    "standalone_verified": false,
+    "restart_verified": false,
+    "platform": "youtube",
+    "dns_mode": "proxy_doh",
+    "deno_version": "2.9.8",
+    "ejs_version": "0.8.0",
+    "ejs_verified": true,
+    "sandbox_verified": true,
+    "ffmpeg_version": "4.4.2-0ubuntu0.22.04.1",
+    "ffmpeg_features": {
+      "fps_mode": false,
+      "vsync": true,
+      "render_verified": false
+    },
+    "render_notice": "当前切片命令所需 fps_mode 参数未验证可用；需单独验证兼容或升级，不能仅凭元数据检查开放成片",
+    "passed": true
+  },
+  "code": "OK",
+  "video_id": "aqz-KE-bpKQ",
+  "duration": 635,
+  "presets": [
+    "video_1080_mp4",
+    "video_720_mp4",
+    "video_480_mp4",
+    "audio_mp3"
+  ],
+  "subtitle_languages": [],
+  "metadata_seconds": 16.507
+}

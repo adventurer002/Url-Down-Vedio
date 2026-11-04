@@ -281,6 +281,29 @@ it("offers file upload after platform restrictions and preserves the video URL",
   expect(api.parse).toHaveBeenCalledOnce();
 });
 
+it("extracts a single link from share text before parsing and keeps multiple links local", async () => {
+  vi.spyOn(api, "parse").mockResolvedValue(metadata);
+  mount();
+  const textbox = screen.getByRole("textbox", { name: "视频链接" });
+  fireEvent.change(textbox, {
+    target: { value: "https://b23.tv/first https://v.douyin.com/second" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "开始解析" }));
+  expect(api.parse).not.toHaveBeenCalled();
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  fireEvent.change(textbox, {
+    target: { value: "复制分享词：看看 https://b23.tv/first， 打开查看" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "开始解析" }));
+  expect(
+    await screen.findByRole("heading", { name: metadata.title }),
+  ).toBeTruthy();
+  expect(api.parse).toHaveBeenCalledWith(
+    "https://b23.tv/first",
+    expect.any(AbortSignal),
+  );
+});
+
 it("cancels an active task through the store and updates the React task card", async () => {
   vi.spyOn(api, "create").mockResolvedValue({
     task_id: "job-1",
