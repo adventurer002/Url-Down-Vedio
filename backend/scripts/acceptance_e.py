@@ -104,7 +104,7 @@ def summarize(manifest, observations, *, elapsed_hours, safety):
         for capability in CAPABILITIES:
             rows = [indexed[(s["sample_id"], capability)] for s in samples if (s["sample_id"], capability) in indexed]
             success = sum(row["code"] == "OK" for row in rows)
-            fresh = [row for row in rows if row.get("http_attempts", 0) > 0]
+            fresh = [row for row in rows if row.get("http_attempts", 0) > 0 or row.get("browser_responses", 0) > 0]
             days = sorted({row["finished_at"][:10] for row in rows})
             errors = {}
             for row in rows:
@@ -271,10 +271,11 @@ class ProbeFailure(Exception):
 
 
 class Campaign:
-    def __init__(self, state):
+    def __init__(self, state, manifest_path=None):
         self.state = state
         self.config, self.engine = load_environment(state)
-        self.manifest = validate_manifest(json.loads((BACKEND / "acceptance-e-samples.json").read_text()))
+        self.manifest_path = manifest_path or BACKEND / "acceptance-e-samples.json"
+        self.manifest = validate_manifest(json.loads(self.manifest_path.read_text()))
         self.path = state / "progress.json"
         self.progress = json.loads(self.path.read_text()) if self.path.exists() else {
             "started_at": timestamp(), "observations": [], "checks": {}, "pending": None,
@@ -296,7 +297,7 @@ class Campaign:
             "trial_eligible": self.progress.get("trial_eligible", False),
             "updated_at": timestamp(), "membership_authorized": True, "login_mode": "isolated_development_mock",
             "account_uid": os.getuid(), "paid_model_calls": False, "production_application_changed": False,
-            "manifest_sha256": hashlib.sha256((BACKEND / "acceptance-e-samples.json").read_bytes()).hexdigest(),
+            "manifest_sha256": hashlib.sha256(self.manifest_path.read_bytes()).hexdigest(),
             "source_hashes": {str(p.relative_to(BACKEND)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((BACKEND / "app").rglob("*.py"))},
             "observations": self.progress["observations"], "checks": self.progress["checks"],
             "membership_audit": self.progress.get("membership_audit"),
@@ -401,7 +402,8 @@ class Campaign:
         raise ProbeFailure("TASK_TIMEOUT")
 
     def create(self, url, preset, pending_key="pending"):
-        quote = self.data("POST", "/billing/quotes", json={"url": url, "action": "download", "preset_id": preset})
+        action = self.manifest.get("audio_action", "download") if preset == "audio_mp3" else "download"
+        quote = self.data("POST", "/billing/quotes", json={"url": url, "action": action, "preset_id": preset})
         self.progress[pending_key]["quote_id"] = quote["quote_id"]
         self.persist()
         task_id = self.data("POST", "/billing/tasks", json={"quote_id": quote["quote_id"]})["task_id"]
@@ -508,11 +510,13 @@ class Campaign:
             result["code"] = error.code if isinstance(error, ProbeFailure) else "ACCEPTANCE_FAILED"
             result["exception_type"] = type(error).__name__
         events = self.trace()
-        if result["code"] == "OK" and not any(e["kind"] == "http_attempt" for e in events):
+        network_seen = any(e["kind"] in {"http_attempt", "browser_response"} for e in events)
+        if result["code"] == "OK" and not network_seen:
             result["code"] = "TELEMETRY_MISSING"
-        elif any(e["kind"] == "http_attempt" for e in events):
+        elif network_seen:
             self.progress["checks"]["telemetry"] = True
         result.update(http_attempts=sum(e["kind"] == "http_attempt" for e in events),
+                      browser_responses=sum(e.get("count", 0) for e in events if e["kind"] == "browser_response"),
                       source_mode=next((e["source_mode"] for e in reversed(events) if e["kind"] == "selection"), None),
                       finished_at=timestamp(), seconds=round(time.monotonic() - started, 3))
         self.progress["observations"].append(result)
@@ -525,7 +529,9 @@ class Campaign:
         self.progress["safety_pending"] = {}
         self.persist()
         try:
-            task_id = self.create("https://www.youtube.com/watch?v=aqz-KE-bpKQ", "video_480_mp4", "safety_pending")
+            cancel_sample = self.manifest.get("cancellation_sample", {})
+            task_id = self.create(cancel_sample.get("url", "https://www.youtube.com/watch?v=aqz-KE-bpKQ"),
+                                  cancel_sample.get("preset", "video_480_mp4"), "safety_pending")
             directory = self.state / "storage/tmp" / task_id
             deadline = time.monotonic() + 90
             groups = set()
@@ -540,7 +546,18 @@ class Campaign:
                             size += path.stat().st_size
                     except FileNotFoundError:
                         pass
-                if size > 65536:
+                browser_seen = False
+                if cancel_sample.get("wait_for") == "browser":
+                    groups = process_groups(self.processes[0].pid) - {self.processes[0].pid}
+                    for path in Path("/proc").iterdir():
+                        try:
+                            if path.name.isdigit() and path.stat().st_uid == os.getuid() and "chrome" in (path / "comm").read_text():
+                                browser_seen = os.getpgid(int(path.name)) in groups
+                                if browser_seen:
+                                    break
+                        except (OSError, ValueError):
+                            continue
+                if browser_seen or (size > 65536 and cancel_sample.get("wait_for") != "browser"):
                     groups = process_groups(self.processes[0].pid) - {self.processes[0].pid}
                     break
                 time.sleep(.25)
@@ -632,8 +649,9 @@ class Campaign:
 
     def run_quick(self):
         """Regression evidence for a trial update, separately from multiday eligibility."""
-        samples = [sample for sample in self.manifest["samples"] if sample["video_id"] in QUICK_VIDEO_IDS]
-        if {sample["video_id"] for sample in samples} != QUICK_VIDEO_IDS:
+        selected_ids = set(self.manifest.get("quick_video_ids", QUICK_VIDEO_IDS))
+        samples = [sample for sample in self.manifest["samples"] if sample["video_id"] in selected_ids]
+        if {sample["video_id"] for sample in samples} != selected_ids:
             raise ValueError("Incomplete trial regression corpus")
         self.progress.update(acceptance_mode="quick_trial", trial_eligible=False)
         self.start()
@@ -693,7 +711,7 @@ def main():
         import fcntl
         with (args.state / "campaign.lock").open("w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            campaign = Campaign(args.state)
+            campaign = Campaign(args.state, args.manifest)
             def interrupt(signum, frame):
                 raise InterruptedError("Acceptance interrupted")
             signal.signal(signal.SIGTERM, interrupt)

@@ -169,6 +169,8 @@ def source_bucket(url):
     # Validate configuration before taking a permit; never put proxy secrets in keys.
     server_proxy(url)
     platform = platform_for(url)
+    if platform == "douyin" and settings.DOUYIN_SOURCE_BACKEND == "browser":
+        platform += "-browser"
     if platform == "other":
         from urllib.parse import urlsplit
         platform += "-" + hashlib.sha256((urlsplit(url).hostname or "").encode()).hexdigest()[:16]

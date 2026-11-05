@@ -1,5 +1,6 @@
 from contextlib import redirect_stdout
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -83,6 +84,7 @@ def main():
         print(json.dumps(value), file=output, flush=True)
 
     try:
+        os.environ["VIDEOHUB_BROWSER_WORK_DIRECTORY"] = sys.argv[2]
         with redirect_stdout(sys.stderr):
             fetch(json.loads(sys.argv[1]), Path(sys.argv[2]), emit)
     except Exception as exc:

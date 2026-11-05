@@ -287,3 +287,19 @@ def test_quick_trial_evidence_keeps_multiday_gate_separate(manifest, failed, mon
     result = e.summarize(manifest, campaign.progress["observations"], elapsed_hours=1,
                          safety=campaign.progress["checks"])
     assert not any(platform["release_eligible"] for platform in result["platforms"].values())
+
+
+def test_browser_runtime_copy_preserves_valid_library_links_and_omits_absent_docs(tmp_path):
+    source = tmp_path / "source"
+    (source / "lib").mkdir(parents=True)
+    (source / "lib/libfixture.so.1.0").write_bytes(b"verified-shared-library")
+    (source / "lib/libfixture.so.1.0").chmod(0o755)
+    (source / "lib/libfixture.so.1").symlink_to("libfixture.so.1.0")
+    (source / "README").symlink_to("../absent-documentation/README")
+    target = tmp_path / "runtime"
+    installer.copy_runtime(source, target)
+    assert (target / "lib/libfixture.so.1").read_bytes() == b"verified-shared-library"
+    assert not (target / "lib/libfixture.so.1").is_symlink()
+    assert (target / "lib/libfixture.so.1").stat().st_mode & 0o111
+    assert not (target / "README").exists()
+    assert installer.runtime_digest({"runtime": source}) == installer.runtime_digest({"runtime": target})

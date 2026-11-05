@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import signal
 import sys
+import tempfile
 
 from app.core.exceptions import AppException
 from app.modules.video.parsers.base import ParsedVideo
@@ -146,6 +147,12 @@ class YtDlpParser:
 
     async def _parse(self, url: str, timeout: float) -> ParsedVideo:
         process = None
+        browser_directory = None
+        process_options = {}
+        from app.modules.video.parsers.links import platform_for
+        if settings.VIDEO_EGRESS_MODE == "platform" and settings.DOUYIN_SOURCE_BACKEND == "browser" and platform_for(url) == "douyin":
+            browser_directory = tempfile.TemporaryDirectory(prefix="vhdy-meta-")
+            process_options["env"] = {**os.environ, "VIDEOHUB_BROWSER_WORK_DIRECTORY": browser_directory.name}
         try:
             async with asyncio.timeout(timeout):
                 process = await asyncio.create_subprocess_exec(
@@ -153,6 +160,7 @@ class YtDlpParser:
                     cwd=Path(__file__).resolve().parents[4],
                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
                     start_new_session=True,
+                    **process_options,
                 )
                 output = bytearray()
                 while chunk := await process.stdout.read(65536):
@@ -178,6 +186,7 @@ class YtDlpParser:
                         "SOURCE_NETWORK_UNAVAILABLE": ("服务器暂时无法连接视频平台，请稍后重试", 502),
                         "SOURCE_FORMATS_UNAVAILABLE": ("视频平台公开接口结构暂不兼容，请稍后重试或上传文件", 502),
                         "SOURCE_RESPONSE_TOO_LARGE": ("视频平台响应超过大小限制", 502),
+                        "SOURCE_BROWSER_UNAVAILABLE": ("服务器抖音浏览器运行时尚未就绪", 503),
                         "SOURCE_EGRESS_UNAVAILABLE": ("服务器尚未配置独立的 YouTube 出口，可改用上传文件", 503),
                         "VIDEO_ID_CHANGED": ("解析结果与请求平台不一致", 422),
                     }
@@ -199,3 +208,5 @@ class YtDlpParser:
         finally:
             if process is not None:
                 await _terminate_process_group(process)
+            if browser_directory is not None:
+                browser_directory.cleanup()

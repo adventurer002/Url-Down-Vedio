@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager, redirect_stdout
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -159,6 +160,7 @@ def main():
         print(json.dumps(event), file=protocol_stdout, flush=True)
 
     try:
+        os.environ["VIDEOHUB_BROWSER_WORK_DIRECTORY"] = sys.argv[2]
         with redirect_stdout(sys.stderr):
             download(json.loads(sys.argv[1]), Path(sys.argv[2]), emit)
     except Exception as exc:
