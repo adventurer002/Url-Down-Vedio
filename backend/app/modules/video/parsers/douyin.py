@@ -154,7 +154,8 @@ def info_from_detail(detail, identifier):
             if stream["vcodec"] == "unknown" and re.search(r"_h264_", str(address.get("url_key", ""))):
                 stream["vcodec"] = "h264"
             identity = [item.get("gear_name"), item.get("quality_type"), item.get("format"),
-                        stream["width"], stream["height"], stream["vcodec"], item.get("bit_rate")]
+                        stream["width"], stream["height"], stream["vcodec"],
+                        item.get("bit_rate") if positive(item.get("bit_rate")) else None]
             stream["format_id"] = "douyin-video-" + hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:20]
         if positive(address.get("data_size")):
             stream["filesize"] = int(address["data_size"])

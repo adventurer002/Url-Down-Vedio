@@ -195,5 +195,5 @@
     "wait_for": "browser"
   },
   "audio_action": "audio_extraction",
-  "runtime_revision": 5
+  "runtime_revision": 6
 }

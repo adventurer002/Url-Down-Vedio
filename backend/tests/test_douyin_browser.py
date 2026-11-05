@@ -119,6 +119,15 @@ def test_browser_format_identity_survives_upstream_reordering(dash_detail):
     assert before == after
 
 
+def test_default_video_format_identity_excludes_signed_sibling_urls(dash_detail):
+    before = douyin.info_from_detail(dash_detail, IDENTIFIER)
+    dash_detail["video"]["bit_rate"][0]["play_addr"]["url_list"] = [
+        "https://v.example.douyinvod.com/rotated.mp4?expires=123456"]
+    after = douyin.info_from_detail(dash_detail, IDENTIFIER)
+    assert [stream["format_id"] for stream in before["formats"]] == [
+        stream["format_id"] for stream in after["formats"]]
+
+
 @pytest.mark.parametrize("hint,codec", [("video_h264_720p_100000", "h264"), ("", "unknown")])
 def test_browser_only_copies_video_with_explicit_avc_source_hint(dash_detail, hint, codec, tmp_path):
     stream = dash_detail["video"]["bit_rate"][0]
