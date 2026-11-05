@@ -46,3 +46,29 @@ if trace_directory:
         return streams
 
     presets.select_streams = select_streams
+
+    if os.environ.get("DOUYIN_SOURCE_BACKEND") == "browser":
+        from app.modules.video.parsers import douyin_browser
+        from app.modules.media import audio
+        original_probe = douyin_browser.run_probe
+        original_audio = audio.select_audio_stream
+
+        @functools.wraps(original_audio)
+        def select_original_audio(video):
+            stream = original_audio(video)
+            record("selection", source_mode="independent_audio", preset="audio_mp3")
+            return stream
+
+        audio.select_audio_stream = select_original_audio
+
+        @functools.wraps(original_probe)
+        def browser_probe(*args, **kwargs):
+            result = original_probe(*args, **kwargs)
+            responses = sum(value for key, value in result.get("responses", {}).items() if key.isdecimal())
+            if responses:
+                record("browser_response", count=responses)
+            record("browser_probe", code=result["code"], bytes=result["browser_bytes"], seconds=result["seconds"],
+                   captcha=result.get("captcha_visible", False), isolated=result.get("direct_network_blocked", False))
+            return result
+
+        douyin_browser.run_probe = browser_probe

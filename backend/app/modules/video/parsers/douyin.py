@@ -1,9 +1,9 @@
-"""Public Douyin share-page source, with one bounded locked-SDK fallback.
+"""Public Douyin sources inside the existing watched child process.
 
-Runs inside the existing watched child process. No login cookies, signature
-browser, external service or automatic paid requests are introduced.
+Operators select the native share page or isolated anonymous browser backend.
 """
 import json
+import hashlib
 import math
 import re
 import time
@@ -134,6 +134,7 @@ def info_from_detail(detail, identifier):
     if not isinstance(rates, list) or len(rates) > 128 or any(not isinstance(item, dict) for item in rates):
         raise ShareDataUnavailable()
     formats = []
+    from app.core.config import settings
     for index, item in enumerate([*rates, video]):
         address = item.get("play_addr")
         if not isinstance(address, dict) or item.get("has_drm") or item.get("is_drm"):
@@ -147,11 +148,36 @@ def info_from_detail(detail, identifier):
         stream = {"format_id": f"douyin-{index}", "url": media_url(urls[0]), "ext": "mp4", "protocol": "https",
                   "width": int(width), "height": int(height), "vcodec": "hevc" if item.get("is_h265") or item.get("is_bytevc1") else "unknown",
                   "acodec": "none" if video.get("has_audio") is False else "unknown", "http_headers": dict(HEADERS)}
+        if (item.get("format") or video.get("format")) == "dash":
+            stream["acodec"] = "none"
+        if settings.DOUYIN_SOURCE_BACKEND == "browser":
+            if stream["vcodec"] == "unknown" and re.search(r"_h264_", str(address.get("url_key", ""))):
+                stream["vcodec"] = "h264"
+            identity = [item.get("gear_name"), item.get("quality_type"), item.get("format"),
+                        stream["width"], stream["height"], stream["vcodec"], item.get("bit_rate")]
+            stream["format_id"] = "douyin-video-" + hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:20]
         if positive(address.get("data_size")):
             stream["filesize"] = int(address["data_size"])
         if positive(item.get("bit_rate")):
             stream["tbr"] = item["bit_rate"] / 1000
         formats.append(stream)
+    audio_rates = video.get("bit_rate_audio") or []
+    if not isinstance(audio_rates, list) or len(audio_rates) > 32:
+        raise ShareDataUnavailable()
+    for item in audio_rates:
+        if not isinstance(item, dict) or not isinstance(item.get("audio_meta"), dict):
+            raise ShareDataUnavailable()
+        audio = item["audio_meta"]
+        addresses = audio.get("url_list") or {}
+        if audio.get("media_type") != "audio" or not isinstance(addresses, dict) or not addresses.get("main_url"):
+            continue
+        if audio.get("has_drm") or audio.get("is_drm"):
+            continue
+        identity = [audio.get("file_id"), audio.get("file_hash"), audio.get("bitrate"), audio.get("size")]
+        formats.append({"format_id": "douyin-audio-" + hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:20],
+            "url": media_url(addresses["main_url"]), "ext": "m4a", "protocol": "https", "vcodec": "none",
+            "acodec": "unknown", "filesize": int(audio["size"]) if positive(audio.get("size")) else None,
+            "abr": audio["bitrate"] / 1000 if positive(audio.get("bitrate")) else None, "http_headers": dict(HEADERS)})
     if not formats:
         raise ShareDataUnavailable()
     author = detail.get("author") or {}
@@ -167,6 +193,10 @@ class DouyinSourceBackend:
         from app.modules.video.parsers.ytdlp import map_extraction_error, source_failure
 
         canonical, identifier = video_reference(url)
+        from app.core.config import settings
+        if settings.DOUYIN_SOURCE_BACKEND == "browser":
+            from app.modules.video.parsers.douyin_browser import browser_detail
+            return info_from_detail(browser_detail(identifier), identifier)
         # Includes the native page, SDK fallback and all their redirects. The
         # existing guard caps this phase at 26 seconds and each socket at 5 seconds.
         with downloader.source_budget(12):

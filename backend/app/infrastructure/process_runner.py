@@ -136,6 +136,7 @@ class ProcessRunner:
                                 "SOURCE_FORMATS_UNAVAILABLE": "视频平台公开接口结构暂不兼容，请稍后重试或上传文件",
                                 "SOURCE_RESPONSE_TOO_LARGE": "视频平台响应超过大小限制",
                                 "SOURCE_SELECTION_CHANGED": "源画幅或格式发生变化，请重新报价",
+                                "SOURCE_BROWSER_UNAVAILABLE": "服务器抖音浏览器运行时尚未就绪",
                                 "SOURCE_EGRESS_UNAVAILABLE": "服务器尚未配置独立的 YouTube 出口，可改用上传文件",
                                 "PARSE_TIMEOUT": "视频平台连接或解析超时",
                                 "PARSE_FAILED": "视频平台解析失败",
@@ -144,7 +145,7 @@ class ProcessRunner:
                                 "CLIP_MEDIA_INVALID": "视频缺少有效音视频轨或精确时间轴"}
                     if code not in messages:
                         code = "DOWNLOAD_FAILED"
-                    status = 503 if code in {"YTDLP_PROXY_INVALID", "YTDLP_RUNTIME_UNAVAILABLE", "SOURCE_RATE_LIMITED", "SOURCE_EGRESS_UNAVAILABLE"} else 504 if code in {"PARSE_TIMEOUT", "DNS_TIMEOUT"} else 502
+                    status = 503 if code in {"YTDLP_PROXY_INVALID", "YTDLP_RUNTIME_UNAVAILABLE", "SOURCE_RATE_LIMITED", "SOURCE_EGRESS_UNAVAILABLE", "SOURCE_BROWSER_UNAVAILABLE"} else 504 if code in {"PARSE_TIMEOUT", "DNS_TIMEOUT"} else 502
                     error = AppException(code, messages.get(code, "视频下载失败"), status)
                     if event.get("source_failure") in {"restricted", "rate_limited"}:
                         error.source_failure = event["source_failure"]

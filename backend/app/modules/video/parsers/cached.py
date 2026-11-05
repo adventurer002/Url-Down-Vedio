@@ -150,6 +150,8 @@ def loop_cache() -> MetadataCache:
                  settings.VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS, settings.VIDEO_EGRESS_MODE,
                  hashlib.sha256(settings.YOUTUBE_PROXY.get_secret_value().encode()).digest(),
                  settings.VIDEO_EGRESS_POLICY_VERSION, settings.YOUTUBE_DNS_MODE)
+    signature += (settings.DOUYIN_SOURCE_BACKEND, settings.DOUYIN_BROWSER_EXECUTABLE_PATH,
+                  settings.DOUYIN_BROWSER_LIBRARY_PATH)
     current = getattr(loop, "_videohub_metadata_cache", None)
     if current is None or current[0] != signature:
         cooldown = settings.VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS if settings.VIDEO_EGRESS_MODE == "legacy" else 0

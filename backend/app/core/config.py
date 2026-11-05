@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     VIDEO_EGRESS_MODE: Literal["legacy", "platform"] = "legacy"
     YOUTUBE_PROXY: SecretStr = SecretStr("")
     YOUTUBE_DNS_MODE: Literal["system", "proxy_doh"] = "system"
+    DOUYIN_SOURCE_BACKEND: Literal["native", "browser"] = "native"
+    DOUYIN_BROWSER_EXECUTABLE_PATH: str = ""
+    DOUYIN_BROWSER_LIBRARY_PATH: str = ""
     VIDEO_EGRESS_POLICY_VERSION: str = Field(default="v1", pattern=r"^[A-Za-z0-9_-]{1,32}$")
     SOURCE_FAILURE_THRESHOLD: int = Field(default=3, ge=1, le=20)
     SOURCE_FAILURE_WINDOW_SECONDS: int = Field(default=60, ge=1, le=600)

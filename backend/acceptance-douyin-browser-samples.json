@@ -1,0 +1,199 @@
+{
+  "registered_on": "2026-11-05",
+  "mode": "anonymous_server_browser",
+  "sample_source": "user sample and public Douyin search-index pages",
+  "samples": [
+    {
+      "video_id": "7700513046734006379",
+      "url": "https://www.douyin.com/video/7700513046734006379",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7700513046734006379",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7681133341692677414",
+      "url": "https://www.douyin.com/video/7681133341692677414",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7681133341692677414",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7656280006468832558",
+      "url": "https://www.douyin.com/video/7656280006468832558",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7656280006468832558",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7685027936717606196",
+      "url": "https://www.douyin.com/video/7685027936717606196",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7685027936717606196",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7672353829669447867",
+      "url": "https://www.douyin.com/video/7672353829669447867",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7672353829669447867",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7685683231571676459",
+      "url": "https://www.douyin.com/video/7685683231571676459",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7685683231571676459",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7631888662678015259",
+      "url": "https://www.douyin.com/video/7631888662678015259",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7631888662678015259",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7597008418687208745",
+      "url": "https://www.douyin.com/video/7597008418687208745",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7597008418687208745",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7650108609900072207",
+      "url": "https://www.douyin.com/video/7650108609900072207",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7650108609900072207",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7682078251681942826",
+      "url": "https://www.douyin.com/video/7682078251681942826",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7682078251681942826",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7630002836880788778",
+      "url": "https://www.douyin.com/video/7630002836880788778",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7630002836880788778",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7685202834761486952",
+      "url": "https://www.douyin.com/video/7685202834761486952",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7685202834761486952",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7696760263190077914",
+      "url": "https://www.douyin.com/video/7696760263190077914",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7696760263190077914",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7655302298255853236",
+      "url": "https://www.douyin.com/video/7655302298255853236",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7655302298255853236",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7671266977990644965",
+      "url": "https://www.douyin.com/video/7671266977990644965",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7671266977990644965",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7697478133531967370",
+      "url": "https://www.douyin.com/video/7697478133531967370",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7697478133531967370",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7681997669951322542",
+      "url": "https://www.douyin.com/video/7681997669951322542",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7681997669951322542",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7687095066384469248",
+      "url": "https://www.douyin.com/video/7687095066384469248",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7687095066384469248",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7615842384613575963",
+      "url": "https://www.douyin.com/video/7615842384613575963",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7615842384613575963",
+      "scheduled_day": 0
+    },
+    {
+      "video_id": "7691829934763134632",
+      "url": "https://www.douyin.com/video/7691829934763134632",
+      "expected": "public_video",
+      "platform": "douyin",
+      "sample_id": "douyin_7691829934763134632",
+      "scheduled_day": 0
+    }
+  ],
+  "schema_version": 1,
+  "duration_hours": 72,
+  "test_membership_authorized": true,
+  "quick_video_ids": [
+    "7700513046734006379",
+    "7681133341692677414",
+    "7656280006468832558",
+    "7685027936717606196",
+    "7672353829669447867",
+    "7685683231571676459",
+    "7631888662678015259",
+    "7597008418687208745",
+    "7650108609900072207",
+    "7682078251681942826",
+    "7630002836880788778",
+    "7685202834761486952",
+    "7696760263190077914",
+    "7655302298255853236",
+    "7671266977990644965",
+    "7697478133531967370",
+    "7681997669951322542",
+    "7687095066384469248",
+    "7615842384613575963",
+    "7691829934763134632"
+  ],
+  "cancellation_sample": {
+    "url": "https://www.douyin.com/video/7700513046734006379",
+    "preset": "video_720_mp4",
+    "wait_for": "browser"
+  },
+  "audio_action": "audio_extraction",
+  "runtime_revision": 5
+}
