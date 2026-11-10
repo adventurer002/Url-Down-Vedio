@@ -27,6 +27,9 @@
   flex: none;
 }
 .m-showcase-window {
+  box-shadow:
+    0 4px 12px rgb(24 24 27 / 4%),
+    0 18px 48px rgb(24 24 27 / 7%);
   border: 1px solid #e4e4e9;
   border-radius: 24px;
   background: #fff;
@@ -286,18 +289,10 @@
   border-top: 1px solid #ededf0;
   padding: 12px 32px;
 }
-.m-showcase-footer > span,
-.m-showcase-source-note {
+.m-showcase-footer > span {
   color: #62626b;
   font-size: 13px;
   line-height: 1.8;
-}
-.m-landing-site .m-showcase-source-note {
-  margin-top: 14px;
-}
-.m-showcase-source-note a {
-  text-decoration: underline;
-  text-underline-offset: 4px;
 }
 @media (max-width: 900px) {
   .m-landing-site .m-showcase {

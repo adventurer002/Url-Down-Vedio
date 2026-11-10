@@ -3,7 +3,7 @@ import { example, features } from "./content";
 import Glyph from "./Glyph";
 
 const labels = ["视频下载", "文稿提取", "章节总结", "思维导图"];
-const examplePath = "/examples/knowledge-loop";
+const exampleMediaPath = "/media/examples/knowledge-loop";
 
 /** Display an excerpt of the published output, without changing that output. */
 function firstSentence(title: string) {
@@ -73,14 +73,18 @@ export default function ProductShowcase() {
           </h2>
           <p>下载原片、检索文稿，或沿着章节和导图回顾重点。</p>
         </div>
-        <a className="m-inline-link" href={examplePath}>
-          查看完整处理记录 <Glyph name="arrow" size={18} />
+        <a
+          className="m-inline-link"
+          href={`${exampleMediaPath}/result.json`}
+          download
+        >
+          下载处理记录 <Glyph name="arrow" size={18} />
         </a>
       </div>
       <div className="m-showcase-window" data-reveal="panel">
         <div className="m-showcase-source">
           <a
-            href={`${examplePath}#source-title`}
+            href={`${exampleMediaPath}/source.mp4`}
             aria-label="查看示例原片"
             className="m-showcase-poster"
           >
@@ -180,8 +184,8 @@ export default function ProductShowcase() {
                     {example.segments.slice(0, 3).map((segment) => (
                       <p key={segment.start}>
                         <a
-                          href={`${examplePath}#segment-${segment.start}`}
-                          aria-label={`查看 ${segment.start} 秒处原文`}
+                          href={`${exampleMediaPath}/source.mp4#t=${segment.start}`}
+                          aria-label={`回看 ${segment.start} 秒处原片`}
                         >
                           00:{String(segment.start).padStart(2, "0")}
                         </a>
@@ -194,8 +198,8 @@ export default function ProductShowcase() {
                     {example.summary.chapters.map((chapter) => (
                       <li key={chapter.start_seconds}>
                         <a
-                          href={`${examplePath}#segment-${chapter.start_seconds}`}
-                          aria-label={`查看 ${chapter.start_seconds} 秒处的章节原文`}
+                          href={`${exampleMediaPath}/source.mp4#t=${chapter.start_seconds}`}
+                          aria-label={`回看 ${chapter.start_seconds} 秒处章节原片`}
                         >
                           <time>{chapter.timestamp.slice(3)}</time>
                         </a>
@@ -220,10 +224,6 @@ export default function ProductShowcase() {
           </a>
         </div>
       </div>
-      <p className="m-showcase-source-note">
-        字幕由作者提供，未经过语音识别。
-        <a href={examplePath}>核对原片、字幕与完整结果</a>
-      </p>
     </section>
   );
 }

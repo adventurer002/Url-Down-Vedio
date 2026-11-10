@@ -13,7 +13,7 @@
 }
 .admin-app {
   min-height: 100dvh;
-  background: #fafbfc;
+  background: #fff;
 }
 .admin-app button,
 .admin-dialog button,
@@ -281,6 +281,7 @@
   padding: 22px 18px;
   background: white;
   min-height: 134px;
+  box-shadow: var(--card-shadow);
 }
 .admin-metric-icon {
   padding-top: 3px;
@@ -333,6 +334,7 @@
   border-radius: 8px;
   min-width: 0;
   padding: 20px;
+  box-shadow: var(--card-shadow);
 }
 .admin-panel-heading {
   display: flex;
@@ -705,6 +707,7 @@
   padding: 40px;
   width: min(100%, 440px);
   text-align: center;
+  box-shadow: var(--card-shadow);
 }
 .admin-gate-icon {
   width: 56px;

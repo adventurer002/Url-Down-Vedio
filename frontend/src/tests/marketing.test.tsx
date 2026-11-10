@@ -34,19 +34,17 @@ it("renders product facts and the case without making auth or business requests"
       name: /每一帧，\s*皆有所得。/,
     }),
   ).toBeTruthy();
-  expect(
-    within(screen.getByRole("region", { name: /每一帧/ }))
-      .getByRole("link", { name: "开始体验" })
-      .getAttribute("href"),
-  ).toBe("/app");
   const hero = within(screen.getByRole("region", { name: /每一帧/ }));
-  expect(hero.getAllByRole("link")).toHaveLength(3);
+  expect(hero.getAllByRole("link")).toHaveLength(1);
   expect(
     hero.getByRole("link", { name: "看看实际处理结果" }).getAttribute("href"),
   ).toBe("#features");
+  expect(hero.queryByRole("link", { name: "查看示例" })).toBeNull();
+  expect(hero.queryByRole("link", { name: "开始体验" })).toBeNull();
+  const nav = within(screen.getByRole("navigation", { name: "主导航" }));
   expect(
-    hero.getByRole("link", { name: "查看示例" }).getAttribute("href"),
-  ).toBe("/examples/knowledge-loop");
+    nav.getByRole("link", { name: "打开视频工作台" }).getAttribute("href"),
+  ).toBe("/app");
   expect(screen.getByText(/下载原片、检索文稿/)).toBeTruthy();
   expect(login).not.toHaveBeenCalled();
   expect(catalog).not.toHaveBeenCalled();
@@ -63,12 +61,12 @@ it("shows one source-backed example with real chapter timestamps and readable ex
   ).toEqual(["00:00", "00:16", "00:32"]);
   expect(
     within(chapterPanel)
-      .getByRole("link", { name: "查看 32 秒处的章节原文" })
+      .getByRole("link", { name: "回看 32 秒处章节原片" })
       .getAttribute("href"),
-  ).toBe("/examples/knowledge-loop#segment-32");
+  ).toBe("/media/examples/knowledge-loop/source.mp4#t=32");
   expect(
-    screen.getByRole("link", { name: "查看完整处理记录" }).getAttribute("href"),
-  ).toBe("/examples/knowledge-loop");
+    screen.getByRole("link", { name: "下载处理记录" }).getAttribute("href"),
+  ).toBe("/media/examples/knowledge-loop/result.json");
   fireEvent.click(screen.getByRole("tab", { name: "思维导图" }));
   const map = screen.getByRole("tabpanel", { name: "思维导图" });
   expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
@@ -102,9 +100,9 @@ it("lets visitors explore real outputs with keyboard tabs and a working sample d
   const transcript = screen.getByRole("tabpanel", { name: /^文稿提取/ });
   expect(
     within(transcript)
-      .getByRole("link", { name: "查看 8 秒处原文" })
+      .getByRole("link", { name: "回看 8 秒处原片" })
       .getAttribute("href"),
-  ).toBe("/examples/knowledge-loop#segment-8");
+  ).toBe("/media/examples/knowledge-loop/source.mp4#t=8");
   fireEvent.keyDown(choices.getByRole("tab", { name: /^文稿提取/ }), {
     key: "End",
   });
@@ -232,6 +230,7 @@ it("marks only the current navigation section while scrolling from the hero thro
   for (const [position, name] of [
     [700, "功能介绍"],
     [1400, "使用流程"],
+    [2200, "使用流程"],
     [2600, "常见问题"],
   ] as const) {
     offset = position;
@@ -456,23 +455,32 @@ it("ships readable static content without motion-dependent visibility or running
     expect(piece.style.opacity).not.toBe("0");
     expect(piece.style.transform).toBe("");
   });
-  expect(initial.querySelector(".m-gooey-nav [aria-current]")).toBeNull();
+  expect(initial.querySelector(".m-reference-nav [aria-current]")).toBeNull();
   expect(initial.getElementById("example")).toBeTruthy();
   const motion = motionEnvironment();
   render(<MarketingSite path="/help" />);
   expect(motion.observe).not.toHaveBeenCalled();
 });
 
-it("keeps the complete case text, provenance and outputs available without client JavaScript", () => {
-  const html = renderToString(
-    <MarketingSite path="/examples/knowledge-loop" />,
-  );
-  expect(html).toContain("heuristic-v1");
-  expect(html).toContain("不代表线上云端模型");
-  expect(html).toContain('id="segment-40"');
-  expect(html).toContain("source.mp4");
-  expect(html).toContain("result.json");
-  expect(html).toContain("真正留下的知识");
+it("removes the old detail page and keeps it noindex without incoming page links", () => {
+  const html = publicDocument(template, "/examples/knowledge-loop", {
+    styles: [],
+  });
+  const document = new DOMParser().parseFromString(html, "text/html");
+  expect(
+    document.querySelector('meta[name="robots"]')?.getAttribute("content"),
+  ).toBe("noindex,follow");
+  expect(document.querySelector('link[rel="canonical"]')).toBeNull();
+  expect(html).not.toContain('id="segment-40"');
+  for (const path of documentPaths) {
+    const page = new DOMParser().parseFromString(
+      renderToString(<MarketingSite path={path} />),
+      "text/html",
+    );
+    expect(
+      page.querySelector('a[href^="/examples/knowledge-loop"]'),
+    ).toBeNull();
+  }
 });
 
 it.each(documentPaths)(

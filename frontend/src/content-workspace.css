@@ -24,7 +24,7 @@
   place-items: center;
   border: 1px solid #e0e9e7;
   border-radius: 12px;
-  background: #f5faf9;
+  background: #fff;
   color: var(--content-green);
   flex: none;
 }
@@ -92,7 +92,7 @@
   align-items: flex-start;
   gap: 10px;
   padding: 14px 17px;
-  background: #f5faf9;
+  background: #fff;
   border-radius: 8px;
   color: var(--content-text);
   font-size: 13px;
@@ -316,6 +316,7 @@
   border-radius: 12px;
   overflow: hidden;
   background: white;
+  box-shadow: var(--card-shadow);
 }
 .public-app .content-workspace .content-tabs {
   display: grid;
@@ -455,7 +456,7 @@
   line-height: 1.7;
 }
 .content-goal.featured {
-  background: #f5faf9;
+  background: #fff;
   border-color: #bfd5cf;
 }
 .goal-corner {
@@ -590,6 +591,7 @@
   border-radius: 12px;
   background: white;
   overflow: hidden;
+  box-shadow: var(--card-shadow);
 }
 .citation-desktop {
   position: sticky;

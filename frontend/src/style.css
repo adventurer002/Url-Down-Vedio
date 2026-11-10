@@ -4,9 +4,10 @@
     "Inter", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 :root {
+  --card-shadow: 0 2px 6px rgb(24 24 27 / 3%), 0 8px 24px rgb(24 24 27 / 4%);
   font-family: var(--font-sans);
   color: #1c1d1d;
-  background: #ffffff;
+  background: #fff;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   font-size: 14px;
@@ -330,6 +331,7 @@ svg {
   border-radius: 9px;
   padding: 27px 26px 0;
   min-height: 229px;
+  box-shadow: var(--card-shadow);
 }
 .feature-top {
   display: flex;
@@ -1741,6 +1743,7 @@ svg {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #fff;
+  box-shadow: var(--card-shadow);
 }
 .preferences-card h2 {
   font-size: 18px;
@@ -1976,7 +1979,7 @@ svg {
 .workspace-panel {
   border: 1px solid #e0e3e9;
   border-radius: 15px;
-  box-shadow: 0 5px 22px #11111104;
+  box-shadow: var(--card-shadow);
 }
 .workspace-panel:not([hidden]) {
   display: block;

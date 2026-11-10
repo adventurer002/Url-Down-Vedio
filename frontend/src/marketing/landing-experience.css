@@ -77,11 +77,10 @@ html:has(.m-landing-site) {
   width: fit-content;
   min-height: 40px;
   margin: 0;
-  padding: 0 14px;
-  border: 1px solid rgb(255 255 255 / 0.2);
-  border-radius: 999px;
-  background: rgb(17 17 19 / 0.68);
-  backdrop-filter: blur(8px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-shadow: 0 1px 5px rgb(0 0 0 / 0.65);
   color: #fff;
   font-size: 12px;
   white-space: nowrap;

@@ -4,7 +4,7 @@
 @import "./showcase.css";
 
 .marketing-site {
-  --m-bg: #fafaf8;
+  --m-bg: #fff;
   --m-ink: #202322;
   --m-muted: #6e7470;
   --m-accent: #0f766e;
@@ -53,7 +53,7 @@
 }
 body:has(.marketing-site) {
   margin: 0;
-  background: #fafaf8;
+  background: #fff;
 }
 .m-skip {
   position: fixed;
@@ -1445,4 +1445,9 @@ body:has(.marketing-site) {
     font-size: 9px;
     margin-left: 3px;
   }
+}
+
+/* Inner public pages share the quiet card elevation; the landing stays unchanged. */
+.marketing-site:not(.m-landing-site) .m-example-index {
+  box-shadow: 0 2px 6px rgb(24 24 27 / 3%), 0 8px 24px rgb(24 24 27 / 4%);
 }

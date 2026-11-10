@@ -4,22 +4,17 @@ import { example, faqs } from "./content";
 import Glyph, { type GlyphName } from "./Glyph";
 import { useLandingMotion } from "./useLandingMotion";
 import LandingHero from "./LandingHero";
-import GooeyNav from "./components/GooeyNav";
 import ProductShowcase from "./ProductShowcase";
 
 const landingNavItems = [
   { label: "功能介绍", href: "#features" },
   { label: "使用流程", href: "#how-it-works" },
   { label: "常见问题", href: "#faq" },
-  { label: "订阅方案", href: "/subscription" },
 ];
 
 function Brand() {
   return (
     <a className="m-brand" href="/" aria-label="VideoHub AI 首页">
-      <span className="m-brand-mark">
-        <Glyph name="play" size={17} />
-      </span>
       <span>
         VideoHub<span className="m-brand-ai">AI</span>
       </span>
@@ -56,26 +51,27 @@ function Header({
       <header className="m-header-reference">
         <div className="m-reference-bar">
           <Brand />
-          <GooeyNav
-            items={landingNavItems}
-            activeIndex={landingNavItems.findIndex(
-              (item) => item.href === `#${activeSection}`,
-            )}
-            onChange={(_index, item) => {
-              if (item.href?.startsWith("#"))
-                onSelectSection?.(item.href.slice(1));
-            }}
-            theme="light"
-            color="#111113"
-            activeTextColor="#ffffff"
-            size="sm"
-            particleCount={7}
-            spread={18}
-            animationTime={400}
-            timeVariance={80}
-            gooeyness={0.4}
-            wobble={0.2}
-          />
+          <nav className="m-reference-nav" aria-label="主导航">
+            <a
+              className="m-reference-play"
+              href="/app"
+              aria-label="打开视频工作台"
+            >
+              <Glyph name="play" size={18} />
+            </a>
+            {landingNavItems.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                aria-current={
+                  item.href === `#${activeSection}` ? "location" : undefined
+                }
+                onClick={() => onSelectSection?.(item.href.slice(1))}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
           <a className="m-reference-app" href="/app">
             进入工作台 <span aria-hidden="true">↗</span>
           </a>
@@ -90,7 +86,6 @@ function Header({
         <div className="m-nav-links">
           <a href="/#features">功能介绍</a>
           <a href="/examples">处理示例</a>
-          <a href="/subscription">订阅方案</a>
         </div>
         <a className="m-nav-app" href="/app">
           进入工作台
@@ -101,7 +96,6 @@ function Header({
           <div>
             <a href="/#features">功能介绍</a>
             <a href="/examples">处理示例</a>
-            <a href="/subscription">订阅方案</a>
             <a href="/help">使用帮助</a>
           </div>
         </details>
@@ -140,22 +134,6 @@ function FAQ({ all = false }: { all?: boolean }) {
           </details>
         ),
       )}
-    </div>
-  );
-}
-function MindmapPreview() {
-  return (
-    <div className="m-map-preview">
-      <span className="m-map-root">让知识留下来</span>
-      <div>
-        {example.mindmap.children.map((item) => (
-          <div className="m-map-branch" key={item.title}>
-            <span title={item.title}>
-              {item.title.replace(/^章节 \d+：/, "")}
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -200,7 +178,7 @@ function Landing() {
       <section
         className="m-section m-use-cases"
         id="about"
-        data-nav-section="about"
+        data-nav-section="how-it-works"
       >
         <div className="m-section-heading" data-reveal="heading">
           <h2>用在你的学习与工作中。</h2>
@@ -229,22 +207,6 @@ function Landing() {
               <p>{item.text}</p>
             </article>
           ))}
-        </div>
-      </section>
-      <section className="m-section m-rules" data-nav-section="about">
-        <div data-reveal="heading">
-          <p className="m-eyebrow">用量清晰，心中有数</p>
-          <h2>处理前，先确认额度。</h2>
-        </div>
-        <div data-reveal="content">
-          <p>
-            转写分钟、AI
-            次数和下载权益分别计算。开始处理前查看最高占用，在个人中心查看实际余额和有效期。
-          </p>
-          <p>目前尚未开放在线购买，已获得的权益照常使用。</p>
-          <a className="m-inline-link" href="/subscription">
-            了解订阅与额度规则 <Glyph name="arrow" size={18} />
-          </a>
         </div>
       </section>
       <section className="m-section m-faq" id="faq" data-nav-section="faq">
@@ -290,175 +252,40 @@ function PageIntro({
     </header>
   );
 }
-function Examples({ detail = false }: { detail?: boolean }) {
+function Examples() {
   return (
     <div className="m-document">
       <nav className="m-breadcrumb" aria-label="面包屑">
         <a href="/">首页</a>
         <span>/</span>
-        {detail ? (
-          <>
-            <a href="/examples">处理示例</a>
-            <span>/</span>
-            <span>让知识留下来</span>
-          </>
-        ) : (
-          <span>处理示例</span>
-        )}
+        <span>处理示例</span>
       </nav>
       <PageIntro
         eyebrow="SEE THE SOURCE. FOLLOW THE RESULT."
-        title={detail ? example.title : "一段视频，几种新的可能。"}
+        title="一段视频，几种新的可能。"
       >
-        {detail
-          ? example.description
-          : "从一份可核对的来源，看看文稿、总结与思维导图如何对应起来。"}
+        从一份可核对的来源，看看文稿、总结与思维导图如何对应起来。
       </PageIntro>
-      {!detail ? (
-        <>
-          <section className="m-example-index">
-            <div className="m-example-poster">
-              <Glyph name="play" size={40} />
-              <span>00:48 · 自制字幕短片</span>
-            </div>
-            <div>
-              <p className="m-eyebrow">公开处理示例 01</p>
-              <h2>{example.title}</h2>
-              <p>{example.description}</p>
-              <p className="m-subtle">
-                本地演示模型处理，提供原片、字幕与完整结果。
-              </p>
-              <a className="m-inline-link" href="/examples/knowledge-loop">
-                查看完整示例 <Glyph name="arrow" />
-              </a>
-            </div>
-          </section>
-          <div className="m-document-note">
-            公开示例由站点单独制作，不来自用户的私人任务或收藏。
-          </div>
-        </>
-      ) : (
-        <>
-          <section className="m-example-source" aria-labelledby="source-title">
-            <h2 id="source-title">从原片开始核对</h2>
-            <video
-              controls
-              preload="none"
-              width="1280"
-              height="720"
-              poster="/media/examples/knowledge-loop/poster.webp"
-            >
-              <source
-                src="/media/examples/knowledge-loop/source.mp4"
-                type="video/mp4"
-              />
-              <track
-                kind="subtitles"
-                src="/media/examples/knowledge-loop/source.vtt"
-                srcLang="zh"
-                label="中文字幕"
-                default
-              />
-              你的浏览器暂不支持视频播放，可下载原片查看。
-            </video>
-            <p className="m-subtle">
-              48 秒自制文字短片，无录音。字幕由作者提供，未经过语音识别。
-            </p>
-            <div className="m-source-links">
-              <a href="/media/examples/knowledge-loop/source.mp4" download>
-                下载原片
-              </a>
-              <a href="/media/examples/knowledge-loop/source.srt" download>
-                下载字幕 SRT
-              </a>
-              <a href="/media/examples/knowledge-loop/result.json" download>
-                查看处理记录 JSON
-              </a>
-            </div>
-            <dl className="m-provenance">
-              <div>
-                <dt>素材作者</dt>
-                <dd>VideoHub AI</dd>
-              </div>
-              <div>
-                <dt>素材许可</dt>
-                <dd>
-                  <a href={example.licenseUrl}>{example.license}</a>
-                </dd>
-              </div>
-              <div>
-                <dt>结果生成</dt>
-                <dd>本地演示总结器 · {example.model}</dd>
-              </div>
-              <div>
-                <dt>来源校验</dt>
-                <dd>
-                  <code title={example.sourceHash}>
-                    {example.sourceHash.slice(0, 16)}…
-                  </code>
-                </dd>
-              </div>
-            </dl>
-            <p className="m-document-note">
-              此示例由项目现有字幕总结和导图服务生成，保留输出结果。本地演示总结器用于说明功能流程，不代表线上云端模型的效果或速度。
-            </p>
-          </section>
-          <section
-            className="m-example-reading"
-            aria-labelledby="summary-title"
-          >
-            <p className="m-eyebrow">01 / SUMMARY</p>
-            <h2 id="summary-title">先建立内容的主线</h2>
-            <p className="m-example-overview">{example.summary.overview}</p>
-            <h3>关键观点</h3>
-            <ul>
-              {example.summary.key_points.map((point) => (
-                <li key={point}>{point}</li>
-              ))}
-            </ul>
-            <h3>章节与时间位置</h3>
-            {example.summary.chapters.map((chapter) => (
-              <article className="m-chapter" key={chapter.start_seconds}>
-                <a href={`#segment-${chapter.start_seconds}`}>
-                  {chapter.timestamp}
-                </a>
-                <div>
-                  <h4>{chapter.title}</h4>
-                  <p>{chapter.summary}</p>
-                </div>
-              </article>
-            ))}
-          </section>
-          <section className="m-example-reading" id="mindmap">
-            <p className="m-eyebrow">02 / MIND MAP</p>
-            <h2>再把内容展开成结构</h2>
-            <MindmapPreview />
-            <a
-              className="m-inline-link"
-              href="/media/examples/knowledge-loop/mindmap.md"
-              download
-            >
-              下载完整导图 Markdown <Glyph name="arrow" size={17} />
-            </a>
-          </section>
-          <section className="m-example-reading" id="transcript">
-            <p className="m-eyebrow">03 / TRANSCRIPT</p>
-            <h2>回到原文，核对上下文</h2>
-            <div className="m-full-transcript">
-              {example.segments.map((segment) => (
-                <p id={`segment-${segment.start}`} key={segment.start}>
-                  <time>00:{String(segment.start).padStart(2, "0")}</time>
-                  <span>{segment.text}</span>
-                </p>
-              ))}
-            </div>
-          </section>
-          <div className="m-document-end">
-            <h2>用你感兴趣的视频，开始一次整理。</h2>
-            <Action />
-          </div>
-        </>
-      )}
+      <section className="m-example-index">
+        <div className="m-example-poster">
+          <Glyph name="play" size={40} />
+          <span>00:48 · 自制字幕短片</span>
+        </div>
+        <div>
+          <p className="m-eyebrow">公开处理示例 01</p>
+          <h2>{example.title}</h2>
+          <p>{example.description}</p>
+          <p className="m-subtle">
+            本地演示模型处理，提供原片、字幕与完整结果。
+          </p>
+          <a className="m-inline-link" href="/#features">
+            查看处理演示 <Glyph name="arrow" />
+          </a>
+        </div>
+      </section>
+      <div className="m-document-note">
+        公开示例由站点单独制作，不来自用户的私人任务或收藏。
+      </div>
     </div>
   );
 }
@@ -499,8 +326,8 @@ function Help() {
           平台字幕与语音转写都可能存在识别或时间误差。AI
           总结和导图用于辅助理解，不替代原视频、原文或专业判断。
         </p>
-        <a className="m-inline-link" href="/examples/knowledge-loop">
-          看一份完整的来源与结果 <Glyph name="arrow" size={17} />
+        <a className="m-inline-link" href="/#features">
+          查看首页处理演示 <Glyph name="arrow" size={17} />
         </a>
       </section>
       <div className="m-document-end">
@@ -605,8 +432,6 @@ export default function MarketingSite({ path }: { path: string }) {
           <Privacy />
         ) : pathname === "/examples" ? (
           <Examples />
-        ) : pathname === "/examples/knowledge-loop" ? (
-          <Examples detail />
         ) : (
           <Missing />
         )}

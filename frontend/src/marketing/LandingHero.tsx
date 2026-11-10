@@ -21,19 +21,8 @@ export default function LandingHero() {
             fontWeight="inherit"
           />
         </h1>
-        <p className="m-hero-description">
-          粘贴视频链接，或导入本地视频、MP3 与 M4A。
-          <br />
-          提取文稿，生成总结与导图，带着问题理解内容。
-        </p>
-        <div className="m-hero-actions">
-          <a className="m-hero-action" href="/app">
-            开始体验 <span aria-hidden="true">↗</span>
-          </a>
-          <a className="m-hero-secondary" href="/examples/knowledge-loop">
-            <Glyph name="play" size={17} />
-            查看示例
-          </a>
+        <div className="m-hero-caption">
+          <p>视频切片与下载，提取文稿，生成AI总结与思维导图</p>
         </div>
       </div>
 
@@ -79,10 +68,10 @@ export default function LandingHero() {
       <div className="m-hero-stage">
         <img
           className="m-hero-composite"
-          src="/media/landing/hero-composite-clean.webp"
-          alt="黑白人物周围环绕着文稿、AI 总结、思维导图和视频卡片"
-          width={1200}
-          height={744}
+          src="/media/landing/hero-composite-meditation.webp"
+          alt="闭眼冥想的黑白人物周围环绕着文稿、AI 总结、思维导图和视频卡片"
+          width={1593}
+          height={987}
           fetchPriority="high"
           decoding="async"
         />
@@ -90,16 +79,6 @@ export default function LandingHero() {
           看看实际处理结果 <span aria-hidden="true">↓</span>
         </a>
       </div>
-
-      <p className="m-hero-resource-note">
-        YouTube · bilibili · TikTok
-        <span>仅处理公开免登录资源，以实际解析结果为准。</span>
-      </p>
-      <p className="m-hero-corner-note">
-        <span aria-hidden="true">✦</span>少一些遗忘，
-        <br />
-        多一些理解。
-      </p>
     </section>
   );
 }
