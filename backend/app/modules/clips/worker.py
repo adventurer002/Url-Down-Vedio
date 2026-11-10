@@ -89,7 +89,10 @@ async def _execute_plan(task, service, provider=None, pipeline=None):
                           "outcome": cached["outcome"], "cache_hit": True}
                 await database_call(tasks.complete_with, task_id, result, lambda session: None)
             else:
-                provider = provider or get_llm_provider()
+                if payload.get("model_config"):
+                    from app.modules.model_config.runtime import llm
+                    provider=await database_call(llm,"clip_analysis",payload["model_config"],tasks.sessions)
+                else:provider = provider or (get_llm_provider(managed=False) if settings.MODEL_CONFIG_ENABLED else get_llm_provider())
                 if provider.name == "openai_compatible":
                     provider.model = spec["model"]
                 elif provider.model != spec["model"]:
@@ -316,9 +319,13 @@ async def _execute_export(task, service, sources=None, adapter=None, provider=No
                 return await terminal(service, task_id)
             if payload.get("reuse_result") or payload.get("reuse_assets") or payload.get("_clip_execution_mode") == "cache":
                 raise AppException("CLIP_REQUOTE_REQUIRED", "成片缓存失效，请重新报价", 409)
-            if payload["timing_model"] != settings.CLIPS_TIMING_MODEL or payload["timing_base_url"] != settings.CLIPS_TIMING_API_BASE_URL:
+            if not payload.get("model_config") and (payload["timing_model"] != settings.CLIPS_TIMING_MODEL or payload["timing_base_url"] != settings.CLIPS_TIMING_API_BASE_URL):
                 raise AppException("CLIP_REQUOTE_REQUIRED", "精细定位配置已改变，请重新报价", 409)
-            provider = provider or timing_provider(payload["timing_model"])
+            if payload.get("model_config"):
+                from app.modules.model_config.runtime import asr
+                provider=await database_call(asr,"clip_timing",payload["model_config"],tasks.sessions)
+                if provider.model!=payload["timing_model"]:raise AppException("CLIP_REQUOTE_REQUIRED","定位模型已更新，请重新确认",409)
+            else:provider = provider or timing_provider(payload["timing_model"])
             if not provider.available or not provider.model:
                 raise AppException("CLIP_TIMING_NOT_CONFIGURED", "请配置支持真实分段时间戳的切片定位模型", 503)
             plan = await database_call(service.repository.plan, task.user_id, UUID(payload["plan_id"]))

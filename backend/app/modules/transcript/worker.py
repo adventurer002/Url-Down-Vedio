@@ -60,8 +60,6 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
     if not intermediate and not await database_call(tasks.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(tasks.get, task_id)).status}
     task = await database_call(tasks.get, task_id)
-    if "allowance" in task.input_payload:
-        asr.model = task.input_payload["allowance"]["asr_model"]
     language = task.input_payload.get("language")
     version = task.input_payload["content_version"]
     progress, status = 0, "running"
@@ -94,6 +92,12 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
             pass
 
     try:
+        if task.input_payload.get("model_config"):
+            from app.modules.model_config.runtime import asr as configured_asr
+            asr=await database_call(configured_asr,"transcription",task.input_payload["model_config"],tasks.sessions)
+        elif asr is None:asr=get_asr_provider(managed=False)
+        if "allowance" in task.input_payload:
+            asr.model=task.input_payload["allowance"]["asr_model"]
         if not intermediate:
             log_queue_wait(task)
             await publish(task)
@@ -205,7 +209,7 @@ def transcription_task(task_id: str):
                 TranscriptRepository(SessionLocal), media, storage,
                 YtDlpSubtitleProvider(ProcessRunner(settings.SUBTITLE_TIMEOUT_SECONDS, 6 * 1024 * 1024)),
                 AudioAcquirer(media, storage, ProcessRunner(settings.DOWNLOAD_TIMEOUT_SECONDS, settings.MAX_FILE_SIZE_MB * 1024 * 1024)),
-                get_asr_provider())
+                get_asr_provider() if not settings.MODEL_CONFIG_ENABLED else None)
         finally:
             await redis.aclose()
 

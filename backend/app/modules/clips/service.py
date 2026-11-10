@@ -12,6 +12,14 @@ from app.modules.uploads.repository import UploadRepository
 from app.modules.billing.policy import seconds
 
 
+def timing_identity():
+    if settings.MODEL_CONFIG_ENABLED:
+        from app.modules.model_config.runtime import asr
+        provider=asr("clip_timing")
+        if provider is not None:return (provider.model if provider.available else "", "managed")
+    return settings.CLIPS_TIMING_MODEL, settings.CLIPS_TIMING_API_BASE_URL
+
+
 def enabled():
     if not settings.CLIPS_ENABLED:
         raise AppException("CLIPS_DISABLED", "智能切片尚未启用", 503)
@@ -48,7 +56,7 @@ class ClipService:
             source = await database_call(self.videos.clip_source, UUID(payload["video_id"]), user.id)
             from app.modules.billing.policy import seconds
             payload["duration_seconds"] = seconds(payload.get("duration_seconds") or source["duration"])
-        spec = clip_spec(body.strategy.model_dump(), body.language.lower(), get_llm_provider().model)
+        spec = clip_spec(body.strategy.model_dump(), body.language.lower(), (get_llm_provider("clip_analysis") if settings.MODEL_CONFIG_ENABLED else get_llm_provider()).model)
         payload.update(clip_spec=spec, output_language=body.language.lower(), language=None, preset_id="audio_mp3",
             content_version=payload.get("content_version", settings.TRANSCRIPT_CONTENT_VERSION))
         transcript = None
@@ -123,7 +131,7 @@ class ClipService:
         from app.modules.clips.cache import TIMING_VERSION
         from app.modules.clips.timing import playback_ranges
         candidates = await database_call(self.repository.candidate_timelines, user_id, plan["id"], ids,
-            settings.CLIPS_TIMING_MODEL, settings.CLIPS_TIMING_API_BASE_URL, TIMING_VERSION)
+            timing_identity()[0], timing_identity()[1], TIMING_VERSION)
         groups = {}
         expected_sha = (plan.get("source") or {}).get("content_sha256")
         for content in candidates:
@@ -139,7 +147,7 @@ class ClipService:
             assets = await self.cached_assets(user_id, info, items, profile)
             if all(assets.values()):
                 return {"items": [{**assets[x["candidate_id"]], **x} for x in items], "media": info,
-                        "audio_seconds": 0, "provider_model": settings.CLIPS_TIMING_MODEL}
+                        "audio_seconds": 0, "provider_model": timing_identity()[0]}
         return None
 
     async def quote_export(self, user, body):
@@ -147,10 +155,10 @@ class ClipService:
         plan = await database_call(self.repository.plan, user.id, body.plan_id)
         selected_candidates(plan, body.candidate_ids, body.revision)
         key = digest([str(user.id), str(body.plan_id), body.revision, sorted(body.candidate_ids), body.profile,
-                      f"{RENDERER_VERSION}:{TIMING_VERSION}", settings.CLIPS_TIMING_MODEL])
+                      f"{RENDERER_VERSION}:{TIMING_VERSION}", timing_identity()[0]])
         base = {"plan_id": str(body.plan_id), "revision": body.revision, "candidate_ids": sorted(body.candidate_ids),
             "profile": body.profile, "export_key": key, "video_id": str(plan["video_id"]),
-            "timing_model": settings.CLIPS_TIMING_MODEL, "timing_base_url": settings.CLIPS_TIMING_API_BASE_URL,
+            "timing_model": timing_identity()[0], "timing_base_url": timing_identity()[1],
             "duration_seconds": 0, "output_language": plan["spec"]["language"], "title": "精选切片"}
         cached = await self.cached_export(user.id, key)
         if cached:
@@ -162,7 +170,7 @@ class ClipService:
                                         "source_sha256": selection["media"]["sha256"]}
                 return await database_call(self.billing.save_quote, user.id, "clips_export", base)
             base.update(await self.resolve_export_source(user.id, plan["video_id"]))
-            if not settings.CLIPS_TIMING_MODEL or not settings.CLIPS_TIMING_API_BASE_URL or not settings.CLIPS_TIMING_API_KEY.get_secret_value():
+            if not timing_identity()[0] or not timing_identity()[1] or (timing_identity()[1]!="managed" and not settings.CLIPS_TIMING_API_KEY.get_secret_value()):
                 raise AppException("CLIP_TIMING_NOT_CONFIGURED", "导出前请配置支持真实分段时间戳的定位模型", 503)
         return await database_call(self.billing.save_quote, user.id, "clips_export", base)
 

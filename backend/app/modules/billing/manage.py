@@ -27,7 +27,7 @@ def recover(tasks, storage_path):
     storage = LocalStorageAdapter(storage_path, settings.STORAGE_MAX_QUOTA_MB, settings.STORAGE_MIN_FREE_MB)
     from app.modules.tasks.execution import execution_lock, recoverable_receipt, discard_receipt
     for task in tasks.running():
-        if ("allowance" not in task.input_payload and task.task_type != "media_probe") or not task.worker_pid or task.worker_host != socket.gethostname():
+        if ("allowance" not in task.input_payload and task.task_type not in {"media_probe","model_test"}) or not task.worker_pid or task.worker_host != socket.gethostname():
             continue
         try:
             with execution_lock(storage_path, task.id):

@@ -15,6 +15,7 @@ import { normalizeError } from "../api/client";
 import Icon from "../components/Icon";
 import WeChatLoginModal from "../components/auth/WeChatLoginModal";
 import AuditPage from "../admin/AuditPage";
+import ModelsPage from "../admin/ModelsPage";
 import StoragePage from "../admin/StoragePage";
 import UsersPage from "../admin/UsersPage";
 import UserDetailPage from "../admin/UserDetail";
@@ -86,6 +87,7 @@ function Sidebar({ close }: { close?: () => void }) {
         <div className="admin-nav-divider" />
         <p>系统管理</p>
         {[
+          ["sparkles", "模型管理", "/admin/models"],
           ["history", "操作审计", "/admin/audit"],
           ["server", "存储与服务", "/admin/system"],
         ].map(([icon, label, path]) => (
@@ -186,7 +188,9 @@ function AdminLayout() {
       ? "任务管理"
       : pathname.startsWith("/admin/users")
         ? "用户管理"
-        : pathname.startsWith("/admin/allowances")
+        : pathname.startsWith("/admin/models")
+          ? "模型管理"
+          : pathname.startsWith("/admin/allowances")
           ? "会员与额度"
           : pathname.startsWith("/admin/audit")
             ? "操作审计"
@@ -262,6 +266,7 @@ function AdminLayout() {
           <OperationNotice />
           <Routes>
             <Route path="/admin/audit" element={<AuditPage />} />
+            <Route path="/admin/models" element={<ModelsPage />} />
             <Route path="/admin/system" element={<StoragePage />} />
             <Route path="/admin" element={<OverviewPage />} />
             <Route path="/admin/users" element={<UsersPage />} />

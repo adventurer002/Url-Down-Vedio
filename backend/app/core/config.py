@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     ASR_MAX_UPLOAD_MB: int = Field(default=25, gt=0)
     ASR_CHUNK_CONCURRENCY: int = Field(default=1, ge=1, le=2)
     ASR_MOCK_TEXT: str = "离线模拟转写内容（非真实识别结果）"
+    MODEL_CONFIG_ENABLED: bool = False
+    MODEL_CONFIG_ENCRYPTION_KEY: SecretStr = SecretStr("")
+    MODEL_CONFIG_PREVIOUS_KEYS: SecretStr = SecretStr("")
     LLM_PROVIDER: Literal["auto", "openai_compatible", "heuristic"] = "auto"
     LLM_API_BASE_URL: str = "https://api.openai.com/v1"
     LLM_API_KEY: SecretStr = SecretStr("")

@@ -287,3 +287,6 @@ class AdminService:
             self.users.initialize_admin(session, user_id)
             audit_id = self.audit.record_bootstrap(session, user_id, actor, reason, key, "cli_" + uuid4().hex)
             return {"user_id": str(user_id), "audit_id": str(audit_id), "duplicate": False}
+
+    def model_operation(self, actor, action, target_id, reason, key, request_id, data, operation):
+        return self._mutate(actor, action, "model", target_id, reason, key, request_id, data, operation)

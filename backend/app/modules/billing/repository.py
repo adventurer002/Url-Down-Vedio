@@ -275,8 +275,19 @@ class AllowanceRepository:
                 raise AppException("QUOTE_RATE_LIMITED", "报价过于频繁，请稍后再试", 429)
             from app.modules.ai.providers import get_llm_provider
             from app.modules.transcript.providers import get_asr_provider
-            llm = get_llm_provider()
-            asr = None if text_only or task_type == "clips_export" else get_asr_provider()
+            from app.modules.model_config.runtime import capture, llm as configured_llm, asr as configured_asr, TASK_USE
+            model_config=capture(session) if task_type in TASK_USE else None
+            if model_config:
+                payload={**payload,"model_config":model_config}
+                if task_type=="ai_clip_plan" and payload.get("clip_spec",{}).get("model")!=configured_llm("clip_analysis",model_config,self.sessions).model:
+                    raise AppException("MODEL_CONFIGURATION_CHANGED","分析模型已更新，请重新获取方案",409)
+                if task_type=="clips_export" and payload.get("timing_model")!=configured_asr("clip_timing",model_config,self.sessions).model:
+                    raise AppException("MODEL_CONFIGURATION_CHANGED","定位模型已更新，请重新获取方案",409)
+                llm=configured_llm(TASK_USE.get(task_type,"summary") if task_type not in {"transcription","clips_export"} else "summary",model_config,self.sessions)
+                asr=None if text_only or task_type=="clips_export" else configured_asr("transcription",model_config,self.sessions)
+            else:
+                llm = get_llm_provider()
+                asr = None if text_only or task_type == "clips_export" else get_asr_provider()
             if settings.APP_ENV != "development" and task_type.startswith("ai_") and llm.name == "heuristic":
                 raise AppException("LLM_NOT_CONFIGURED", "生产 AI 服务需要配置真实模型", 503)
             quota = {"version": VERSION, "asr_seconds": payload["duration_seconds"] if task_type in

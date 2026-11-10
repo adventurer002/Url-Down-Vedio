@@ -4,7 +4,11 @@ from app.modules.ai.providers.openai_compatible import OpenAICompatibleLLMProvid
 from app.core.config import settings
 
 
-def get_llm_provider() -> LLMProvider:
+def get_llm_provider(use="summary", snapshot=None, *, managed=True) -> LLMProvider:
+    if managed and (settings.MODEL_CONFIG_ENABLED or snapshot):
+        from app.modules.model_config.runtime import llm
+        configured=llm(use,snapshot)
+        if configured is not None:return configured
     if settings.LLM_PROVIDER == "heuristic" or (settings.LLM_PROVIDER == "auto" and not settings.LLM_API_KEY.get_secret_value()):
         return HeuristicLLMProvider()
     return OpenAICompatibleLLMProvider(settings.LLM_API_BASE_URL, settings.LLM_API_KEY.get_secret_value(),

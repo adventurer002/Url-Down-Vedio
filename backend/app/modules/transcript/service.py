@@ -78,4 +78,4 @@ class TranscriptionPipeline:
         return await execute_transcription(task_id, self.tasks, TranscriptRepository(self.sessions), media, self.storage,
             YtDlpSubtitleProvider(ProcessRunner(settings.SUBTITLE_TIMEOUT_SECONDS, 6 * 1024 * 1024)),
             AudioAcquirer(media, self.storage, ProcessRunner(settings.DOWNLOAD_TIMEOUT_SECONDS, settings.MAX_FILE_SIZE_MB * 1024 * 1024)),
-            get_asr_provider(), intermediate=True, intermediate_progress=on_progress)
+            get_asr_provider() if not settings.MODEL_CONFIG_ENABLED else None, intermediate=True, intermediate_progress=on_progress)

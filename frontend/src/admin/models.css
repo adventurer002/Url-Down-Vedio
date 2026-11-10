@@ -1,0 +1,281 @@
+.admin-model-management > .admin-panel {
+  margin-top: 20px;
+}
+.admin-model-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--admin-border);
+  margin-bottom: 24px;
+}
+.admin-model-tabs button {
+  padding: 12px 0;
+  background: transparent;
+  border: 0;
+  color: var(--admin-muted);
+  border-bottom: 2px solid transparent;
+}
+.admin-model-tabs button[aria-current="page"] {
+  color: var(--admin-ink);
+  border-bottom-color: var(--admin-ink);
+}
+.admin-model-management .admin-panel {
+  margin-bottom: 24px;
+}
+.admin-model-table {
+  min-width: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+.admin-model-management .admin-model-table td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.admin-model-management .admin-model-table th {
+  text-align: left;
+  white-space: normal;
+}
+.admin-model-management .admin-model-table th:last-child {
+  width: 200px;
+}
+.admin-model-table small,
+.admin-model-release-list small {
+  display: block;
+  color: var(--admin-muted);
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.admin-model-table td > span:not(.admin-badge) {
+  display: block;
+}
+.admin-model-url {
+  max-width: 230px;
+  overflow-wrap: anywhere;
+}
+.admin-model-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+  align-items: center;
+}
+.admin-model-menu .admin-model-menu-item.admin-model-danger-text {
+  color: #b91c1c;
+}
+.admin-model-menu {
+  z-index: 90;
+  min-width: 160px;
+  max-width: calc(100vw - 32px);
+  padding: 6px;
+  background: var(--admin-paper, #fff);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #18181b14;
+}
+.admin-model-menu-item {
+  padding: 10px 12px;
+  border-radius: 4px;
+  color: var(--admin-ink);
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+}
+.admin-model-menu-item[data-highlighted] {
+  background: #f4f4f5;
+}
+.admin-model-menu-item[data-disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.admin-model-impact,
+.admin-model-preflight {
+  padding: 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: #fafafa;
+  overflow-wrap: anywhere;
+}
+.admin-model-impact {
+  max-height: 35vh;
+  overflow-y: auto;
+  margin: 20px 0;
+}
+.admin-model-impact h3,
+.admin-model-preflight h3 {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+.admin-model-impact p,
+.admin-model-preflight p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.admin-model-impact ul,
+.admin-model-preflight ul {
+  padding-left: 20px;
+  margin: 12px 0;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.admin-model-impact li > span,
+.admin-model-preflight li > span {
+  display: block;
+  color: var(--admin-muted);
+}
+.admin-overlay.admin-model-discard-overlay {
+  z-index: 100;
+}
+.admin-modal-viewport.admin-model-discard-viewport {
+  z-index: 101;
+}
+.admin-dialog.admin-model-discard-dialog {
+  z-index: 102;
+}
+.admin-dialog.admin-model-drawer {
+  position: fixed;
+  z-index: 70;
+  inset: 0 0 0 auto;
+  width: min(560px, 100%);
+  max-height: 100dvh;
+  border-radius: 0;
+  padding: 32px;
+  overflow-y: auto;
+  box-shadow: -12px 0 40px #18181b14;
+}
+.admin-model-form {
+  display: grid;
+  gap: 20px;
+}
+.admin-model-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--admin-ink);
+  font-size: 14px;
+}
+.admin-model-form input:not([type="checkbox"]),
+.admin-model-form select,
+.admin-model-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #dedee3;
+  border-radius: 6px;
+  background: #fff;
+  color: #18181b;
+  font: inherit;
+}
+.admin-model-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+.admin-model-field-row,
+.admin-model-bindings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.admin-model-form label.admin-model-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.admin-model-check input {
+  margin-top: 5px;
+}
+.admin-model-form > .admin-button {
+  justify-self: start;
+}
+.admin-model-form small {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+.admin-model-probes > div,
+.admin-model-release-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+.admin-model-release-list > div:last-child {
+  border: 0;
+}
+.admin-model-release-list .admin-button {
+  flex-shrink: 0;
+}
+.admin-model-success {
+  border: 1px solid #dcece1;
+  background: #f7faf8;
+  padding: 12px 16px;
+  border-radius: 6px;
+  color: #306348;
+}
+@media (max-width: 640px) {
+  .admin-model-drawer {
+    padding: 24px 20px;
+  }
+  .admin-model-field-row,
+  .admin-model-bindings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-model-release-list > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 900px) {
+  .admin-model-table thead {
+    display: none;
+  }
+  .admin-model-table,
+  .admin-model-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .admin-model-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-bottom: 1px solid var(--admin-border);
+    padding: 12px 0;
+  }
+  .admin-model-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .admin-model-table td {
+    display: block;
+    border: 0;
+    min-width: 0;
+    padding: 12px;
+  }
+  .admin-model-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 8px;
+    color: var(--admin-muted);
+    font-size: 12px;
+  }
+  .admin-model-table td:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 480px) {
+  .admin-model-table tbody tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.admin-model-key-history {
+  font-size: 12px;
+  color: var(--admin-muted);
+}
+.admin-model-key-history > div {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+.admin-model-key-history summary {
+  cursor: pointer;
+}

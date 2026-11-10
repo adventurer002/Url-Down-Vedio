@@ -25,7 +25,7 @@ class KnowledgeService:
         if len(transcript.content_text) > 60000:
             raise AppException("TRANSCRIPT_TOO_LONG", "当前问答最多支持 60000 字符文稿", 413)
         video = (await database_call(self.videos.history_metadata, [transcript.video_id]))[transcript.video_id]
-        model = get_llm_provider().model
+        model = (get_llm_provider("question") if settings.MODEL_CONFIG_ENABLED else get_llm_provider()).model
         key = question_key(transcript, question, model, language)
         payload = {"video_id": str(transcript.video_id), "url": video["source_url"], "title": video["title"],
             "duration_seconds": max(1, int(video["duration"] or 1)), "transcript_id": str(identifier),
