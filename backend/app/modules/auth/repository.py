@@ -73,6 +73,9 @@ class UserRepository:
             raise AppException("USER_NOT_FOUND", "用户不存在", 404)
         return self.admin_record(user)
 
+    def display_names(self, session, user_ids):
+        return dict(session.execute(select(User.id, User.nickname).where(User.id.in_(user_ids))).all())
+
     def admin_list(self, session, limit, offset, q, status, subscribed, member, member_ids):
         conditions = []
         if q and (q := q.strip()):

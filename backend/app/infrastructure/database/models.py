@@ -16,3 +16,5 @@ from app.modules.audit import models as audit_models  # noqa: F401
 
 from app.modules.uploads.models import Upload  # noqa: F401
 from app.modules.clips import models as clips_models  # noqa: F401
+
+from app.modules.model_config import models as model_config_models  # noqa: F401

@@ -91,6 +91,7 @@ class TaskRepository:
         return session.scalar(select(Task).where(Task.id == task_id).with_for_update().execution_options(populate_existing=True))
 
     def _settle(self, session, task):
+        if task.task_type == "model_test": return
         if "allowance" not in task.input_payload:
             return
         owned = False
@@ -115,16 +116,33 @@ class TaskRepository:
         with self.sessions.begin() as session:
             quote = None
             probe_upload = None
+            model_probe = None
+            if task_type == "model_test":
+                from app.modules.model_config.service import ModelConfigService
+                model_probe = ModelConfigService(self.sessions)
+                previous = model_probe.bind_probe(session, input_payload["probe_id"], user_id)
+                if previous: return record(session.get(Task,previous))
+            elif task_type in {"transcription","ai_summary","ai_mindmap","ai_question","ai_clip_plan","clips_export"}:
+                from app.modules.model_config.runtime import capture,validate_snapshot
+                input_payload = dict(input_payload or {})
+                if "model_config" not in input_payload and not settings.ALLOWANCES_ENABLED:
+                    snapshot=capture(session,lock=True)
+                    if snapshot: input_payload["model_config"]=snapshot
+                if not settings.ALLOWANCES_ENABLED:validate_snapshot(session,input_payload)
+
             if task_type == "media_probe":
                 from app.modules.uploads.repository import UploadRepository
                 probe_upload = UploadRepository(self.sessions)
                 previous = probe_upload.bind_probe(session, UUID(input_payload["upload_id"]), user_id)
                 if previous:
                     return record(session.get(Task, previous))
-            if settings.ALLOWANCES_ENABLED and task_type not in {"simulate_progress", "media_probe"}:
+            if settings.ALLOWANCES_ENABLED and task_type not in {"simulate_progress", "media_probe", "model_test"}:
                 quote = self._billing().bind_quote(session, user_id, input_payload or {}, task_type)
                 if quote.task_id:
                     return record(session.get(Task, quote.task_id))
+                if task_type in {"transcription","ai_summary","ai_mindmap","ai_question","ai_clip_plan","clips_export"}:
+                    from app.modules.model_config.runtime import validate_snapshot
+                    validate_snapshot(session,input_payload or {})
                 if task_type == "clips_export":
                     previous = session.scalar(select(Task.id).where(Task.user_id == user_id,
                         Task.task_type == "clips_export", Task.status.in_(ACTIVE_STATUSES),
@@ -141,11 +159,28 @@ class TaskRepository:
             task = Task(user_id=user_id, task_type=task_type, video_id=video_id, input_payload=input_payload or {}, expires_at=expires_at)
             session.add(task)
             session.flush()
+            if model_probe:
+                model_probe.bind_probe(session,input_payload["probe_id"],user_id,task.id)
             if probe_upload:
                 probe_upload.bind_probe(session, UUID(input_payload["upload_id"]), user_id, task.id)
             if quote:
                 quote.task_id = task.id
             return record(task)
+
+    def active_model_test_ids(self, session):
+        return list(session.scalars(select(Task.id).where(
+            Task.task_type == "model_test", Task.status.in_(ACTIVE_STATUSES)
+        )))
+
+    def model_probe_results(self,session,task_ids):
+        ids=[identifier for identifier in task_ids if identifier]
+        if not ids:return {}
+        return {task.id:{"status":task.status.value if hasattr(task.status,"value") else task.status,
+                "result":task.result_payload or {},"error_code":task.error_code}
+                for task in session.scalars(select(Task).where(Task.id.in_(ids),Task.task_type=="model_test"))}
+
+    def model_probe_result(self,session,task_id):
+        return self.model_probe_results(session,[task_id]).get(task_id)
 
     def list_recent(self, limit: int = 20, offset: int = 0, user_id: UUID | None = None) -> tuple[list[TaskRecord], int]:
         with self.sessions() as session:
@@ -207,9 +242,16 @@ class TaskRepository:
                 task.error_code, task.error_message = "TASK_EXPIRED", "任务已过期"
                 self._settle(session, task)
                 return False
+            if task.task_type == "model_test":
+                from app.modules.auth.repository import UserRepository
+                try:UserRepository(self.sessions).require_admin(session,task.user_id,task.input_payload["admin_version"])
+                except AppException:
+                    task.status,task.finished_at=TaskStatus.failed,utcnow()
+                    task.error_code,task.error_message="MODEL_TEST_AUTH_REVOKED","发起测试的管理员权限已失效"
+                    return False
             if task.task_type == "clips_export":
                 task.input_payload = {**task.input_payload, "_clip_execution_mode": "cache" if clip_cache_ready or task.input_payload.get("reuse_result") or task.input_payload.get("reuse_assets") else "reserved"}
-            if settings.ALLOWANCES_ENABLED and task.task_type not in {"simulate_progress", "media_probe"}:
+            if settings.ALLOWANCES_ENABLED and task.task_type not in {"simulate_progress", "media_probe", "model_test"}:
                 reason = self._billing().admit(session, record(task))
                 if reason:
                     task.wait_reason = reason

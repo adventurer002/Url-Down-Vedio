@@ -25,6 +25,12 @@ import {
   QuickFilters,
 } from "./list";
 export const actionLabels: Record<string, string> = {
+  "model.save_connection": "保存模型服务连接",
+  "model.save_model": "保存模型版本",
+  "model.test": "发起模型测试",
+  "model.publish": "发布模型配置",
+  "model.archive": "归档模型配置",
+  "model.revoke_key": "撤销模型密钥",
   "admin.bootstrap": "初始化管理员",
   "user.status": "账号状态变更",
   "allowance.grant": "人工权益发放",
@@ -43,6 +49,7 @@ const targetLabels: Record<string, string> = {
   user: "用户",
   task: "任务",
   storage: "存储",
+  model: "模型配置",
 };
 export function auditLink(kind: string, target: string) {
   return `/admin/audit?${new URLSearchParams({ target_type: kind === "cleanup" ? "storage" : kind === "cancel" ? "task" : "user", target_id: target, action: kind === "cleanup" ? "" : kind === "status" ? "user.status" : kind === "grant" ? "allowance.grant" : "task.cancel" })}`;
@@ -112,7 +119,9 @@ const fields: FilterField[] = [
 ];
 function AuditDetail({ event }: { event: AuditEvent }) {
   const target =
-    event.target_type === "storage"
+    event.target_type === "model"
+      ? "/admin/models"
+      : event.target_type === "storage"
       ? "/admin/system"
       : isUuid(event.target_id)
         ? `/admin/${event.target_type === "task" ? "tasks" : "users"}/${event.target_id}`

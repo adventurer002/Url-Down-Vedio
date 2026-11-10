@@ -9,6 +9,9 @@ class BoundedLLMProvider:
     def __init__(self, provider, limits=None):
         self.provider = provider
         self.name, self.model = provider.name, provider.model
+        self.cost_rates=getattr(provider,"cost_rates",None)
+        self.summary_model=getattr(provider,"summary_model",provider.model)
+        self.summary_cost_rates=getattr(provider,"summary_cost_rates",self.cost_rates)
         self.calls, self.output_tokens = 0, 0
         self.reserved_tokens = 0
         self._changed = asyncio.Condition()

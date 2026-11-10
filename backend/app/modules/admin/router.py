@@ -37,7 +37,7 @@ class GrantRequest(OperationRequest):
     product: Literal["monthly", "asr_120", "ai_100"]
 
 
-TaskType = Literal["download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap", "ai_question", "ai_clip_plan", "clips_export", "media_probe", "simulate_progress"]
+TaskType = Literal["download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap", "ai_question", "ai_clip_plan", "clips_export", "media_probe", "simulate_progress", "model_test"]
 
 
 async def add_progress(page, tasks):
@@ -87,7 +87,7 @@ async def cancel_task(task_id: UUID, body: OperationRequest, request: Request, a
 @router.get("/audit-events")
 async def audit_events(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
     actor_id: UUID | None = None, action: str | None = Query(None, max_length=64),
-    target_type: Literal["user", "task", "storage"] | None = None,
+    target_type: Literal["user", "task", "storage", "model"] | None = None,
     target_id: str | None = Query(None, max_length=128),
     outcome: Literal["succeeded", "accepted", "unchanged", "failed", "unknown"] | None = None,
     since: AwareDatetime | None = None, until: AwareDatetime | None = None, service=Depends(get_admin_service)):

@@ -29,6 +29,10 @@ async def execute_question(task_id, service, repository, transcripts, provider):
     log_queue_wait(task)
     payload = task.input_payload
     try:
+        if payload.get("model_config"):
+            from app.modules.model_config.runtime import llm
+            provider=await database_call(llm,"question",payload["model_config"],tasks.sessions)
+        elif provider is None:provider=get_llm_provider(managed=False)
         async with asyncio.timeout(settings.AI_TASK_TIMEOUT_SECONDS):
             from app.modules.transcript.service import TranscriptService
             data = await TranscriptService(None, service, transcripts).get(UUID(payload["transcript_id"]), SimpleNamespace(id=task.user_id))
@@ -73,7 +77,7 @@ def question_task(task_id):
             socket_timeout=1, retry=Retry(NoBackoff(), 0))
         try:
             return await execute_question(UUID(task_id), TaskService(TaskRepository(SessionLocal), ProgressBus(redis)),
-                KnowledgeRepository(SessionLocal), TranscriptRepository(SessionLocal), get_llm_provider())
+                KnowledgeRepository(SessionLocal), TranscriptRepository(SessionLocal), get_llm_provider() if not settings.MODEL_CONFIG_ENABLED else None)
         finally:
             await redis.aclose()
     return asyncio.run(execute())

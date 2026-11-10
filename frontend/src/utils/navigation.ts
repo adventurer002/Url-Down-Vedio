@@ -6,6 +6,7 @@ export function pageLabel(pathname: string) {
   if (pathname.startsWith("/admin/tasks")) return "任务管理";
   if (pathname.startsWith("/admin/users")) return "用户管理";
   if (pathname.startsWith("/admin/allowances")) return "会员与额度";
+  if (pathname.startsWith("/admin/models")) return "模型管理";
   if (pathname.startsWith("/admin/audit")) return "操作审计";
   if (pathname.startsWith("/admin/system")) return "存储与服务";
   if (pathname.startsWith("/admin/")) return "管理控制台";

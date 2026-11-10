@@ -22,6 +22,7 @@ export const taskLabels: Record<string, string> = {
   ai_mindmap: "思维导图",
   ai_question: "视频问答",
   simulate_progress: "进度模拟",
+  model_test: "模型测试",
 };
 export function StatusBadge({ status }: { status: TaskStatus }) {
   return (

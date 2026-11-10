@@ -54,3 +54,6 @@ async def ready():
             status_code=503,
         )
     return success_response({"status": "ready", "database": "ready", "redis": "ready"})
+
+from app.modules.model_config.router import router as model_config_router
+router.include_router(model_config_router)

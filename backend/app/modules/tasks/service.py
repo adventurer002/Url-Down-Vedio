@@ -32,7 +32,7 @@ class TaskService:
 
     async def create(self, task_type: str = "simulate_progress", video_id: UUID | None = None,
                      input_payload: dict | None = None) -> TaskRecord:
-        if task_type not in {"simulate_progress", "media_probe", "download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap", "ai_question", "ai_clip_plan", "clips_export"} or self.dispatcher is None:
+        if task_type not in {"simulate_progress", "media_probe", "download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap", "ai_question", "ai_clip_plan", "clips_export", "model_test"} or self.dispatcher is None:
             raise AppException("UNSUPPORTED_TASK_TYPE", "不支持该任务类型", 422)
         from app.modules.auth.dependencies import task_user_id
         task = await database_call(self.repository.create, task_type, video_id, input_payload,
@@ -41,10 +41,10 @@ class TaskService:
             await self.bus.publish(task.id, "queued", 0)
             async with asyncio.timeout(15):
                 await asyncio.to_thread(self.dispatcher.enqueue, task.id)
-            if "allowance" in task.input_payload or task.task_type == "media_probe":
+            if "allowance" in task.input_payload or task.task_type in {"media_probe","model_test"}:
                 await database_call(self.repository.mark_dispatched, task.id)
         except Exception:
-            if "allowance" in task.input_payload or task.task_type == "media_probe":
+            if "allowance" in task.input_payload or task.task_type in {"media_probe","model_test"}:
                 # Publish/ACK failure is ambiguous: an executing worker may already
                 # own the task. Leave its durable state intact for reconciliation.
                 return await database_call(self.repository.get, task.id)
@@ -103,6 +103,7 @@ class TaskService:
         data = asdict(task)
         data.pop("worker_pid", None)
         data.pop("worker_host", None)
+        data["input_payload"].pop("model_config", None)
         data["input_payload"].pop("_execution_id", None)
         data["input_payload"].pop("_clip_execution_mode", None)
         data["task_id"] = str(data.pop("id"))

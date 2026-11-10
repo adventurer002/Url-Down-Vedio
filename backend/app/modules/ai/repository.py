@@ -69,7 +69,7 @@ class AIRepository:
             return record(item)
 
     def store(self, session: Session, task_id: UUID, transcript, result_type: str, provider: str,
-              model: str, version: str, language: str, content: dict, usage: Usage, markdown: str | None = None, *, cache_scope: str | None = None) -> AIRecord:
+              model: str, version: str, language: str, content: dict, usage: Usage, markdown: str | None = None, *, cache_scope: str | None = None, rates=None) -> AIRecord:
         from app.modules.video.repository import VideoRepository
         scope = cache_scope or VideoRepository.cache_scope(session, transcript.video_id, transcript.id)
         key = self.key(transcript.content_hash, result_type, model, version, language, scope)
@@ -83,7 +83,7 @@ class AIRepository:
                                 llm_provider=provider, llm_model=model, prompt_version=version, output_language=language,
                                 content_json=content, markdown_export=markdown, input_tokens=usage.input_tokens,
                                 output_tokens=usage.output_tokens, duration_ms=usage.duration_ms,
-                                estimated_cost_usd=usage.cost(settings.LLM_INPUT_COST_PER_MILLION, settings.LLM_OUTPUT_COST_PER_MILLION,
+                                estimated_cost_usd=usage.cost(*(rates if rates is not None else (settings.LLM_INPUT_COST_PER_MILLION, settings.LLM_OUTPUT_COST_PER_MILLION)),
                                                               free=provider == "heuristic"))
                 session.add(item)
                 session.flush()

@@ -42,10 +42,10 @@ class BillingService:
         if action.startswith("ai_"):
             from app.modules.ai.providers import get_llm_provider
             if transcript_id is not None:
-                owned = await self._owned_transcript_result(transcript_id, user_id, action, language or "zh", get_llm_provider().model)
+                owned = await self._owned_transcript_result(transcript_id, user_id, action, language or "zh", (get_llm_provider("mindmap" if action=="ai_mindmap" else "summary") if settings.MODEL_CONFIG_ENABLED else get_llm_provider()).model)
             else:
                 owned = await database_call(self.tasks.repository.own_ai_result, user_id, UUID(payload["video_id"]),
-                    action, language or "zh", get_llm_provider().model, settings.SUMMARY_PROMPT_VERSION,
+                    action, language or "zh", (get_llm_provider("mindmap" if action=="ai_mindmap" else "summary") if settings.MODEL_CONFIG_ENABLED else get_llm_provider()).model, settings.SUMMARY_PROMPT_VERSION,
                     settings.MINDMAP_PROMPT_VERSION + ":" + settings.MINDMAP_SCHEMA_VERSION)
             if owned:
                 payload["reuse_result"] = owned
@@ -96,10 +96,13 @@ class BillingService:
 async def resume_queued(tasks, user_id=None):
     dispatched = 0
     for task in await database_call(tasks.queued, user_id):
-        if "allowance" in task.input_payload or task.task_type == "media_probe":
+        if "allowance" in task.input_payload or task.task_type in {"media_probe","model_test"}:
             try:
                 async with asyncio.timeout(5):
-                    if task.task_type == "media_probe":
+                    if task.task_type == "model_test":
+                        from app.modules.model_config.worker import ModelTestDispatcher
+                        await asyncio.to_thread(ModelTestDispatcher().enqueue,task.id)
+                    elif task.task_type == "media_probe":
                         from app.modules.uploads.worker import UploadDispatcher
                         await asyncio.to_thread(UploadDispatcher().enqueue, task.id)
                     else:

@@ -504,7 +504,11 @@ class FallbackLocalASRProvider:
         )
 
 
-def get_asr_provider() -> ASRProvider:
+def get_asr_provider(snapshot=None, *, managed=True) -> ASRProvider:
+    if managed and (settings.MODEL_CONFIG_ENABLED or snapshot):
+        from app.modules.model_config.runtime import asr
+        configured=asr("transcription",snapshot)
+        if configured is not None:return configured
     if settings.ASR_PROVIDER == "mock":
         return FallbackLocalASRProvider(mock=True, text=settings.ASR_MOCK_TEXT)
     if settings.ASR_PROVIDER == "qwen":

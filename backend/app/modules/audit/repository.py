@@ -19,6 +19,22 @@ def operator_text(value, maximum):
 
 
 class AuditRepository:
+    def model_release_metadata(self, session, release_ids):
+        """Read publication context without exposing request bodies or credentials."""
+        if not release_ids:
+            return {}
+        events = session.scalars(select(AuditEvent).where(
+            AuditEvent.action == "model.publish",
+            AuditEvent.outcome == "succeeded",
+            AuditEvent.result["release_id"].as_string().in_(release_ids),
+        ))
+        return {event.result["release_id"]: {
+            "actor_id": str(event.actor_user_id) if event.actor_user_id else None,
+            "actor_label": event.actor_label,
+            "reason": event.reason,
+            "version": event.result.get("version"),
+        } for event in events}
+
     @staticmethod
     def serialize(event):
         return {name: getattr(event, name) for name in (

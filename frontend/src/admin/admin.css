@@ -675,24 +675,51 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 7px 12px;
-  border: 1px solid #dedee3 !important;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--admin-button-border, #dedee3) !important;
   border-radius: 6px;
   font-size: 12px;
-  background: white;
-  color: #3f3f46;
+  font-weight: 500;
+  background: var(--admin-button-bg, #fff);
+  color: var(--admin-button-ink, #3f3f46);
   min-height: 34px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
 }
-.admin-button:hover {
-  background: #f4f4f5;
+.admin-button:hover:not(:disabled),
+.admin-button:active:not(:disabled) {
+  background: var(--admin-button-hover, #f4f4f5);
+}
+.admin-button:focus-visible {
+  outline: 2px solid var(--admin-button-focus, #52525b);
+  outline-offset: 3px;
 }
 .admin-button-primary {
-  background: #18181b;
-  border-color: #18181b !important;
-  color: white;
+  --admin-button-bg: #18181b;
+  --admin-button-ink: #fff;
+  --admin-button-border: #18181b;
+  --admin-button-hover: #303035;
 }
-.admin-button-primary:hover {
-  background: #303035;
+.admin-button-secondary {
+  --admin-button-bg: #f4f4f5;
+  --admin-button-ink: #3f3f46;
+  --admin-button-border: #e4e4e7;
+  --admin-button-hover: #e4e4e7;
+}
+.admin-button-danger {
+  --admin-button-bg: #dc2626;
+  --admin-button-ink: #fff;
+  --admin-button-border: #dc2626;
+  --admin-button-hover: #b91c1c;
+  --admin-button-focus: #dc2626;
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-button {
+    transition: none;
+  }
 }
 .admin-gate {
   display: grid;
@@ -1222,7 +1249,18 @@
   }
 }
 .admin-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
   margin: 0 0 20px;
+}
+.admin-detail-actions > .admin-button {
+  flex: 0 0 auto;
+}
+.admin-detail-actions > .admin-footnote {
+  flex-basis: 100%;
+  margin: 0;
 }
 .admin-operation-dialog {
   width: min(620px, 100%);

@@ -270,7 +270,7 @@ export interface CancelResult extends WriteReceipt {
   cancel_requested: boolean;
   notification_pending: boolean;
 }
-async function adminPost<T>(
+export async function adminPost<T>(
   path: string,
   body: OperationRequest,
   signal?: AbortSignal,
