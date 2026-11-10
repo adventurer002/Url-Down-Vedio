@@ -1,10 +1,4 @@
-export const marketingPaths = [
-  "/",
-  "/help",
-  "/privacy",
-  "/examples",
-  "/examples/knowledge-loop",
-] as const;
+export const marketingPaths = ["/", "/help", "/privacy", "/examples"] as const;
 export const documentPaths = [...marketingPaths, "/subscription"] as const;
 
 export function cleanPath(path: string) {

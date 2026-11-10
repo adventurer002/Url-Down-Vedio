@@ -1,48 +1,41 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "../api";
-import { normalizeError, type ApiError } from "../api/client";
-import { authStore, useAuth } from "../stores/auth";
-import { useBilling } from "../stores/billing";
-import type { BillingCatalog, Product } from "../types/billing";
-import { durationLabel, priceLabel } from "../utils/billing";
-import ErrorNotice from "../components/ErrorNotice";
+import { useAuth } from "../stores/auth";
 import Icon from "../components/Icon";
-import PixelCard from "../components/PixelCard";
+import {
+  addonOffers,
+  billingPeriods,
+  offerPrice,
+  subscriptionOffers,
+  type BillingPeriod,
+} from "../subscriptionOffers";
 
-function Benefits({ items }: { items: string[] }) {
-  return (
-    <ul className="plan-benefits">
-      {items.map((item) => (
-        <li key={item}>
-          <Icon size={15} />
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
+type Selection = {
+  name: string;
+  priceFen: number;
+  detail: string;
+};
 function PurchaseNotice({
-  product,
+  selection,
   onClose,
 }: {
-  product: Product;
+  selection: Selection;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    ref.current?.showModal();
+    const dialog = ref.current;
+    dialog?.showModal();
     return () => {
-      ref.current?.close();
+      dialog?.close();
       previous?.focus();
     };
   }, []);
   return (
     <dialog
       ref={ref}
-      className="billing-dialog purchase-dialog"
+      className="billing-dialog pricing-dialog"
       aria-labelledby="purchase-title"
       onCancel={(event) => {
         event.preventDefault();
@@ -59,428 +52,237 @@ function PurchaseNotice({
       >
         <Icon name="close" />
       </button>
-      <span className="billing-dialog-icon">
-        <Icon name="sparkles" size={26} />
-      </span>
-      <p className="eyebrow">A LITTLE MORE POSSIBILITY</p>
-      <h2 id="purchase-title">{product.name}</h2>
-      <p className="purchase-price">¥{priceLabel(product.price_fen)}</p>
-      <p>
-        暂未开放在线购买。你可以先使用免费体验额度，已获得的权益会在账户中显示。
+      <span className="pricing-coming">新方案待开放</span>
+      <h2 id="purchase-title">{selection.name}</h2>
+      <p className="purchase-price pricing-dialog-price">
+        ¥{offerPrice(selection.priceFen)}
       </p>
-      <button className="button primary full" onClick={onClose}>
+      <p>{selection.detail}</p>
+      <p>
+        暂未开放在线购买。支付与权益发放接通后再开放购买，当前展示为新方案预告，尚未生效；已获得的会员与额度仍按原规则使用，可在个人中心查看。
+      </p>
+      <button
+        className="pricing-button pricing-button-primary"
+        onClick={onClose}
+      >
         我知道了
       </button>
     </dialog>
   );
 }
-
-function publishedCatalog() {
-  if (typeof document === "undefined") return undefined;
-  try {
-    const content = document.getElementById("published-catalog")?.textContent;
-    return content ? (JSON.parse(content) as BillingCatalog) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-export default function SubscriptionView({
-  initialCatalog,
-}: { initialCatalog?: BillingCatalog } = {}) {
-  const auth = useAuth();
-  const { user } = auth;
-  const navigate = useNavigate();
-  const billing = useBilling();
-  const [catalog, setCatalog] = useState<BillingCatalog | undefined>(
-    () => initialCatalog ?? publishedCatalog(),
-  );
-  const [error, setError] = useState<ApiError | null>(null);
-  const [catalogCurrent, setCatalogCurrent] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const [addon, setAddon] = useState<"asr_120" | "ai_100">("asr_120");
-  const [purchase, setPurchase] = useState<Product>();
-  useEffect(() => {
-    const controller = new AbortController();
-    setError(null);
-    setCatalogCurrent(false);
-    void api
-      .catalog(controller.signal)
-      .then((value) => {
-        if (!controller.signal.aborted) {
-          setCatalog(value);
-          setCatalogCurrent(true);
-        }
-      })
-      .catch((cause) => {
-        if (!controller.signal.aborted) {
-          setError(normalizeError(cause));
-        }
-      });
-    return () => controller.abort();
-  }, [attempt]);
-  const member = billing.data?.member;
-  const trial = catalog?.trial;
-  const monthly = catalog?.products.monthly;
-  const extra = catalog?.products[addon];
-  const cardProps = {
-    theme: "light" as const,
-    colors: ["#18181b", "#cfd8e3"],
-    glowColor: "#71717a",
-    shape: "square" as const,
-    origin: "center" as const,
-    gap: 8,
-    pixelSize: 2,
-    speed: 18,
-    revealDuration: 600,
-    spotlight: 0.15,
-    glow: 0.15,
-    opacity: 0.12,
-    fade: 0.7,
-    trigger: "hover" as const,
-    radius: 24,
-    clickPulse: false,
-    intro: false,
-    noFocus: true,
-  };
-
+function Benefits({ items }: { items: readonly string[] }) {
   return (
-    <div className="subscription-page">
-      <div className="subscription-breadcrumb">
+    <ul className="pricing-benefits">
+      {items.map((item) => (
+        <li key={item}>
+          <Icon size={17} />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+export default function SubscriptionView() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [period, setPeriod] = useState<BillingPeriod>("monthly");
+  const [selection, setSelection] = useState<Selection>();
+  const selectedPeriod = billingPeriods.find((item) => item.id === period)!;
+  return (
+    <div className="subscription-page pricing-page">
+      <nav className="pricing-breadcrumb" aria-label="面包屑">
         <a href="/">首页</a>
         <span>/</span>
         <span>订阅方案</span>
-      </div>
-      <section className="subscription-heading">
-        <span className="membership-tag">
-          <span /> 为每一次好奇，多留一点空间
-        </span>
-        <h1>
-          好内容，<span>值得更进一步。</span>
-        </h1>
-        <p>
-          从一段视频，到真正属于你的知识。
-          <br className="mobile-break" />
-          选择适合自己的节奏，其余交给 AI。
-        </p>
-        <div className="subscription-assurances">
-          <span>
-            <Icon size={14} /> 下载与 AI 额度独立
-          </span>
-          <span>
-            <Icon size={14} /> 失败不扣额度
-          </span>
-          <span>
-            <Icon size={14} /> 已有结果随时查看
-          </span>
-        </div>
-      </section>
-
-      {catalog && !catalogCurrent && (
-        <div className="subscription-read-notice" role="status">
-          <p>
-            {error
-              ? "暂时无法更新方案，以下为已发布的公开说明。实际权益以处理前确认为准。"
-              : "以下为已发布的公开说明，实际权益以处理前确认为准。"}
-          </p>
-          {error && (
+      </nav>
+      <section className="pricing-heading">
+        <h1>选择适合你的节奏。</h1>
+        <p>从免费体验，到持续积累。找到适合你的使用方式。</p>
+        <div className="pricing-periods" role="group" aria-label="付费周期">
+          {billingPeriods.map((item) => (
             <button
-              className="text-button"
-              onClick={() => setAttempt((value) => value + 1)}
+              key={item.id}
+              aria-pressed={period === item.id}
+              onClick={() => setPeriod(item.id)}
             >
-              重新加载套餐
+              {item.label}
+              {item.id === "annual" && <span>赠送 2 个月</span>}
             </button>
-          )}
-        </div>
-      )}
-      {auth.restoreError && (
-        <div className="subscription-read-notice" role="status">
-          <p>登录状态暂时无法确认，你仍可阅读公开方案。</p>
-          <button
-            className="text-button"
-            onClick={() => void authStore.restore()}
-          >
-            重新连接账号
-          </button>
-        </div>
-      )}
-      <ErrorNotice error={catalog ? null : error}>
-        <button
-          className="text-button"
-          onClick={() => setAttempt((value) => value + 1)}
-        >
-          重新加载套餐
-        </button>
-      </ErrorNotice>
-      {!catalog && !error && (
-        <div className="subscription-loading" role="status">
-          <span className="spinner" /> 正在加载套餐…
-        </div>
-      )}
-      {catalog && trial && monthly && extra && (
-        <>
-          <section className="subscription-plans" aria-label="选择套餐">
-            <PixelCard
-              {...cardProps}
-              className="subscription-card"
-              introDelay={0}
-            >
-              <div className="plan-content">
-                <div className="plan-heading">
-                  <span className="plan-icon">
-                    <Icon name="seedling" size={22} />
-                  </span>
-                  <span className="plan-label">轻松开始</span>
-                </div>
-                <h2>免费体验</h2>
-                <p className="plan-description">先发现，一段视频的更多可能。</p>
-                <div className="plan-price">
-                  <span>¥</span>
-                  <strong>0</strong>
-                  <small>/ 一次领取</small>
-                </div>
-                <p className="plan-price-note">关注公众号并绑定账号后获得</p>
-                <button
-                  className="button secondary full plan-action"
-                  disabled={
-                    !catalogCurrent ||
-                    auth.restoring ||
-                    Boolean(auth.restoreError)
-                  }
-                  onClick={() => {
-                    if (!user) authStore.open();
-                    else navigate("/account");
-                  }}
-                >
-                  {user ? "查看我的体验额度" : "免费开始体验"}
-                  <Icon name="arrow" size={16} />
-                </button>
-                <div className="plan-divider" />
-                <Benefits
-                  items={[
-                    `${durationLabel(trial.asr_seconds)}语音转写`,
-                    `${trial.ai_generations} 次 AI 生成`,
-                    `每天 ${catalog.free_daily_downloads} 次成功下载`,
-                    `单视频最长 ${catalog.free_limits.video_seconds / 60} 分钟`,
-                    "总结与导图再次查看免费",
-                  ]}
-                />
-                <p className="plan-validity">
-                  体验额度领取后 {trial.valid_days} 天有效 · 每个账号限领一次
-                </p>
-              </div>
-            </PixelCard>
-
-            <PixelCard
-              {...cardProps}
-              className="subscription-card featured-plan"
-              introDelay={120}
-            >
-              <div className="plan-content">
-                <div className="plan-heading">
-                  <span className="plan-icon">
-                    <Icon name="sparkles" size={23} />
-                  </span>
-                  <span className="plan-label">持续探索</span>
-                  <span className="plan-recommended">推荐</span>
-                </div>
-                <h2>月度会员</h2>
-                <p className="plan-description">
-                  把日常的观看，变成持续的积累。
-                </p>
-                <div className="plan-price">
-                  <span>¥</span>
-                  <strong>{priceLabel(monthly.price_fen)}</strong>
-                  <small>/ 月</small>
-                </div>
-                <p className="plan-price-note">按开通日期计算账期 · 手动续费</p>
-                <button
-                  className="button primary full plan-action"
-                  disabled={!catalogCurrent}
-                  onClick={() => setPurchase(monthly)}
-                >
-                  {member ? "续费说明" : "开通说明"}
-                  <Icon name="arrow" size={16} />
-                </button>
-                <div className="plan-divider" />
-                <Benefits
-                  items={[
-                    `每账期 ${durationLabel(monthly.asr_seconds)}转写`,
-                    `每账期 ${monthly.ai_generations} 次 AI 生成`,
-                    "视频下载不按次数计费",
-                    `单视频最长 ${catalog.member_limits.video_seconds / 60} 分钟`,
-                    `每日 ${catalog.member_limits.daily_egress_bytes / 1024 ** 3} GiB 下载流量`,
-                    "总结与导图组合仅扣 1 次",
-                  ]}
-                />
-                <p className="plan-validity">
-                  月度额度到期刷新，不结转 · 不自动扣款
-                </p>
-              </div>
-            </PixelCard>
-
-            <PixelCard
-              {...cardProps}
-              className="subscription-card"
-              introDelay={240}
-            >
-              <div className="plan-content">
-                <div className="plan-heading">
-                  <span className="plan-icon">
-                    <Icon name="plus" size={23} />
-                  </span>
-                  <span className="plan-label">按需补充</span>
-                </div>
-                <h2>灵活加购</h2>
-                <p className="plan-description">灵感正盛时，不必停在这里。</p>
-                <div className="plan-price">
-                  <span>¥</span>
-                  <strong>{priceLabel(extra.price_fen)}</strong>
-                  <small>/ 包</small>
-                </div>
-                <div
-                  className="addon-switch"
-                  role="group"
-                  aria-label="选择加购额度"
-                >
-                  <button
-                    aria-pressed={addon === "asr_120"}
-                    onClick={() => setAddon("asr_120")}
-                  >
-                    转写分钟包
-                  </button>
-                  <button
-                    aria-pressed={addon === "ai_100"}
-                    onClick={() => setAddon("ai_100")}
-                  >
-                    AI 次数包
-                  </button>
-                </div>
-                <button
-                  className="button secondary full plan-action"
-                  disabled={!catalogCurrent}
-                  onClick={() => setPurchase(extra)}
-                >
-                  加购说明
-                  <Icon name="arrow" size={16} />
-                </button>
-                <div className="plan-divider" />
-                <Benefits
-                  items={[
-                    addon === "asr_120"
-                      ? `${durationLabel(extra.asr_seconds)}语音转写`
-                      : `${extra.ai_generations} 次 AI 生成`,
-                    "无需开通会员也可使用",
-                    "与会员额度独立，到期时间不变",
-                    "失败或有效取消自动释放额度",
-                    "操作前确认本次最高消耗",
-                  ]}
-                />
-                <p className="plan-validity">
-                  发放后 {catalog.addon_valid_days} 天有效 ·
-                  会员到期不影响有效加购包
-                </p>
-              </div>
-            </PixelCard>
-          </section>
-          <p className="subscription-sale-note">
-            暂未开放在线购买。你可以先领取体验额度，已获得的权益可在
-            <Link to="/account">个人中心查看</Link>。
-          </p>
-        </>
-      )}
-
-      <section className="subscription-faq" aria-label="订阅常见问题">
-        <div>
-          <span className="eyebrow">GOOD TO KNOW</span>
-          <h2>
-            简单的规则，
-            <br />
-            安心地使用。
-          </h2>
-          <p>每一次消耗，都在开始前说清楚。</p>
-        </div>
-        <div className="faq-list">
-          <details>
-            <summary>
-              分钟和 AI 次数分别怎么计算？
-              <Icon name="plus" size={16} />
-            </summary>
-            <p>
-              语音转写按整段音频的实际时长，以秒向上取整；已有字幕和转写缓存不扣分钟。总结消耗
-              1 次，总结与导图组合整体成功也只扣 1 次。视频问答每个新问题成功扣
-              1 次
-              AI，不重复扣转写分钟；相同文稿、模型和版本的已有回答免费，无足够原文依据时不扣次数。
-            </p>
-            {catalog && (
-              <p>
-                单次生成支持最多 {catalog.max_text_chars}{" "}
-                字符文稿；每次模型调用最多输出{" "}
-                {catalog.max_output_tokens_per_call} Token， 整次操作最多{" "}
-                {catalog.max_llm_calls} 次调用、累计{" "}
-                {catalog.max_total_output_tokens} 输出
-                Token。平台内部拆分和重试不另扣次数。
-              </p>
-            )}
-          </details>
-          <details>
-            <summary>
-              失败、取消或再次查看，会扣额度吗？
-              <Icon name="plus" size={16} />
-            </summary>
-            <p>
-              任务开始执行前占用最高额度，成功后核销；失败或有效取消释放占用。自己的已有结果、导图交互和导出免费，公共
-              AI 缓存首次获取计 1 次。
-            </p>
-          </details>
-          <details>
-            <summary>
-              免费与会员下载有哪些限制？
-              <Icon name="plus" size={16} />
-            </summary>
-            <p>
-              会员下载不按次数收费。单视频最长{" "}
-              {catalog ? catalog.member_limits.video_seconds / 60 : "—"}{" "}
-              分钟，单文件最多{" "}
-              {catalog ? catalog.member_limits.file_bytes / 1024 ** 2 : "—"}{" "}
-              MiB，每日流量{" "}
-              {catalog
-                ? catalog.member_limits.daily_egress_bytes / 1024 ** 3
-                : "—"}{" "}
-              GiB。任务按服务负载排队，文件保留 24 小时。
-            </p>
-            {catalog && (
-              <p>
-                免费用户每天成功下载 {catalog.free_daily_downloads} 次，北京时间
-                00:00 重置、不累计； 视频最长{" "}
-                {catalog.free_limits.video_seconds / 60} 分钟，文件最多{" "}
-                {catalog.free_limits.file_bytes / 1024 ** 2} MiB， 每日流量{" "}
-                {catalog.free_limits.daily_egress_bytes / 1024 ** 3}{" "}
-                GiB。重复取回文件也计入流量。 免费 / 会员账号最多分别占用{" "}
-                {catalog.free_limits.download_concurrency} /{" "}
-                {catalog.member_limits.download_concurrency}{" "}
-                个下载执行名额，实际执行按服务负载排队。
-              </p>
-            )}
-          </details>
-          <details>
-            <summary>
-              额度会结转，或自动续费吗？
-              <Icon name="plus" size={16} />
-            </summary>
-            <p>
-              月度额度按账期刷新，不结转，不自动扣款。加购包独立计算有效期，不受会员到期影响。正常交付后不支持无理由退款，支付异常及依法应退款的情形除外。
-            </p>
-          </details>
+          ))}
         </div>
       </section>
-      <Link className="subscription-return" to="/app">
-        回到工作台，开始一次新的探索
-        <Icon name="arrow" size={17} />
-      </Link>
-      {purchase && (
+      <section className="pricing-grid" aria-label="选择套餐">
+        <article
+          className="pricing-card pricing-free"
+          aria-labelledby="free-plan-title"
+        >
+          <h2 id="free-plan-title">免费体验</h2>
+          <p className="pricing-description">先体验，再决定</p>
+          <p className="pricing-price">
+            <strong>¥0</strong>
+            <span>/ 免费</span>
+          </p>
+          <p className="pricing-price-detail">无需购买会员</p>
+          <div className="pricing-free-rights">
+            <Benefits items={["每日 2 次视频解析", "单视频最长 20 分钟"]} />
+            <p>转写与 AI 额度可另购</p>
+          </div>
+          <button
+            className="pricing-button"
+            onClick={() => navigate(user ? "/account" : "/app")}
+          >
+            {user ? "查看我的体验额度" : "开始体验"}
+          </button>
+        </article>
+        {subscriptionOffers.map((offer) => (
+          <article
+            key={offer.id}
+            className={`pricing-card pricing-${offer.id}`}
+            aria-labelledby={`${offer.id}-plan-title`}
+          >
+            {offer.id === "pro" && (
+              <span className="pricing-recommended">推荐</span>
+            )}
+            <h2 id={`${offer.id}-plan-title`}>{offer.name}</h2>
+            <p className="pricing-description">{offer.description}</p>
+            <p className="pricing-price">
+              <strong>¥{offerPrice(offer.prices[period])}</strong>
+              <span>/ {selectedPeriod.unit}</span>
+            </p>
+            <p className="pricing-price-detail">
+              {period === "monthly"
+                ? `季付 ¥${offerPrice(offer.prices.quarterly)} / 季 · 年付 ¥${offerPrice(offer.prices.annual)} / 年`
+                : `一次支付 ¥${offerPrice(offer.prices[period])}，折合 ¥${(offer.prices[period] / 100 / selectedPeriod.months).toFixed(2)} / 月`}
+            </p>
+            <div
+              className="pricing-quotas"
+              aria-label={`${offer.name} 每月额度`}
+            >
+              <div>
+                <Icon name="audio" size={25} />
+                <p>
+                  <strong>{offer.monthlyMinutes} 分钟 / 月</strong>
+                  <span>语音转写</span>
+                </p>
+              </div>
+              <div>
+                <Icon name="sparkles" size={25} />
+                <p>
+                  <strong>{offer.monthlyGenerations} 次 / 月</strong>
+                  <span>AI 生成</span>
+                </p>
+              </div>
+            </div>
+            <Benefits items={offer.benefits} />
+            <p className="pricing-upgrade">
+              {offer.id === "pro"
+                ? `每${selectedPeriod.unit}多 ¥${offerPrice(offer.prices[period] - subscriptionOffers[0].prices[period])}，转写与 AI 额度翻倍`
+                : "核心功能，两档都拥有"}
+            </p>
+            <button
+              className={`pricing-button${offer.id === "pro" ? " pricing-button-primary" : ""}`}
+              onClick={() =>
+                setSelection({
+                  name: `${offer.name} · ${selectedPeriod.label}`,
+                  priceFen: offer.prices[period],
+                  detail: `一次支付，服务期 ${selectedPeriod.months} 个月。每月 ${offer.monthlyMinutes} 分钟转写、${offer.monthlyGenerations} 次 AI，额度按月发放，不结转。`,
+                })
+              }
+            >
+              选择 {offer.name}
+            </button>
+          </article>
+        ))}
+      </section>
+      <p className="pricing-renewal">
+        会员额度每月发放，当月有效，不结转。一次购买，到期手动续费。
+      </p>
+      <p className="pricing-availability" role="status">
+        新方案待开放：月付、季付、年付与额度包暂未开放购买。已有权益仍按原规则使用，
+        <Link to="/account">查看我的实际额度</Link>。
+      </p>
+      <section className="pricing-addons" aria-labelledby="addons-title">
+        <h2 id="addons-title">不够用？按需加一点。</h2>
+        <p>额度包可单独购买，无需先开会员。</p>
+        <div className="pricing-addon-grid">
+          {addonOffers.map((addon) => (
+            <article key={addon.id} className="pricing-addon-card">
+              <Icon name={addon.icon} size={28} />
+              <div>
+                <h3>{addon.name}</h3>
+                <p>{addon.detail}</p>
+              </div>
+              <strong>¥{offerPrice(addon.priceFen)}</strong>
+              <button
+                className="pricing-button"
+                aria-label={`购买${addon.name}`}
+                onClick={() =>
+                  setSelection({
+                    name: addon.name,
+                    priceFen: addon.priceFen,
+                    detail: addon.detail,
+                  })
+                }
+              >
+                购买额度包
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="pricing-rules" aria-labelledby="rules-title">
+        <h2 id="rules-title">用得明白，买得放心</h2>
+        <div>
+          {[
+            ["成功后扣额度", "未成功交付，不核销额度"],
+            ["组合生成只扣 1 次", "总结与思维导图一起生成，合计扣 1 次"],
+            ["已有结果免费查看", "查看、复制和导出不重复扣费"],
+          ].map(([title, text]) => (
+            <article key={title}>
+              <Icon name="shield" size={21} />
+              <div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="pricing-faq" aria-label="订阅常见问题">
+        <details>
+          <summary>
+            转写分钟和 AI 次数如何计算？
+            <Icon name="plus" size={16} />
+          </summary>
+          <p>
+            语音转写按整段音频实际时长，以秒向上取整；已有字幕和转写缓存不扣分钟。总结与思维导图组合整体成功仅扣
+            1 次。每个新问题成功回答扣 1 次 AI，平台内部拆分和重试不另扣次数。
+          </p>
+        </details>
+        <details>
+          <summary>
+            季付和年付的额度如何发放？
+            <Icon name="plus" size={16} />
+          </summary>
+          <p>
+            一次支付所选周期的总价。从开通日起，每个订阅月发放当月额度；当月未用完不结转，不一次性发放整个季度或全年的额度。到期手动续费，不自动扣款。
+          </p>
+        </details>
+        <details>
+          <summary>
+            额度包需要先开会员吗？
+            <Icon name="plus" size={16} />
+          </summary>
+          <p>
+            不需要。新方案中的额度包购买后 90
+            天有效，与会员独立计算；优先消耗即将到期的额度。购买额度包不附带会员的解析、时长或下载权益。
+          </p>
+        </details>
+      </section>
+      {selection && (
         <PurchaseNotice
-          product={purchase}
-          onClose={() => setPurchase(undefined)}
+          selection={selection}
+          onClose={() => setSelection(undefined)}
         />
       )}
     </div>

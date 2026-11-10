@@ -26,6 +26,7 @@
   border: 1px solid #e5e5e9;
   border-radius: 16px;
   background: #fff;
+  box-shadow: var(--card-shadow);
 }
 .account-profile-identity {
   display: flex;
@@ -110,6 +111,7 @@
   padding: 22px;
   min-width: 0;
   background: #fff;
+  box-shadow: var(--card-shadow);
 }
 .account-metrics h3 {
   display: flex;

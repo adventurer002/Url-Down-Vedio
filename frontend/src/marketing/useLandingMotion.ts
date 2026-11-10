@@ -45,7 +45,7 @@ export function useLandingMotion(
     ];
     const links = [
       ...root.querySelectorAll<HTMLAnchorElement>(
-        ".m-gooey-list:not(.m-gooey-overlay) a[href^='#']",
+        ".m-reference-nav a[href^='#']",
       ),
     ];
     let frame = 0;

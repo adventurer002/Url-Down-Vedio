@@ -1,14 +1,12 @@
 import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import MarketingSite from "./MarketingSite";
-import { metadata, siteOrigin, productDescription, example } from "./content";
+import { metadata, siteOrigin, productDescription } from "./content";
 import { cleanPath, documentPaths } from "./routes";
 import SubscriptionView from "../views/SubscriptionView";
 import AppHeader from "../components/AppHeader";
 import AppFooter from "../components/AppFooter";
 import { WorkspaceProvider } from "../hooks/useWorkspace";
-import catalog from "./generated/catalog.json";
-import type { BillingCatalog } from "../types/billing";
 
 const escape = (value: string) =>
   value
@@ -92,29 +90,12 @@ export function publicDocument(
           name: "首页",
           item: `${origin.origin}/`,
         },
-        ...(path === "/examples/knowledge-loop"
-          ? [
-              {
-                "@type": "ListItem",
-                position: 2,
-                name: "处理示例",
-                item: `${origin.origin}/examples`,
-              },
-              {
-                "@type": "ListItem",
-                position: 3,
-                name: example.title,
-                item: url,
-              },
-            ]
-          : [
-              {
-                "@type": "ListItem",
-                position: 2,
-                name: info.title.split("｜")[0].split(" — ")[0],
-                item: url,
-              },
-            ]),
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: info.title.split("｜")[0].split(" — ")[0],
+          item: url,
+        },
       ],
     });
   const head = [
@@ -144,9 +125,7 @@ export function publicDocument(
                 <div className="public-app">
                   <AppHeader />
                   <main id="main" tabIndex={-1}>
-                    <SubscriptionView
-                      initialCatalog={catalog as BillingCatalog}
-                    />
+                    <SubscriptionView />
                   </main>
                   <AppFooter />
                 </div>
@@ -154,13 +133,9 @@ export function publicDocument(
             </MemoryRouter>,
           )
         : renderToString(<MarketingSite path={path} />);
-  const seed =
-    path === "/subscription" && !options.empty
-      ? `<script id="published-catalog" type="application/json">${json(catalog)}</script>`
-      : "";
   return template
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${escape(info.title)}</title>`)
     .replace(/<meta\s+name="description"[^>]*>/, "")
     .replace("</head>", `${head}\n</head>`)
-    .replace('<div id="app"></div>', `<div id="app">${content}</div>${seed}`);
+    .replace('<div id="app"></div>', `<div id="app">${content}</div>`);
 }

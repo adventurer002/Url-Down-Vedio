@@ -5,14 +5,7 @@ import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 
 const output = fileURLToPath(new URL("../dist/", import.meta.url));
-const routes = [
-  "/",
-  "/help",
-  "/privacy",
-  "/examples",
-  "/examples/knowledge-loop",
-  "/subscription",
-];
+const routes = ["/", "/help", "/privacy", "/examples", "/subscription"];
 const documents = new Map();
 for (const route of routes) {
   const file = route === "/" ? "index.html" : `${route.slice(1)}/index.html`;
@@ -88,5 +81,5 @@ for (const file of ["app-shell.html", "404.html"]) {
 }
 await access(path.join(output, "media/landing/social-cover.png"));
 console.log(
-  "Public output verified: 6 readable documents, metadata, styles, assets, source links, sitemap and private noindex shells.",
+  "Public output verified: 5 readable documents, metadata, styles, assets, source links, sitemap and private noindex shells.",
 );

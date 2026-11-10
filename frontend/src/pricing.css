@@ -1,0 +1,472 @@
+.public-app .pricing-page {
+  width: 100%;
+  max-width: 1220px;
+  padding: 24px 32px 64px;
+  color: #18181b;
+}
+.pricing-page :is(h1, h2, h3, p) {
+  margin: 0;
+}
+.pricing-breadcrumb {
+  display: flex;
+  gap: 12px;
+  color: #71717a;
+  font-size: 13px;
+}
+.pricing-breadcrumb a:hover {
+  color: #18181b;
+}
+.pricing-heading {
+  text-align: center;
+  padding: 48px 0 42px;
+}
+.pricing-heading h1 {
+  font-size: clamp(30px, 3.2vw, 44px);
+  font-weight: 650;
+  letter-spacing: -1.5px;
+  line-height: 1.35;
+}
+.pricing-heading > p {
+  margin-top: 14px;
+  color: #62626b;
+  font-size: 16px;
+}
+.pricing-periods {
+  display: inline-flex;
+  margin-top: 32px;
+  padding: 5px;
+  gap: 3px;
+  border: 1px solid #ededf0;
+  border-radius: 999px;
+  background: #f4f4f5;
+}
+.pricing-periods button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 24px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #62626b;
+  font: inherit;
+  font-weight: 550;
+  transition:
+    background 0.18s,
+    box-shadow 0.18s;
+}
+.pricing-periods button[aria-pressed="true"] {
+  background: white;
+  color: #18181b;
+  box-shadow: 0 2px 8px #18181b14;
+}
+.pricing-periods button:hover {
+  color: #18181b;
+}
+.pricing-periods button span {
+  border-radius: 5px;
+  padding: 3px 6px;
+  background: #0f766e;
+  color: white;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.pricing-grid {
+  display: grid;
+  grid-template-columns: 0.94fr 1fr 1fr;
+  gap: 22px;
+  align-items: stretch;
+}
+.pricing-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 28px 25px 24px;
+  border: 1px solid #e5e5e9;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow:
+    0 2px 6px #18181b05,
+    0 10px 28px #18181b09;
+}
+.pricing-card h2 {
+  font-size: 29px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.7px;
+}
+.pricing-card .pricing-description {
+  margin-top: 9px;
+  color: #62626b;
+  font-size: 13px;
+}
+.pricing-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 30px;
+}
+.pricing-price strong {
+  font-size: clamp(36px, 3.5vw, 48px);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -1.5px;
+}
+.pricing-price > span {
+  font-size: 14px;
+  color: #62626b;
+}
+.pricing-card .pricing-price-detail {
+  margin-top: 10px;
+  min-height: 43px;
+  color: #71717a;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.pricing-quotas {
+  display: grid;
+  gap: 19px;
+  padding: 22px 0;
+  border-top: 1px solid #ededf0;
+  border-bottom: 1px solid #ededf0;
+}
+.pricing-quotas > div {
+  display: flex;
+  gap: 17px;
+  align-items: center;
+}
+.pricing-quotas svg,
+.pricing-benefits svg,
+.pricing-rules svg {
+  flex: none;
+  color: #0f766e;
+}
+.pricing-quotas p {
+  display: grid;
+  gap: 3px;
+}
+.pricing-quotas strong {
+  font-size: 18px;
+  font-weight: 600;
+}
+.pricing-quotas span {
+  color: #71717a;
+  font-size: 13px;
+}
+.pricing-benefits {
+  display: grid;
+  gap: 16px;
+  padding: 22px 0 0;
+  margin: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.pricing-benefits li {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+}
+.pricing-benefits svg {
+  margin-top: 3px;
+}
+.pricing-free-rights {
+  flex: 1;
+  border-top: 1px solid #ededf0;
+}
+.pricing-free-rights .pricing-benefits svg {
+  color: #71717a;
+}
+.pricing-free-rights > p {
+  padding-top: 22px;
+  color: #71717a;
+  font-size: 13px;
+}
+.pricing-card .pricing-upgrade {
+  min-height: 62px;
+  padding: 20px 0;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 550;
+}
+.pricing-plus .pricing-upgrade {
+  color: #71717a;
+}
+.pricing-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #a1a1aa;
+  border-radius: 10px;
+  background: #fff;
+  color: #18181b;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    background 0.18s,
+    border-color 0.18s;
+}
+.pricing-card > .pricing-button {
+  width: 100%;
+  margin-top: auto;
+}
+.pricing-button:hover {
+  background: #f7f7f8;
+  border-color: #18181b;
+}
+.pricing-button-primary {
+  background: #18181b;
+  color: white;
+  border-color: #18181b;
+}
+.pricing-button-primary:hover {
+  background: #333336;
+}
+.pricing-pro {
+  border-color: #0f766e;
+  box-shadow:
+    0 3px 10px #0f766e09,
+    0 14px 32px #0f766e0d;
+}
+.pricing-recommended {
+  position: absolute;
+  top: 25px;
+  right: 24px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #0f766e;
+  color: white;
+  font-size: 12px;
+}
+.pricing-page .pricing-renewal {
+  margin-top: 24px;
+  color: #71717a;
+  font-size: 12px;
+  text-align: center;
+}
+.pricing-page .pricing-availability {
+  margin: 12px auto 0;
+  max-width: 800px;
+  color: #71717a;
+  font-size: 12px;
+  text-align: center;
+}
+.pricing-availability a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pricing-addons {
+  padding-top: 56px;
+}
+.pricing-addons > h2 {
+  font-size: 27px;
+  letter-spacing: -0.6px;
+}
+.pricing-addons > p {
+  margin-top: 8px;
+  color: #71717a;
+  font-size: 14px;
+}
+.pricing-addon-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 24px;
+}
+.pricing-addon-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid #e5e5e9;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 4px 18px #18181b08;
+}
+.pricing-addon-card > svg {
+  flex: none;
+  color: #0f766e;
+}
+.pricing-addon-card > div {
+  flex: 1;
+}
+.pricing-addon-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.pricing-addon-card p {
+  margin-top: 5px;
+  color: #71717a;
+  font-size: 12px;
+}
+.pricing-addon-card > strong {
+  font-size: 23px;
+  white-space: nowrap;
+}
+.pricing-addon-card .pricing-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pricing-rules {
+  margin-top: 36px;
+  padding: 24px;
+  border: 1px solid #e5e5e9;
+  border-radius: 14px;
+}
+.pricing-rules > h2 {
+  margin-bottom: 20px;
+  font-size: 21px;
+  font-weight: 600;
+}
+.pricing-rules > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.pricing-rules article {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+}
+.pricing-rules article + article {
+  border-left: 1px solid #e5e5e9;
+  padding-left: 24px;
+}
+.pricing-rules h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.pricing-rules p {
+  margin-top: 5px;
+  color: #71717a;
+  font-size: 12px;
+}
+.pricing-faq {
+  margin-top: 32px;
+}
+.pricing-faq details {
+  border-bottom: 1px solid #ededf0;
+  padding: 16px 0;
+}
+.pricing-faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+.pricing-faq summary::-webkit-details-marker {
+  display: none;
+}
+.pricing-faq details p {
+  margin-top: 12px;
+  max-width: 800px;
+  color: #71717a;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.pricing-faq details[open] summary > svg {
+  transform: rotate(45deg);
+}
+.pricing-dialog {
+  max-width: min(460px, calc(100vw - 32px));
+}
+.pricing-dialog h2 {
+  margin-top: 16px;
+  font-size: 25px;
+}
+.pricing-dialog .pricing-dialog-price {
+  margin: 16px 0;
+  font-size: 36px;
+  font-weight: 650;
+  color: #18181b;
+}
+.pricing-dialog .pricing-button {
+  width: 100%;
+  margin-top: 22px;
+}
+.pricing-coming {
+  color: #0f766e;
+  font-size: 13px;
+}
+@media (max-width: 1000px) {
+  .pricing-grid {
+    gap: 14px;
+  }
+  .pricing-card {
+    padding: 24px 18px;
+  }
+  .pricing-addon-card {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 20px;
+  }
+  .pricing-addon-card > .pricing-button {
+    margin-left: auto;
+  }
+}
+@media (max-width: 760px) {
+  .public-app .pricing-page {
+    padding: 22px 20px 48px;
+  }
+  .pricing-heading {
+    padding: 32px 0;
+  }
+  .pricing-heading > p {
+    font-size: 14px;
+  }
+  .pricing-periods button {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .pricing-periods button span {
+    font-size: 9px;
+  }
+  .pricing-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .pricing-card {
+    padding: 26px;
+  }
+  .pricing-free-rights {
+    padding-bottom: 26px;
+  }
+  .pricing-price strong {
+    font-size: 44px;
+  }
+  .pricing-price-detail {
+    min-height: 0 !important;
+    padding-bottom: 20px;
+  }
+  .pricing-addon-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .pricing-rules > div {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .pricing-rules article + article {
+    border-left: 0;
+    border-top: 1px solid #ededf0;
+    padding: 18px 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pricing-button,
+  .pricing-periods button {
+    transition: none;
+  }
+}

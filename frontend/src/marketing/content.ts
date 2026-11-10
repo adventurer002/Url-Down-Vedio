@@ -92,11 +92,6 @@ export function metadata(path: string) {
       description:
         "查看 VideoHub AI 的自制公开视频示例，核对原始字幕、本地演示总结器的处理结果、章节与思维导图。",
     },
-    "/examples/knowledge-loop": {
-      title: "让看过的内容真正留下来｜公开处理示例 — VideoHub AI",
-      description:
-        "一段 48 秒自制字幕短片的公开处理记录，包含原视频、字幕、章节总结、思维导图与处理来源说明，可逐项核对。",
-    },
     "/help": {
       title: "使用帮助｜视频转写、AI 总结与额度规则 — VideoHub AI",
       description:

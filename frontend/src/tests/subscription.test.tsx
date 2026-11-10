@@ -33,15 +33,12 @@ function login(id: string = user.id) {
     user: { ...user, id },
   });
 }
-function mount(path = "/subscription", initialCatalog?: typeof catalog) {
+function mount(path = "/subscription") {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <WorkspaceProvider>
         <Routes>
-          <Route
-            path="/subscription"
-            element={<SubscriptionView initialCatalog={initialCatalog} />}
-          />
+          <Route path="/subscription" element={<SubscriptionView />} />
           <Route path="/account" element={<AccountView />} />
         </Routes>
       </WorkspaceProvider>
@@ -75,62 +72,73 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
-it("renders the API catalog, switches addons and shows an unavailable purchase notice", async () => {
+it("shows the three approved offers without taking payments before entitlement delivery is ready", async () => {
   mount();
-  await screen.findByRole("heading", { name: "月度会员" });
-  expect(screen.getByText("19.90")).toBeTruthy();
-  expect(screen.queryByRole("heading", { name: "我的额度" })).toBeNull();
-  expect(screen.getByText("120 分钟语音转写")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "AI 次数包" }));
-  expect(screen.queryByText("120 分钟语音转写")).toBeNull();
-  expect(screen.getByText("100 次 AI 生成")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "加购说明" }));
-  const dialog = await screen.findByRole("dialog", { name: "100 次 AI 包" });
+  expect(screen.getByRole("heading", { name: "免费体验" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Plus" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Pro" })).toBeTruthy();
+  expect(
+    within(screen.getByRole("article", { name: "Plus" })).getByText("¥9.9"),
+  ).toBeTruthy();
+  expect(screen.getByText("¥16.9")).toBeTruthy();
+  expect(screen.getByText("每日 2 次视频解析")).toBeTruthy();
+  expect(screen.getByText("每日 10 GB 下载流量")).toBeTruthy();
+  expect(screen.getByText("每日下载流量不限量")).toBeTruthy();
+  for (const minutes of [20, 60, 120])
+    expect(screen.getByText(`单视频最长 ${minutes} 分钟`)).toBeTruthy();
+  screen.getByRole("button", { name: "选择 Pro" }).focus();
+  fireEvent.click(screen.getByRole("button", { name: "选择 Pro" }));
+  const dialog = screen.getByRole("dialog", { name: "Pro · 月付" });
   expect(within(dialog).getByText(/暂未开放在线购买/)).toBeTruthy();
   expect(within(dialog).queryByRole("button", { name: /支付/ })).toBeNull();
   fireEvent.click(within(dialog).getByRole("button", { name: "我知道了" }));
   expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "选择 Pro" }),
+  );
 });
-it("does not invent catalog values after failure and supports retry", async () => {
-  vi.mocked(api.catalog).mockRejectedValueOnce(
+it("publishes the proposed prices independently of the legacy live entitlement catalog", () => {
+  vi.mocked(api.catalog).mockRejectedValue(
     new ApiError("NETWORK_ERROR", "加载失败"),
   );
   mount();
-  await screen.findByText("加载失败");
-  expect(screen.queryByText("19.90")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /重新加载/ }));
-  expect(await screen.findByText("19.90")).toBeTruthy();
+  expect(screen.getByText("¥16.9")).toBeTruthy();
+  expect(screen.getByText(/新方案待开放/)).toBeTruthy();
+  expect(api.catalog).not.toHaveBeenCalled();
+  expect(api.allowances).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "购买AI 额度包" }));
+  const dialog = screen.getByRole("dialog", { name: "AI 额度包" });
+  expect(within(dialog).getByText("50 次 · 90 天有效")).toBeTruthy();
+  expect(within(dialog).getByText("¥5.9")).toBeTruthy();
 });
-it("retains the published plan after a refresh fails and enables actions only after live recovery", async () => {
-  const updated = {
-    ...catalog,
-    products: {
-      ...catalog.products,
-      monthly: { ...catalog.products.monthly, price_fen: 2990 },
-    },
-  };
-  vi.mocked(api.catalog)
-    .mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "刷新失败"))
-    .mockResolvedValueOnce(updated);
-  mount("/subscription", catalog);
-  await screen.findByText(/暂时无法更新方案/);
-  expect(screen.getByText("19.90")).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "免费体验" })).toBeTruthy();
-  expect(screen.getByText("120 分钟语音转写")).toBeTruthy();
-  const action = screen.getByRole("button", {
-    name: "开通说明",
-  }) as HTMLButtonElement;
-  expect(action.disabled).toBe(true);
-  fireEvent.click(action);
-  expect(screen.queryByRole("dialog")).toBeNull();
-  expect(
-    (screen.getByRole("button", { name: "免费开始体验" }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "重新加载套餐" }));
-  await screen.findByText("29.90");
-  expect(action.disabled).toBe(false);
-  expect(screen.queryByText(/暂时无法更新方案/)).toBeNull();
+it("switches all cycle totals while retaining monthly quotas and confirms the selected annual offer", () => {
+  mount();
+  const periods = within(screen.getByRole("group", { name: "付费周期" }));
+  for (const [label, plus, pro] of [
+    ["季付", "¥26.9", "¥45.9"],
+    ["年付", "¥99", "¥169"],
+    ["月付", "¥9.9", "¥16.9"],
+  ]) {
+    fireEvent.click(periods.getByRole("button", { name: new RegExp(label) }));
+    expect(
+      within(screen.getByRole("article", { name: "Plus" })).getByText(plus),
+    ).toBeTruthy();
+    expect(screen.getByText(pro)).toBeTruthy();
+    expect(screen.getByText("150 分钟 / 月")).toBeTruthy();
+    expect(screen.getByText("100 次 / 月")).toBeTruthy();
+    expect(
+      periods
+        .getAllByRole("button")
+        .filter((button) => button.getAttribute("aria-pressed") === "true"),
+    ).toHaveLength(1);
+  }
+  fireEvent.click(periods.getByRole("button", { name: /年付/ }));
+  expect(screen.getByText("一次支付 ¥169，折合 ¥14.08 / 月")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "选择 Plus" }));
+  const dialog = screen.getByRole("dialog", { name: "Plus · 年付" });
+  expect(within(dialog).getByText("¥99")).toBeTruthy();
+  expect(within(dialog).getByText(/服务期 12 个月/)).toBeTruthy();
+  expect(within(dialog).queryByRole("link", { name: /前往支付/ })).toBeNull();
 });
 it("shows real balances, held usage and expiry without exposing the previous account", async () => {
   login();
@@ -290,4 +298,35 @@ it("identifies both addon products in personal allowance details", async () => {
   expect(await screen.findByText("120 分钟转写包 · 转写额度")).toBeTruthy();
   expect(screen.getByText("100 次 AI 包 · AI额度")).toBeTruthy();
   expect(screen.queryByText(/其他.*额度/)).toBeNull();
+});
+
+it.each([
+  ["Plus", "月付", "¥9.9"],
+  ["Pro", "月付", "¥16.9"],
+  ["Plus", "季付", "¥26.9"],
+  ["Pro", "季付", "¥45.9"],
+  ["Plus", "年付", "¥99"],
+  ["Pro", "年付", "¥169"],
+])("keeps payments closed for %s %s and addons", (plan, period, price) => {
+  mount();
+  fireEvent.click(
+    within(screen.getByRole("group", { name: "付费周期" })).getByRole(
+      "button",
+      { name: new RegExp(period) },
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: `选择 ${plan}` }));
+  const dialog = screen.getByRole("dialog", { name: `${plan} · ${period}` });
+  const link = within(dialog).queryByRole("link", { name: /前往支付/ });
+  expect(within(dialog).getByText(price)).toBeTruthy();
+  expect(link).toBeNull();
+  expect(within(dialog).getByText(/暂未开放在线购买/)).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "我知道了" }));
+  fireEvent.click(screen.getByRole("button", { name: "购买转写额度包" }));
+  expect(
+    within(screen.getByRole("dialog", { name: "转写额度包" })).queryByRole(
+      "link",
+      { name: /前往支付/ },
+    ),
+  ).toBeNull();
 });
