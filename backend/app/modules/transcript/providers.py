@@ -19,6 +19,7 @@ from app.core.exceptions import AppException
 from app.core.security import normalize_url
 from app.infrastructure.http_client import PublicNetworkBackend, public_transport
 from app.modules.transcript.data import TranscriptData, make_transcript
+from app.modules.transcript.qwen_filetrans import QwenFiletransASRProvider
 
 
 asr_work_directory = ContextVar("asr_work_directory", default=None)
@@ -35,6 +36,8 @@ class ASRProvider(Protocol):
 
 
 class OpenAICompatibleASRProvider:
+    precise_timestamps = True
+
     def __init__(
         self,
         base_url: str,
@@ -149,6 +152,8 @@ class QwenASRProvider:
       messages 包在 input 内，需 parameters.format，响应文本在 output.sentence.text。
     音频按最多 120 秒切片；每段时间范围来自真实音频长度，并非逐句对齐时间戳。
     """
+
+    precise_timestamps = False
 
     def __init__(
         self,
@@ -502,6 +507,13 @@ class FallbackLocalASRProvider:
         return make_transcript(
             language or "und", [{"start": 0, "end": 1, "text": self.text}]
         )
+
+
+CLOUD_ASR_PROVIDERS = {
+    "openai_asr": OpenAICompatibleASRProvider,
+    "qwen_asr": QwenASRProvider,
+    "qwen_filetrans": QwenFiletransASRProvider,
+}
 
 
 def get_asr_provider(snapshot=None, *, managed=True) -> ASRProvider:

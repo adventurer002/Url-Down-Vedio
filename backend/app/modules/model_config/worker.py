@@ -151,7 +151,7 @@ async def run_checks(identifier, phase, factory, cancelled, progress):
             502,
         )
     capabilities = ["transcription"]
-    if adapter == "openai_asr":
+    if provider.precise_timestamps:
         with wave.open(str(path), "rb") as audio:
             duration = audio.getnframes() / audio.getframerate()
         if not reply.segments or any(
@@ -166,7 +166,7 @@ async def run_checks(identifier, phase, factory, cancelled, progress):
         "capabilities": capabilities,
         "checks": [
             "fixed_speech_recognized",
-            "segment_timestamps" if adapter == "openai_asr" else "coarse_timing_only",
+            "segment_timestamps" if provider.precise_timestamps else "coarse_timing_only",
         ],
     }
 

@@ -42,7 +42,10 @@ export interface ModelCatalog {
   active_release: string | null;
   uses: ModelUse[];
   enabled_uses?: ModelUse[];
-  adapters: Record<string, { label: string; family: "llm" | "asr" }>;
+  adapters: Record<
+    string,
+    { label: string; family: "llm" | "asr"; supports_timestamps?: boolean }
+  >;
   resources: ModelResource[];
   health?: {
     revision_id: string;

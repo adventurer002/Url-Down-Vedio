@@ -215,6 +215,63 @@ async def test_real_export_atomic_files_authorization_reuse_and_no_source_pollut
     assert third.result_payload["clip_export_id"] == str(result["id"])
 
 
+@pytest.mark.parametrize("mode", ["success", "timeout", "cancel"])
+async def test_filetrans_pipeline_renders_or_cleans_up_real_clip_audio(clips, mode):
+    from test_qwen_filetrans import FiletransServer
+
+    u = clips
+    _, plan, _ = await plan_task(u)
+    server = FiletransServer()
+    server.language = None
+    server.statuses = ["SUCCEEDED"]
+    server.result = {
+        "transcripts": [
+            {
+                "sentences": [
+                    {
+                        "begin_time": i * 4000,
+                        "end_time": i * 4000 + 3000,
+                        "text": text,
+                        "language": "zh",
+                    }
+                    for i, text in enumerate(TEXTS)
+                ]
+            }
+        ]
+    }
+    server.block_poll = mode != "success"
+    provider = server.provider(timeout=0.1 if mode == "timeout" else 10)
+    before = u.billing.repository.balance(u.user.id)["balances"]
+    before_files = u.clips.media.storage_keys()
+    operation = asyncio.create_task(export_task(u, plan, provider=provider))
+    if mode == "cancel":
+        await asyncio.wait_for(server.polling.wait(), 10)
+        with u.repository.sessions() as session:
+            task_id = session.scalar(
+                select(Task.id).where(Task.task_type == "clips_export")
+            )
+        u.repository.request_cancel(task_id)
+    task, _ = await asyncio.wait_for(operation, 20)
+    assert (
+        task.status
+        == {"success": "completed", "timeout": "failed", "cancel": "cancelled"}[mode]
+    )
+    if mode == "success":
+        result = await u.clips.export(
+            u.user, UUID(task.result_payload["clip_export_id"])
+        )
+        assert len(result["items"]) == 2
+        assert all(item["verification"]["decoded"] for item in result["items"])
+    else:
+        assert task.error_code == (
+            "ASR_TIMEOUT" if mode == "timeout" else "TASK_CANCELLED"
+        )
+        assert u.clips.media.storage_keys() == before_files
+    assert u.billing.repository.balance(u.user.id)["balances"] == before
+    assert not (u.storage.root / "tmp" / str(task.id)).exists()
+    assert not list((u.storage.root / ".reservations").glob("*.json"))
+
+
 @pytest.mark.parametrize("mode", ["mismatch", "timeout", "cancel", "second_render"])
 async def test_failed_export_no_partial_files_no_charge_and_source_preserved(clips, mode):
     u = clips

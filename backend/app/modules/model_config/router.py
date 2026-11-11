@@ -26,7 +26,7 @@ def get_model_config_service():
 class Operation(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     key: str = Field(min_length=1, max_length=100)
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
 
 
 class RevisionRequest(Operation):
@@ -36,7 +36,7 @@ class RevisionRequest(Operation):
 
 
 class ConnectionRequest(RevisionRequest):
-    adapter: Literal["openai_chat", "openai_asr", "qwen_asr"]
+    adapter: Literal["openai_chat", "openai_asr", "qwen_asr", "qwen_filetrans"]
     base_url: str = Field(min_length=1, max_length=2048)
     api_key: SecretStr | None = Field(default=None, max_length=4096)
 

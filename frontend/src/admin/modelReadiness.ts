@@ -22,7 +22,10 @@ export function modelIssue(
   if (!version.has_key || version.revoked) return "密钥不可用或已撤销";
   const family = ["transcription", "clip_timing"].includes(use) ? "asr" : "llm";
   if (model.family !== family) return "模型类型不匹配";
-  if (use === "clip_timing" && version.adapter !== "openai_asr")
+  if (
+    use === "clip_timing" &&
+    data.adapters[version.adapter || ""]?.supports_timestamps === false
+  )
     return "需要精确分段时间戳";
   const proof = data.probes.find(
     (p) => p.revision_id === id && p.phase === "compatibility",

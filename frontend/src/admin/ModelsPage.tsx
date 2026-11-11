@@ -2,7 +2,6 @@ import "./models.css";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { bindingIssues, modelIssue } from "./modelReadiness";
 import { useDiscardGuard } from "./useDiscardGuard";
 import {
@@ -19,6 +18,7 @@ import { ErrorState, Loading, Panel, formatDateTime } from "./ui";
 import Icon from "../components/Icon";
 
 const pendingStatuses = ["pending", "queued", "running", "processing"];
+const validModelReason = (value: string) => !value.trim() || validReason(value);
 const probeErrors: Record<string, string> = {
   LLM_TIMEOUT: "模型请求超时，请检查地址或超时设置",
   ASR_TIMEOUT: "转写请求超时，请检查服务或超时设置",
@@ -28,6 +28,9 @@ const probeErrors: Record<string, string> = {
   MODEL_SCHEMA_INVALID: "模型未返回有效 JSON 结果",
   LLM_API_ERROR: "模型服务请求失败，请检查密钥、模型 ID 和服务额度",
   ASR_API_ERROR: "语音服务请求失败，请检查配置与额度",
+  ASR_AUTH_ERROR: "语音服务鉴权失败，请检查密钥、地域和模型权限",
+  ASR_SUBMISSION_UNKNOWN: "转写提交结果未确认，请先核对服务商任务记录",
+  ASR_TASK_FAILED: "语音转写任务失败，请检查文件格式和模型权限",
   MODEL_TRANSCRIPT_MISMATCH: "固定语音识别结果不匹配",
   MODEL_TIMESTAMPS_INVALID: "模型未返回有效分段时间戳",
   MODEL_CREDENTIAL_REVOKED: "密钥已撤销",
@@ -44,7 +47,11 @@ function versions(data: ModelCatalog, kind: "connection" | "model") {
   return data.resources
     .filter((r) => r.kind === kind && !r.archived)
     .flatMap((r) =>
-      r.revisions.map((v) => ({ ...v, label: `${r.name} · v${v.version}` })),
+      r.revisions.map((v, index) => ({
+        ...v,
+        label: r.name,
+        latest: index === 0,
+      })),
     );
 }
 function liveBindings(data: ModelCatalog) {
@@ -54,43 +61,6 @@ function liveBindings(data: ModelCatalog) {
       ModelUse,
       string | null
     >)
-  );
-}
-
-function MoreActions({
-  items,
-}: {
-  items: {
-    label: string;
-    run: () => void;
-    disabled?: boolean;
-    danger?: boolean;
-  }[];
-}) {
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger className="admin-button" aria-label="更多操作">
-        更多
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          className="admin-model-menu"
-          align="end"
-          sideOffset={6}
-        >
-          {items.map((item) => (
-            <DropdownMenu.Item
-              key={item.label}
-              className={`admin-model-menu-item${item.danger ? " admin-model-danger-text" : ""}`}
-              disabled={item.disabled}
-              onSelect={item.run}
-            >
-              {item.label}
-            </DropdownMenu.Item>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
   );
 }
 
@@ -118,7 +88,9 @@ function Editor({
   const [adapter, setAdapter] = useState(old?.adapter || "openai_chat");
   const [url, setUrl] = useState(old?.base_url || "");
   const [secret, setSecret] = useState("");
-  const connections = versions(data, "connection");
+  const connections = versions(data, "connection").filter(
+    (v) => v.latest || v.id === old?.connection_revision,
+  );
   const [connection, setConnection] = useState(
     old?.connection_revision || connections[0]?.id || "",
   );
@@ -152,6 +124,8 @@ function Editor({
   const family =
     data.adapters[connections.find((c) => c.id === connection)?.adapter || ""]
       ?.family;
+  const filetransModel =
+    connections.find((c) => c.id === connection)?.adapter === "qwen_filetrans";
   return (
     <>
       <Dialog.Root
@@ -170,7 +144,7 @@ function Editor({
             <Dialog.Description>
               {kind === "connection"
                 ? "维护接口地址与密钥，多个模型可以复用同一连接。"
-                : "保存后生成新版本；测试通过并应用到功能后生效。"}
+                : "保存后完成测试，再到功能分配中应用。"}
             </Dialog.Description>
             {error && (
               <div role="alert" className="admin-error">
@@ -196,7 +170,7 @@ function Editor({
               className="admin-model-form"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!validReason(reason) || busy) return;
+                if (!validModelReason(reason) || busy) return;
                 const common = {
                   id: resource?.id || null,
                   expected_version: resource?.version || 0,
@@ -268,7 +242,11 @@ function Editor({
                       maxLength={2048}
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://api.example.com/v1"
+                      placeholder={
+                        adapter === "qwen_filetrans"
+                          ? "https://dashscope.aliyuncs.com/api/v1"
+                          : "https://api.example.com/v1"
+                      }
                     />
                   </label>
                   <label>
@@ -285,13 +263,19 @@ function Editor({
                     />
                   </label>
                   <p className="admin-footnote">
-                    密钥加密保存，保存后不回显。变更连接会生成新版本；模型需选择新连接版本并重新测试后发布。
+                    密钥加密保存，保存后不回显。变更连接后，模型需选择更新后的连接并重新测试。
                   </p>
+                  {adapter === "qwen_filetrans" && (
+                    <p className="admin-footnote">
+                      本地验证使用百炼临时存储上传音频，云端文件由服务商在 48
+                      小时后清理。
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
                   <label>
-                    服务连接版本
+                    服务连接
                     <select
                       required
                       value={connection}
@@ -301,6 +285,7 @@ function Editor({
                       {connections.map((c) => (
                         <option disabled={!c.has_key} value={c.id} key={c.id}>
                           {c.label}
+                          {c.latest ? "" : "（当前连接）"}
                           {c.has_key ? "" : "（密钥不可用）"}
                         </option>
                       ))}
@@ -313,7 +298,11 @@ function Editor({
                       maxLength={128}
                       value={model}
                       onChange={(e) => setModel(e.target.value)}
-                      placeholder="填写服务商提供的模型 ID"
+                      placeholder={
+                        filetransModel
+                          ? "qwen3-asr-flash-filetrans"
+                          : "填写服务商提供的模型 ID"
+                      }
                     />
                   </label>
                   <div className="admin-model-field-row">
@@ -390,9 +379,9 @@ function Editor({
                 </>
               )}
               <label>
-                操作原因
+                操作原因（选填）
                 <textarea
-                  required
+                  aria-label="操作原因"
                   maxLength={500}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
@@ -401,7 +390,7 @@ function Editor({
               <div className="admin-detail-actions">
                 <button
                   className="admin-button admin-button-primary"
-                  disabled={busy || !validReason(reason)}
+                  disabled={busy || !validModelReason(reason)}
                 >
                   保存草稿
                 </button>
@@ -430,40 +419,21 @@ function Confirm({
   busy,
   error,
   retry,
-  credentialId,
 }: {
   title: string;
   description: string;
   close: () => void;
-  submit: (reason: string, expectedVersion?: number) => void;
-  credentialId?: string;
+  submit: (reason: string) => void;
   busy: boolean;
   error: string;
   retry?: () => void;
 }) {
   const [reason, setReason] = useState("");
-  const [checked, setChecked] = useState(false);
-  const impact = useQuery({
-    queryKey: ["admin", "models", "credential-impact", credentialId],
-    queryFn: ({ signal }) => modelApi.credentialImpact(credentialId!, signal),
-    enabled: !!credentialId,
-    staleTime: 0,
-  });
-  useEffect(() => {
-    if (credentialId) setChecked(false);
-  }, [credentialId, impact.dataUpdatedAt]);
-  const blocked =
-    busy ||
-    (!!credentialId &&
-      (!impact.data ||
-        impact.isFetching ||
-        impact.isError ||
-        impact.data.revoked));
   return (
     <Dialog.Root
       open
       onOpenChange={(v) => {
-        if (!v) close();
+        if (!v && !busy) close();
       }}
     >
       <Dialog.Portal>
@@ -472,61 +442,6 @@ function Confirm({
           <Dialog.Content className="admin-dialog">
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Description>{description}</Dialog.Description>
-            {credentialId && (
-              <section className="admin-model-impact" aria-label="密钥影响范围">
-                <h3>影响范围</h3>
-                {impact.isPending ? (
-                  <Loading />
-                ) : impact.isError ? (
-                  <ErrorState
-                    error={impact.error}
-                    retry={() => void impact.refetch()}
-                  />
-                ) : (
-                  impact.data && (
-                    <>
-                      {impact.data.revoked && (
-                        <p role="alert">此密钥已撤销，请刷新配置。</p>
-                      )}
-                      <p>
-                        {impact.data.connections.length} 个连接版本、
-                        {impact.data.models.length} 个模型版本共用此密钥。
-                      </p>
-                      <ul>
-                        {impact.data.connections.map((c) => (
-                          <li key={c.id}>
-                            {c.name} · v{c.version}
-                            {c.archived ? "（已归档）" : ""}
-                          </li>
-                        ))}
-                      </ul>
-                      {impact.data.models.length ? (
-                        <ul>
-                          {impact.data.models.map((m) => (
-                            <li key={m.id}>
-                              <strong>
-                                {m.name} · v{m.version}
-                              </strong>
-                              {m.archived ? "（已归档）" : ""}
-                              <span>
-                                {m.active_uses.length
-                                  ? `正在使用：${m.active_uses.map((use) => modelUses[use]).join("、")}`
-                                  : "当前未分配功能；历史任务仍可能引用"}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>暂无模型引用。</p>
-                      )}
-                      <p>
-                        撤销会同时影响以上全部版本，包括当前功能的后续请求。已发出的请求可能继续完成。
-                      </p>
-                    </>
-                  )
-                )}
-              </section>
-            )}
             {error && (
               <div role="alert" className="admin-error">
                 {error}
@@ -545,35 +460,31 @@ function Confirm({
               className="admin-model-form"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!blocked && checked && validReason(reason))
-                  submit(reason, impact.data?.version);
+                if (!busy && validModelReason(reason)) submit(reason);
               }}
             >
               <label>
-                操作原因
+                操作原因（选填）
                 <textarea
-                  required
+                  aria-label="操作原因"
                   maxLength={500}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                 />
               </label>
-              <label className="admin-model-check">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(e) => setChecked(e.target.checked)}
-                />
-                我已核对影响
-              </label>
               <div className="admin-detail-actions">
                 <button
                   className="admin-button admin-button-danger"
-                  disabled={blocked || !checked || !validReason(reason)}
+                  disabled={busy || !validModelReason(reason)}
                 >
-                  确认操作
+                  确认删除
                 </button>
-                <button type="button" className="admin-button" onClick={close}>
+                <button
+                  type="button"
+                  className="admin-button"
+                  disabled={busy}
+                  onClick={close}
+                >
                   取消
                 </button>
               </div>
@@ -610,7 +521,6 @@ function Workspace({
     description: string;
     path: string;
     body: Record<string, unknown>;
-    credentialId?: string;
   }>();
   const [draft, setDraft] = useState<{
     version: number;
@@ -626,7 +536,7 @@ function Workspace({
     models = versions(data, "model");
   const title = (id: string | null) => {
     if (!id) return "未分配";
-    return models.find((m) => m.id === id)?.label || "历史配置版本";
+    return models.find((m) => m.id === id)?.label || "配置不可用";
   };
   const draftDirty =
     !!draft &&
@@ -639,6 +549,19 @@ function Workspace({
   const changes = draft
     ? data.uses.filter((use) => draft.bindings[use] !== bindings[use])
     : [];
+  const publishBlockers = [
+    ...(busy ? ["正在提交，请稍候"] : []),
+    ...(!data.enabled ? ["服务端尚未启用模型管理"] : []),
+    ...(draft && draft.version !== data.version
+      ? ["当前配置已更新，请重新载入当前分配"]
+      : []),
+    ...issues,
+    ...(!changes.length ? ["暂无配置变更，请先调整功能分配"] : []),
+    ...(!checked ? ["请勾选「已核对功能分配和模型测试结果」"] : []),
+    ...(!validModelReason(reason)
+      ? ["发布原因需在 500 字以内且不含控制字符"]
+      : []),
+  ];
   const testActive = (id: string, phase: string) =>
     data.probes.some(
       (p) =>
@@ -646,15 +569,6 @@ function Workspace({
         p.phase === phase &&
         pendingStatuses.includes(p.status),
     );
-  function revokeKey(id: string, label: string) {
-    setConfirm({
-      title: label,
-      description: "先核对所有共用此密钥的配置。撤销后无法通过回滚恢复。",
-      path: `credentials/${id}/revoke`,
-      body: {},
-      credentialId: id,
-    });
-  }
   function proof(id: string, phase: string) {
     return data.probes.find((p) => p.revision_id === id && p.phase === phase);
   }
@@ -668,11 +582,11 @@ function Workspace({
       reason: `管理员发起${phase === "connection" ? "连接" : "业务兼容"}测试`,
     });
   }
-  function archive(r: ModelResource) {
+  function deleteResource(r: ModelResource) {
     setConfirm({
-      title: `归档 ${r.name}`,
+      title: `删除 ${r.name}`,
       description:
-        "归档后不能用于新发布。任务历史与已创建任务的配置版本会保留。正在使用的配置须先替换功能分配。",
+        "删除后将从配置列表中移除。正在使用的配置需先在功能分配中替换。",
       path: `resources/${r.id}/archive`,
       body: { expected_version: r.version },
     });
@@ -713,30 +627,22 @@ function Workspace({
                 <caption className="admin-sr-only">服务连接</caption>
                 <thead>
                   <tr>
-                    {[
-                      "名称 / 版本",
-                      "适配类型",
-                      "API 地址",
-                      "密钥状态",
-                      "操作",
-                    ].map((t) => (
-                      <th key={t}>{t}</th>
-                    ))}
+                    {["名称", "适配类型", "API 地址", "密钥状态", "操作"].map(
+                      (t) => (
+                        <th key={t}>{t}</th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {data.resources
-                    .filter((r) => r.kind === "connection")
+                    .filter((r) => r.kind === "connection" && !r.archived)
                     .map((r) => {
                       const v = r.revisions[0];
                       return (
                         <tr key={r.id}>
-                          <td data-label="名称 / 版本">
+                          <td data-label="名称">
                             <strong>{r.name}</strong>
-                            <small>
-                              v{r.version}
-                              {r.archived ? " · 已归档" : ""}
-                            </small>
                           </td>
                           <td data-label="适配类型">
                             {data.adapters[v.adapter!]?.label}
@@ -764,51 +670,13 @@ function Workspace({
                               >
                                 编辑
                               </button>
-                              <MoreActions
-                                items={[
-                                  {
-                                    label: "归档",
-                                    run: () => archive(r),
-                                    disabled: busy || r.archived,
-                                  },
-                                  ...(v.has_key
-                                    ? [
-                                        {
-                                          label: "撤销密钥",
-                                          run: () =>
-                                            revokeKey(
-                                              v.credential_id!,
-                                              "撤销此密钥版本",
-                                            ),
-                                          disabled: busy,
-                                          danger: true,
-                                        },
-                                      ]
-                                    : []),
-                                  ...r.revisions
-                                    .slice(1)
-                                    .filter(
-                                      (old, index, all) =>
-                                        old.has_key &&
-                                        old.credential_id !== v.credential_id &&
-                                        all.findIndex(
-                                          (x) =>
-                                            x.credential_id ===
-                                            old.credential_id,
-                                        ) === index,
-                                    )
-                                    .map((old) => ({
-                                      label: `撤销历史 v${old.version} 密钥`,
-                                      run: () =>
-                                        revokeKey(
-                                          old.credential_id!,
-                                          `撤销历史 v${old.version} 密钥`,
-                                        ),
-                                      disabled: busy,
-                                      danger: true,
-                                    })),
-                                ]}
-                              />
+                              <button
+                                className="admin-button admin-button-danger"
+                                disabled={busy}
+                                onClick={() => deleteResource(r)}
+                              >
+                                删除
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -816,7 +684,9 @@ function Workspace({
                     })}
                 </tbody>
               </table>
-              {!data.resources.some((r) => r.kind === "connection") && (
+              {!data.resources.some(
+                (r) => r.kind === "connection" && !r.archived,
+              ) && (
                 <p className="admin-empty">先添加一个服务连接，再添加模型。</p>
               )}
             </div>
@@ -855,7 +725,7 @@ function Workspace({
                 </thead>
                 <tbody>
                   {data.resources
-                    .filter((r) => r.kind === "model")
+                    .filter((r) => r.kind === "model" && !r.archived)
                     .map((r) => {
                       const v = r.revisions[0],
                         activeUses = Object.entries(bindings).filter(([, id]) =>
@@ -864,13 +734,7 @@ function Workspace({
                       return (
                         <tr key={r.id}>
                           <td data-label="名称 / 模型 ID">
-                            <strong>
-                              {r.name}{" "}
-                              <small>
-                                v{v.version}
-                                {r.archived ? " · 已归档" : ""}
-                              </small>
-                            </strong>
+                            <strong>{r.name}</strong>
                             <span>{v.model_id}</span>
                           </td>
                           <td data-label="类型 / 使用情况">
@@ -878,10 +742,7 @@ function Workspace({
                             <small>
                               {activeUses.length
                                 ? activeUses
-                                    .map(
-                                      ([use, id]) =>
-                                        `${modelUses[use as ModelUse]} v${r.revisions.find((x) => x.id === id)?.version}`,
-                                    )
+                                    .map(([use]) => modelUses[use as ModelUse])
                                     .join("、")
                                 : "尚未发布"}
                             </small>
@@ -1019,15 +880,13 @@ function Workspace({
                               >
                                 兼容测试
                               </button>
-                              <MoreActions
-                                items={[
-                                  {
-                                    label: "归档",
-                                    run: () => archive(r),
-                                    disabled: busy || r.archived,
-                                  },
-                                ]}
-                              />
+                              <button
+                                className="admin-button admin-button-danger"
+                                disabled={busy}
+                                onClick={() => deleteResource(r)}
+                              >
+                                删除
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1035,7 +894,9 @@ function Workspace({
                     })}
                 </tbody>
               </table>
-              {!data.resources.some((r) => r.kind === "model") && (
+              {!data.resources.some(
+                (r) => r.kind === "model" && !r.archived,
+              ) && (
                 <p className="admin-empty">
                   添加模型 ID，完成测试后到「功能分配」应用配置。
                 </p>
@@ -1071,20 +932,14 @@ function Workspace({
         <>
           <Panel
             title="功能分配"
-            description="草稿统一发布，新建任务使用新版本，已创建任务继续使用原版本。"
+            description="应用后，新建任务使用更新后的配置。"
           >
             {draft && (
               <form
                 className="admin-model-form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (
-                    !busy &&
-                    !issues.length &&
-                    changes.length &&
-                    checked &&
-                    validReason(reason)
-                  )
+                  if (!publishBlockers.length)
                     void write(
                       "publish",
                       {
@@ -1102,7 +957,7 @@ function Workspace({
               >
                 <p className="admin-footnote">
                   {data.active_release
-                    ? `当前已发布版本 ${data.version}`
+                    ? "当前配置已生效"
                     : "尚未发布，项目沿用服务器环境配置。"}
                 </p>
                 {draft.version !== data.version && (
@@ -1153,12 +1008,16 @@ function Workspace({
                           }}
                         >
                           <option value="">
-                            {family === "asr"
+                            {use === "transcription"
                               ? "停用此项模型能力"
                               : "请选择模型"}
                           </option>
                           {models
-                            .filter((m) => m.family === family)
+                            .filter(
+                              (m) =>
+                                m.family === family &&
+                                (m.latest || m.id === draft.bindings[use]),
+                            )
                             .map((m) => {
                               const issue = modelIssue(data, m.id, use);
                               const supported = !issue;
@@ -1235,9 +1094,9 @@ function Workspace({
                   )}
                 </section>
                 <label>
-                  发布原因
+                  发布原因（选填）
                   <textarea
-                    required
+                    aria-label="发布原因"
                     maxLength={500}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
@@ -1251,70 +1110,30 @@ function Workspace({
                   />
                   已核对功能分配和模型测试结果
                 </label>
-                <button
-                  className="admin-button admin-button-primary"
-                  disabled={
-                    busy ||
-                    !data.enabled ||
-                    !checked ||
-                    !validReason(reason) ||
-                    draft.version !== data.version ||
-                    issues.length > 0 ||
-                    changes.length === 0
-                  }
-                >
-                  应用配置
-                </button>
-              </form>
-            )}
-          </Panel>
-          <Panel
-            title="发布历史"
-            description="回滚会重新验证模型、测试结果及密钥状态，已撤销密钥不会被恢复。"
-          >
-            <div className="admin-model-release-list">
-              {data.releases.map((r, index) => (
-                <div key={r.id}>
-                  <span>
-                    {formatDateTime(r.created_at)}
-                    {r.version != null ? ` · 版本 ${r.version}` : ""}
-                    {r.id === data.active_release ? " · 当前生效" : ""}
-                    <small>
-                      操作人：{r.actor_label || r.actor_id || "历史记录未提供"}
-                    </small>
-                    <small>原因：{r.reason || "历史记录未提供"}</small>
-                    <small>
-                      {Object.entries(r.bindings)
-                        .filter(([, v]) => v)
-                        .map(
-                          ([use, id]) =>
-                            `${modelUses[use as ModelUse]}：${title(id)}`,
-                        )
-                        .join("；")}
-                    </small>
-                  </span>
+                <div className="admin-model-publish-actions">
                   <button
-                    className="admin-button"
-                    disabled={busy || r.id === data.active_release}
-                    onClick={() =>
-                      setConfirm({
-                        title: "回滚功能分配",
-                        description:
-                          "将此历史分配重新发布为一个新版本，已创建任务继续使用各自锁定的版本。",
-                        path: "publish",
-                        body: {
-                          expected_version: data.version,
-                          release_id: r.id,
-                        },
-                      })
+                    className="admin-button admin-button-primary"
+                    disabled={publishBlockers.length > 0}
+                    aria-describedby={
+                      publishBlockers.length
+                        ? "model-publish-blockers"
+                        : undefined
                     }
                   >
-                    回滚到此版本
+                    应用配置
                   </button>
+                  <div id="model-publish-blockers" role="status">
+                    {publishBlockers.length > 0 && (
+                      <ul>
+                        {publishBlockers.map((message) => (
+                          <li key={message}>{message}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-              ))}
-              {!data.releases.length && <p>暂无发布记录。</p>}
-            </div>
+              </form>
+            )}
           </Panel>
         </>
       )}
@@ -1337,19 +1156,15 @@ function Workspace({
           retry={retry}
           close={() => setConfirm(undefined)}
           busy={busy}
-          submit={(reason, expectedVersion) =>
+          submit={(reason) =>
             void write(
               confirm.path,
               {
                 ...confirm.body,
                 reason,
-                ...(confirm.credentialId
-                  ? { expected_version: expectedVersion }
-                  : {}),
               },
               () => {
                 setConfirm(undefined);
-                setDraft(undefined);
               },
             )
           }
@@ -1421,7 +1236,9 @@ export default function ModelsPage() {
       setSuccess(
         item.path === "tests"
           ? "测试任务已创建，可在模型列表查看结果。"
-          : "操作已确认。",
+          : item.path.endsWith("/archive")
+            ? "配置已删除。"
+            : "操作已确认。",
       );
       await client.invalidateQueries({
         queryKey: ["admin", "models", item.owner],

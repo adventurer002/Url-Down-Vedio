@@ -1,6 +1,7 @@
 """Model configuration transactions, runtime pinning and probes; no live vendor requests."""
 
 from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 from unittest.mock import AsyncMock
@@ -472,6 +473,73 @@ async def test_http_permissions_secret_masking_and_invalid_bindings(models):
         ).status_code == 422
 
 
+@pytest.mark.parametrize("reason_fields", [{}, {"reason": ""}, {"reason": "   "}])
+async def test_optional_reasons_save_and_publish_through_http(models, monkeypatch, reason_fields):
+    m = models
+    monkeypatch.setattr(settings, "CLIPS_ENABLED", False)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(m.d.app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/admin/models/connections",
+            headers=headers(m.d),
+            json={
+                "key": "optional-connection",
+                "name": "Optional reason connection",
+                "adapter": "openai_chat",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "fixture-secret",
+                **reason_fields,
+            },
+        )
+        assert response.status_code == 200, response.text
+        connection_id = response.json()["data"]["revision_id"]
+        response = await client.post(
+            "/api/v1/admin/models/models",
+            headers=headers(m.d),
+            json={
+                "key": "optional-model",
+                "name": "Optional reason model",
+                "connection_revision": connection_id,
+                "model_id": "fixture-model",
+                **reason_fields,
+            },
+        )
+        assert response.status_code == 200, response.text
+        model_id = response.json()["data"]["revision_id"]
+        m.test(model_id)
+        response = await client.post(
+            "/api/v1/admin/models/publish",
+            headers=headers(m.d),
+            json={
+                "key": "optional-publish",
+                "expected_version": 0,
+                "bindings": {
+                    use: None if use in {"transcription", "clip_timing"} else model_id
+                    for use in runtime.USES
+                },
+                **reason_fields,
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert m.service.catalog()["releases"][0]["reason"] == "未填写"
+        retry = await client.post(
+            "/api/v1/admin/models/publish",
+            headers=headers(m.d),
+            json={
+                "key": "optional-publish",
+                "expected_version": 0,
+                "bindings": {
+                    use: None if use in {"transcription", "clip_timing"} else model_id
+                    for use in runtime.USES
+                },
+                **reason_fields,
+            },
+        )
+        assert retry.status_code == 200
+        assert retry.json()["data"]["duplicate"] is True
+
+
 async def test_business_probe_runs_real_validators_and_reports_capabilities(
     models, monkeypatch
 ):
@@ -662,6 +730,96 @@ async def test_asr_probe_checks_real_segments_and_qwen_cannot_claim_precise_timi
         row["scope"] == "test" and row["count"] == 1 and row["success_count"] == 1
         for row in health
     )
+
+
+async def test_filetrans_probe_publish_and_frozen_runtime_binding(models, monkeypatch):
+    from app.modules.transcript.data import make_transcript
+
+    m = models
+    monkeypatch.setattr(settings, "CLIPS_ENABLED", True)
+    calls = []
+
+    async def sample(self, path, language):
+        calls.append((self.model, self.timeout, self.max_bytes))
+        return make_transcript(
+            "en", [{"start": 0.25, "end": 1.5, "text": "The meeting starts at nine."}]
+        )
+
+    monkeypatch.setattr(
+        "app.modules.transcript.qwen_filetrans.QwenFiletransASRProvider.transcribe",
+        sample,
+    )
+    connection = m.connection(adapter="qwen_filetrans")
+    model = m.model(connection["revision_id"], timeout=180, max_upload_mb=15)
+
+    async def cancelled():
+        return False
+
+    async def progress(*args):
+        pass
+
+    result = await run_checks(
+        model["revision_id"], "compatibility", m.d.sessions, cancelled, progress
+    )
+    assert result["capabilities"] == ["transcription", "clip_timing"]
+    m.test(model["revision_id"], capabilities=result["capabilities"])
+    text_connection = m.connection()
+    text_model = m.model(text_connection["revision_id"])
+    m.test(text_model["revision_id"])
+    bindings = {
+        use: model["revision_id"]
+        if use in {"transcription", "clip_timing"}
+        else text_model["revision_id"]
+        for use in runtime.USES
+    }
+    m.service.publish(
+        m.actor,
+        PublishRequest(key="publish-filetrans", expected_version=0, bindings=bindings),
+        "req_test",
+    )
+    with m.d.sessions() as session:
+        snapshot = runtime.capture(session)
+    provider = runtime.asr("clip_timing", snapshot, m.d.sessions)
+    assert provider.precise_timestamps and provider.available
+    # Editing a model must not redirect an already-created task to a new revision.
+    m.model(
+        connection["revision_id"], id=UUID(model["id"]), expected_version=1, timeout=300
+    )
+    reply = await provider.transcribe(Path("not-read-by-fixture.wav"), "en")
+    assert reply.segments[0]["start"] == 0.25
+    assert calls[-1] == ("upstream-v1", 180, 15 * 1024 * 1024)
+    assert (
+        m.service.catalog()["adapters"]["qwen_filetrans"]["supports_timestamps"] is True
+    )
+
+
+async def test_filetrans_probe_rejects_timestamps_outside_the_fixed_sample(
+    models, monkeypatch
+):
+    from app.modules.transcript.data import make_transcript
+
+    m = models
+
+    async def invalid(self, path, language):
+        return make_transcript(
+            "en", [{"start": 0, "end": 999, "text": "The meeting starts at nine."}]
+        )
+
+    monkeypatch.setattr(
+        "app.modules.transcript.qwen_filetrans.QwenFiletransASRProvider.transcribe",
+        invalid,
+    )
+    connection = m.connection(adapter="qwen_filetrans")
+    model = m.model(connection["revision_id"])
+    with pytest.raises(AppException) as error:
+        await run_checks(
+            model["revision_id"],
+            "compatibility",
+            m.d.sessions,
+            lambda: False,
+            lambda *args: None,
+        )
+    assert error.value.code == "MODEL_TIMESTAMPS_INVALID"
 
 
 def test_audit_failure_rolls_back_encrypted_connection_and_secret(models):
