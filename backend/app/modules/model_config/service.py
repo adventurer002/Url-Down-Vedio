@@ -16,13 +16,17 @@ from app.modules.model_config.models import (
 )
 from app.modules.model_config.security import endpoint, encrypt
 from app.modules.model_config.runtime import USES
+from app.modules.transcript.providers import CLOUD_ASR_PROVIDERS
 from app.modules.tasks.repository import TaskRepository
 
 ADAPTERS = {
     "openai_chat": {"label": "OpenAI 兼容文本接口", "family": "llm"},
     "openai_asr": {"label": "OpenAI 兼容语音转写", "family": "asr"},
     "qwen_asr": {"label": "千问语音转写", "family": "asr"},
+    "qwen_filetrans": {"label": "千问 Filetrans（支持时间戳）", "family": "asr"},
 }
+for adapter, provider in CLOUD_ASR_PROVIDERS.items():
+    ADAPTERS[adapter]["supports_timestamps"] = provider.precise_timestamps
 
 
 class ModelConfigService:
@@ -74,7 +78,7 @@ class ModelConfigService:
             actor,
             "model." + action,
             target,
-            body.reason,
+            body.reason.strip() or "未填写",
             body.key,
             request_id,
             payload,
@@ -294,7 +298,9 @@ class ModelConfigService:
                 raise AppException(
                     "MODEL_CAPABILITY_MISMATCH", "模型类型与功能不匹配", 422
                 )
-            if use == "clip_timing" and connection.payload["adapter"] != "openai_asr":
+            if use == "clip_timing" and not ADAPTERS[
+                connection.payload["adapter"]
+            ].get("supports_timestamps"):
                 raise AppException(
                     "MODEL_TIMESTAMPS_REQUIRED", "精确定位需要真实分段时间戳", 422
                 )
@@ -379,7 +385,7 @@ class ModelConfigService:
                 )
                 if identifier in {model_head.id, connection_head.id}:
                     raise AppException(
-                        "MODEL_IN_USE", "请先替换功能分配，再归档此配置", 409
+                        "MODEL_IN_USE", "请先替换功能分配，再删除此配置", 409
                     )
             head.archived = True
             return (

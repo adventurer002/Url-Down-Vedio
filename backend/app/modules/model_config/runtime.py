@@ -15,6 +15,7 @@ from app.modules.model_config.models import (
     ModelCredential,
 )
 from app.modules.model_config.security import decrypt
+from app.modules.transcript.providers import CLOUD_ASR_PROVIDERS
 
 probe_context = ContextVar("model_probe", default=False)
 
@@ -210,7 +211,10 @@ class ConfiguredLLM:
 class ConfiguredASR:
     def __init__(self, identifier, factory=None):
         self.identifier, self.factory = str(identifier), factory
-        configuration(identifier, factory)
+        _, connection, _ = configuration(identifier, factory)
+        self.precise_timestamps = CLOUD_ASR_PROVIDERS[
+            connection["adapter"]
+        ].precise_timestamps
         self._identity = "cfg_" + UUID(self.identifier).hex
         self.available = True
 
@@ -227,17 +231,8 @@ class ConfiguredASR:
 
     async def transcribe(self, path, language):
         async def operation():
-            from app.modules.transcript.providers import (
-                OpenAICompatibleASRProvider,
-                QwenASRProvider,
-            )
-
             model, connection, key = configuration(self.identifier, self.factory)
-            adapter = (
-                QwenASRProvider
-                if connection["adapter"] == "qwen_asr"
-                else OpenAICompatibleASRProvider
-            )
+            adapter = CLOUD_ASR_PROVIDERS[connection["adapter"]]
             return await adapter(
                 connection["base_url"],
                 key,
