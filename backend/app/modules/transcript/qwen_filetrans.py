@@ -36,6 +36,7 @@ class QwenFiletransASRProvider:
                 break
         self.base_url = self.public_url(base + "/api/v1")
         self.api_key, self.model = api_key, model
+        self.audio_filetrans = model.startswith("qwen-audio-")
         self.available = bool(api_key)
         self.timeout, self.max_bytes = timeout, max_upload_mb * 1024 * 1024
         self.transport = transport
@@ -134,6 +135,7 @@ class QwenFiletransASRProvider:
         if not 0 < size <= self.max_bytes:
             raise AppException("ASR_AUDIO_TOO_LARGE", "音频为空或超过千问上传上限", 413)
         try:
+            stage = "获取上传凭证或上传音频"
             async with asyncio.timeout(self.timeout):
                 async with httpx.AsyncClient(
                     transport=self.transport or public_transport(),
@@ -142,12 +144,22 @@ class QwenFiletransASRProvider:
                     timeout=httpx.Timeout(30, connect=5, write=30, pool=5),
                 ) as client:
                     uploaded = await self.upload(client, audio_path, size)
-                    # Filetrans's word mode also splits sentences on punctuation.
-                    # VAD-only mode can return an entire continuous lecture as
-                    # one segment, which cannot locate a selected sentence.
-                    parameters = {"channel_id": [0], "enable_words": True}
+                    parameters = {"channel_id": [0]}
+                    if not self.audio_filetrans:
+                        # Qwen3 needs word mode for punctuation sentence boundaries.
+                        parameters["enable_words"] = True
                     if language and language != "und":
-                        parameters["language"] = language.split("-")[0]
+                        code = language.split("-")[0]
+                        if self.audio_filetrans:
+                            parameters["language_hints"] = [code]
+                        else:
+                            parameters["language"] = code
+                    source = (
+                        {"file_urls": [uploaded]}
+                        if self.audio_filetrans
+                        else {"file_url": uploaded}
+                    )
+                    stage = "提交转写任务"
                     reply = await self.request(
                         client,
                         "POST",
@@ -159,7 +171,7 @@ class QwenFiletransASRProvider:
                         },
                         json={
                             "model": self.model,
-                            "input": {"file_url": uploaded},
+                            "input": source,
                             "parameters": parameters,
                         },
                     )
@@ -168,7 +180,9 @@ class QwenFiletransASRProvider:
                         r"[A-Za-z0-9_-]{1,128}", task_id
                     ):
                         raise ValueError
+                    stage = "查询转写任务"
                     result_url = await self.wait_result(client, task_id)
+                    stage = "读取转写文本和时间戳"
                     result = await self.request(client, "GET", result_url, retry=True)
                     return self.transcript(result, language)
         except TimeoutError:
@@ -185,7 +199,7 @@ class QwenFiletransASRProvider:
             ) from None
         except ValueError, KeyError, TypeError, AttributeError, OverflowError:
             raise AppException(
-                "ASR_INVALID_RESPONSE", "千问文件转写返回数据不完整或时间戳无效", 502
+                "ASR_INVALID_RESPONSE", f"千问在{stage}时返回数据不完整或格式无效", 502
             ) from None
 
     async def upload(self, client, path, size):
@@ -249,9 +263,20 @@ class QwenFiletransASRProvider:
                 raise ValueError
             status = output["task_status"]
             if status == "SUCCEEDED":
-                return self.public_url(
-                    output["result"]["transcription_url"], result=True
-                )
+                if self.audio_filetrans:
+                    results = output["results"]
+                    if not isinstance(results, list) or len(results) != 1:
+                        raise ValueError
+                    result = results[0]
+                    if result["subtask_status"] != "SUCCEEDED":
+                        raise AppException(
+                            "ASR_TASK_FAILED",
+                            "千问音频子任务失败，请检查文件格式、模型权限和服务额度",
+                            502,
+                        )
+                else:
+                    result = output["result"]
+                return self.public_url(result["transcription_url"], result=True)
             if status in {"FAILED", "CANCELED", "CANCELLED", "UNKNOWN"}:
                 raise AppException(
                     "ASR_TASK_FAILED",

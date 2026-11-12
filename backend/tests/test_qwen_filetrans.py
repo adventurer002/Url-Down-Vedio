@@ -54,6 +54,9 @@ class FiletransServer:
         self.submit_timeout = False
         self.poll_retry = False
         self.language = "en"
+        self.model = "qwen3-asr-flash-filetrans"
+        self.subtask_status = "SUCCEEDED"
+        self.results = None
 
     async def handle(self, request):
         self.requests.append(request)
@@ -66,10 +69,19 @@ class FiletransServer:
             return httpx.Response(200)
         if request.url.path.endswith("/asr/transcription"):
             body = json.loads(request.content)
-            assert body["input"]["file_url"].startswith("oss://inference/account/test/")
-            expected = {"channel_id": [0], "enable_words": True}
-            if self.language:
-                expected["language"] = self.language
+            assert body["model"] == self.model
+            if self.model.startswith("qwen-audio-"):
+                assert len(body["input"]["file_urls"]) == 1
+                source = body["input"]["file_urls"][0]
+                expected = {"channel_id": [0]}
+                if self.language:
+                    expected["language_hints"] = [self.language]
+            else:
+                source = body["input"]["file_url"]
+                expected = {"channel_id": [0], "enable_words": True}
+                if self.language:
+                    expected["language"] = self.language
+            assert source.startswith("oss://inference/account/test/")
             assert body["parameters"] == expected
             assert request.headers["X-DashScope-OssResourceResolve"] == "enable"
             if self.submit_timeout:
@@ -85,16 +97,17 @@ class FiletransServer:
             status = (
                 self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
             )
-            return httpx.Response(
-                200,
-                json={
-                    "output": {
-                        "task_id": "remote-task-id",
-                        "task_status": status,
-                        "result": {"transcription_url": self.result_url},
+            output = {"task_id": "remote-task-id", "task_status": status}
+            if self.model.startswith("qwen-audio-"):
+                output["results"] = self.results if self.results is not None else [
+                    {
+                        "transcription_url": self.result_url,
+                        "subtask_status": self.subtask_status,
                     }
-                },
-            )
+                ]
+            else:
+                output["result"] = {"transcription_url": self.result_url}
+            return httpx.Response(200, json={"output": output})
         if request.url.host in {
             "result.example.com",
             "dashscope-result-bj.oss-cn-beijing.aliyuncs.com",
@@ -106,7 +119,7 @@ class FiletransServer:
         value = QwenFiletransASRProvider(
             "https://api.example.com/compatible-mode/v1",
             "vendor-secret",
-            "qwen3-asr-flash-filetrans",
+            self.model,
             transport=httpx.MockTransport(self.handle),
             **kwargs,
         )
@@ -172,6 +185,43 @@ async def test_punctuation_mode_locates_a_sentence_inside_continuous_speech(audi
     # boundaries; proportional estimates cannot supply these exact times.
     transcript = await server.provider().transcribe(audio, "zh")
     assert locate(selected, transcript.segments, 44) == (4.48, 14.8, 1)
+
+
+@pytest.mark.parametrize("model", [
+    "qwen-audio-3.0-asr-flash-filetrans",
+    "qwen-audio-3.1-asr-flash-filetrans",
+])
+@pytest.mark.parametrize("language", ["en-US", None, "und"])
+async def test_qwen_audio_filetrans_uses_file_urls_language_hints_and_subtask_results(
+    audio, model, language
+):
+    server = FiletransServer()
+    server.model = model
+    server.language = "en" if language == "en-US" else None
+    data = await server.provider().transcribe(audio, language)
+    assert locate("The meeting starts at nine.", data.segments, 3) == (0.25, 1.25, 1)
+    assert "authorization" not in server.requests[-1].headers
+
+
+async def test_qwen_audio_failed_subtask_is_rejected_before_download(audio):
+    server = FiletransServer()
+    server.model = "qwen-audio-3.1-asr-flash-filetrans"
+    server.subtask_status = "FAILED"
+    with pytest.raises(AppException) as error:
+        await server.provider().transcribe(audio, "en")
+    assert error.value.code == "ASR_TASK_FAILED"
+    assert not any(r.url.host == "result.example.com" for r in server.requests)
+
+
+@pytest.mark.parametrize("results", [[], {}, [{}, {}]])
+async def test_qwen_audio_invalid_result_list_reports_the_query_stage(audio, results):
+    server = FiletransServer()
+    server.model = "qwen-audio-3.1-asr-flash-filetrans"
+    server.results = results
+    with pytest.raises(AppException) as error:
+        await server.provider().transcribe(audio, "en")
+    assert error.value.code == "ASR_INVALID_RESPONSE"
+    assert "查询转写任务" in error.value.message
 
 
 async def test_retries_poll_reads_without_resubmitting_or_uploading_again(audio):
