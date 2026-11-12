@@ -560,3 +560,82 @@ async def test_qwen_reports_upstream_audio_format_error(tmp_path):
         await provider._transcribe_chunk(audio, None)
     assert error.value.code == "ASR_AUDIO_FORMAT_UNSUPPORTED"
     assert "private upstream details" not in error.value.message
+
+
+@pytest.mark.parametrize("silent_chunks", [(0,), (1,), (2,), (0, 1, 2)])
+@pytest.mark.parametrize("nested", [False, True])
+async def test_qwen_skips_confirmed_no_speech_chunks_without_losing_other_segments(
+    tmp_path, monkeypatch, silent_chunks, nested
+):
+    import base64
+    import io
+    import wave
+    from app.modules.transcript import providers
+
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"original audio")
+    monkeypatch.setattr(providers.shutil, "which", lambda _: "/opt/ffmpeg")
+    monkeypatch.setattr(providers.settings, "ASR_CHUNK_CONCURRENCY", 2)
+
+    async def split(runner, command, directory, **kwargs):
+        for index in range(3):
+            with wave.open(str(directory / f"chunk-{index:05d}.wav"), "wb") as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(16000)
+                audio.writeframes(b"\x00\x00" * 16000 * (index + 1))
+        return {}
+
+    monkeypatch.setattr(providers.ProcessRunner, "run", split)
+    calls = []
+
+    def handle(request):
+        body = json.loads(request.content)
+        uri = body["input"]["messages"][0]["content"][0]["input_audio"]["data"]
+        with wave.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1])), "rb") as audio:
+            index = audio.getnframes() // audio.getframerate() - 1
+        calls.append(index)
+        if index in silent_chunks:
+            error = {"code": "CLIENT_ERROR", "message": "ASR_RESPONSE_HAVE_NO_WORDS"}
+            return httpx.Response(400, json={"error": error} if nested else error)
+        return httpx.Response(200, json={"output": {"text": f"语音片段 {index}"}})
+
+    provider = providers.QwenASRProvider(
+        "https://example.com/compatible-mode/v1", "key", "qwen-audio-3.1-asr-flash",
+        transport=httpx.MockTransport(handle),
+    )
+    if len(silent_chunks) == 3:
+        with pytest.raises(AppException) as error:
+            await provider.transcribe(source, "zh")
+        assert error.value.code == "ASR_NO_SPEECH"
+    else:
+        reply = await provider.transcribe(source, "zh")
+        expected = [index for index in range(3) if index not in silent_chunks]
+        assert reply.segments == [
+            {"start": [0, 1, 3][index], "end": [1, 3, 6][index], "text": f"语音片段 {index}"}
+            for index in expected
+        ]
+    assert sorted(calls) == [0, 1, 2]
+    assert source.read_bytes() == b"original audio"
+    assert not list(tmp_path.glob("asr-chunks-*"))
+
+
+@pytest.mark.parametrize("status,code,message", [
+    (400, "CLIENT_ERROR", "OTHER_CLIENT_ERROR"),
+    (400, "OTHER_ERROR", "ASR_RESPONSE_HAVE_NO_WORDS"),
+    (500, "CLIENT_ERROR", "ASR_RESPONSE_HAVE_NO_WORDS"),
+])
+async def test_qwen_keeps_other_upstream_failures_as_errors(tmp_path, status, code, message):
+    from app.modules.transcript.providers import QwenASRProvider
+
+    path = tmp_path / "audio.wav"
+    path.write_bytes(b"fixed audio")
+    provider = QwenASRProvider(
+        "https://example.com/compatible-mode/v1", "key", "qwen-audio-3.1-asr-flash",
+        transport=httpx.MockTransport(lambda request: httpx.Response(
+            status, json={"code": code, "message": message}
+        )),
+    )
+    with pytest.raises(AppException) as error:
+        await provider._transcribe_chunk(path, "zh")
+    assert error.value.code == "ASR_API_ERROR"

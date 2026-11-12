@@ -268,10 +268,18 @@ class QwenASRProvider:
 
                     async def transcribe_chunk(chunk):
                         path, start, duration = chunk
-                        data = await self._transcribe_chunk(path, language)
+                        try:
+                            data = await self._transcribe_chunk(path, language)
+                        except AppException as error:
+                            if error.code == "ASR_NO_SPEECH":
+                                return None
+                            raise
                         return {"start": start, "end": start + duration, "text": data.content_text}, data.language
 
                     replies = await ordered_map(chunks, transcribe_chunk, settings.ASR_CHUNK_CONCURRENCY)
+                    replies = [reply for reply in replies if reply is not None]
+                    if not replies:
+                        raise AppException("ASR_NO_SPEECH", "音频中未识别到可转写的语音", 422)
                     segments = [segment for segment, _ in replies]
                     detected = language or next((detected for _, detected in replies if detected), None)
                     return make_transcript(detected or "und", segments)
@@ -376,14 +384,24 @@ class QwenASRProvider:
                                 continue
                             if response.status_code >= 300:
                                 try:
-                                    error = response.json().get("error") or {}
+                                    body = response.json()
+                                    error = body.get("error") or body
                                     code = (
                                         error.get("code")
                                         if isinstance(error, dict)
                                         else None
                                     )
+                                    message = error.get("message") if isinstance(error, dict) else None
                                 except (ValueError, AttributeError):
-                                    code = None
+                                    code, message = None, None
+                                if (
+                                    response.status_code == 400
+                                    and code == "CLIENT_ERROR"
+                                    and message == "ASR_RESPONSE_HAVE_NO_WORDS"
+                                ):
+                                    raise AppException(
+                                        "ASR_NO_SPEECH", "音频分段中未识别到语音", 422
+                                    )
                                 if code == "UNSUPPORTED_FORMAT":
                                     raise AppException(
                                         "ASR_AUDIO_FORMAT_UNSUPPORTED",
