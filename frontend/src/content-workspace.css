@@ -364,6 +364,34 @@
 .content-panel {
   min-height: 350px;
 }
+.content-panel-scrollable:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: clamp(420px, 72dvh, 720px);
+  min-height: 0;
+}
+.content-panel-scrollable > .content-panel-heading {
+  flex-shrink: 0;
+}
+.content-panel-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.content-panel-body:focus-visible {
+  outline: 2px solid var(--content-green);
+  outline-offset: -2px;
+}
+.content-panel-body .content-reading-tools,
+.content-panel-body .map-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: white;
+}
 .content-panel-heading {
   display: flex;
   align-items: center;

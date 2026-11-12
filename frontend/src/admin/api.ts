@@ -58,6 +58,7 @@ export interface AdminTask {
   queue_seconds: number;
   execution_seconds: number | null;
   attempts?: number;
+  history_deleted?: boolean;
   history_hidden?: boolean;
   expires_at?: string | null;
   stage?: string;

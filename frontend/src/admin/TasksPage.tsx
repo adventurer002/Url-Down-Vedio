@@ -92,7 +92,7 @@ export default function TasksPage() {
       />
       <Panel
         title="任务列表"
-        description="包含用户已隐藏的历史和匿名任务；本页有进行中任务时每 5 秒刷新，其余每 30 秒检查新任务。"
+        description="查看全部用户及匿名任务的运行状态。有进行中任务时每 5 秒刷新，其余每 30 秒检查新任务。"
         busy={query.isFetching}
       >
         {query.isError && query.data && (
@@ -162,7 +162,10 @@ export default function TasksPage() {
                                   "任务"}
                               </strong>
                               <CopyId value={task.task_id} label="任务编号" />
-                              {task.history_hidden && <small>用户已隐藏</small>}
+                              {(task.history_deleted ??
+                                task.history_hidden) && (
+                                <small>历史已删除</small>
+                              )}
                             </div>
                           </div>
                         </td>

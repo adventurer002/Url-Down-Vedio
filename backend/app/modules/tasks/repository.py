@@ -4,12 +4,12 @@ from uuid import UUID
 import os
 import socket
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.orm import sessionmaker
 
 from app.core.exceptions import AppException
 from app.core.config import settings
-from app.modules.tasks.models import ACTIVE_STATUSES, Task, TaskStatus
+from app.modules.tasks.models import ACTIVE_STATUSES, Task, TaskHistoryEntry, TaskStatus
 
 
 def utcnow() -> datetime:
@@ -159,6 +159,7 @@ class TaskRepository:
             task = Task(user_id=user_id, task_type=task_type, video_id=video_id, input_payload=input_payload or {}, expires_at=expires_at)
             session.add(task)
             session.flush()
+            session.add(TaskHistoryEntry(task_id=task.id))
             if model_probe:
                 model_probe.bind_probe(session,input_payload["probe_id"],user_id,task.id)
             if probe_upload:
@@ -184,23 +185,24 @@ class TaskRepository:
 
     def list_recent(self, limit: int = 20, offset: int = 0, user_id: UUID | None = None) -> tuple[list[TaskRecord], int]:
         with self.sessions() as session:
-            condition = [Task.history_hidden.is_(False)]
+            condition = [Task.id.in_(select(TaskHistoryEntry.task_id))]
             if user_id is not None:
                 condition.append(Task.user_id == user_id)
             total = session.scalar(select(func.count()).select_from(Task).where(*condition))
             items = session.scalars(select(Task).where(*condition).order_by(Task.created_at.desc(), Task.id.desc()).limit(limit).offset(offset))
             return [record(item) for item in items], total
 
-    def hide_history(self, user_id: UUID, task_id: UUID | None = None) -> int:
-        # History is presentation state. Keep task rows, live work and result grants intact.
+    def delete_history(self, user_id: UUID, task_id: UUID | None = None) -> int:
         with self.sessions.begin() as session:
-            conditions = [Task.user_id == user_id, Task.history_hidden.is_(False)]
+            owned_tasks = select(Task.id).where(Task.user_id == user_id)
             if task_id is not None:
                 owned = session.scalar(select(Task.id).where(Task.id == task_id, Task.user_id == user_id))
                 if owned is None:
                     raise AppException("TASK_NOT_FOUND", "任务记录不存在", 404)
-                conditions.append(Task.id == task_id)
-            return session.execute(update(Task).where(*conditions).values(history_hidden=True)).rowcount
+                owned_tasks = owned_tasks.where(Task.id == task_id)
+            return session.execute(delete(TaskHistoryEntry).where(
+                TaskHistoryEntry.task_id.in_(owned_tasks)
+            )).rowcount
 
     def has_result_grant(self, field: str, result_ids: list[UUID], user_id: UUID | None) -> bool:
         if field not in {"file_id", "transcript_id", "result_id", "clip_plan_id", "clip_export_id"}:
@@ -297,14 +299,17 @@ class TaskRepository:
         task = session.get(Task, task_id, populate_existing=True)
         if task is None:
             raise AppException("TASK_NOT_FOUND", "任务不存在", 404)
-        return self.admin_record(task)
+        deleted = task.user_id is not None and session.get(TaskHistoryEntry, task_id) is None
+        return self.admin_record(task, history_deleted=deleted)
 
     @staticmethod
-    def admin_record(task):
+    def admin_record(task, *, history_deleted=False):
         data = {name: getattr(task, name) for name in (
             "user_id", "video_id", "task_type", "progress", "error_code", "wait_reason", "attempts",
-            "cancel_requested", "history_hidden", "created_at", "started_at", "finished_at", "expires_at")}
-        data.update(task_id=task.id, status=task.status.value)
+            "cancel_requested", "created_at", "started_at", "finished_at", "expires_at")}
+        # Keep the former response key for existing administrative clients.
+        data.update(task_id=task.id, status=task.status.value,
+                    history_deleted=history_deleted, history_hidden=history_deleted)
         references = {}
         for name in ("clip_export_id", "clip_plan_id", "file_id", "transcript_id", "result_id", "summary_result_id", "answer_id"):
             try:
@@ -329,8 +334,12 @@ class TaskRepository:
             conditions.append(Task.created_at < until)
         total = session.scalar(select(func.count()).select_from(Task).where(*conditions))
         items = session.scalars(select(Task).where(*conditions)
-            .order_by(Task.created_at.desc(), Task.id.desc()).limit(limit).offset(offset))
-        return {"items": [self.admin_record(item) for item in items], "total": total, "limit": limit, "offset": offset}
+            .order_by(Task.created_at.desc(), Task.id.desc()).limit(limit).offset(offset)).all()
+        visible = set(session.scalars(select(TaskHistoryEntry.task_id).where(
+            TaskHistoryEntry.task_id.in_([item.id for item in items])
+        )))
+        return {"items": [self.admin_record(item, history_deleted=item.user_id is not None and item.id not in visible)
+                          for item in items], "total": total, "limit": limit, "offset": offset}
 
     def status_map(self, session, task_ids):
         if not task_ids:

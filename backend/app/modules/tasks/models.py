@@ -45,10 +45,17 @@ class Task(Base):
     worker_pid: Mapped[int | None] = mapped_column(Integer)
     worker_host: Mapped[str | None] = mapped_column(String(255))
     last_dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    history_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TaskHistoryEntry(Base):
+    __tablename__ = "task_history_entries"
+
+    task_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True
+    )

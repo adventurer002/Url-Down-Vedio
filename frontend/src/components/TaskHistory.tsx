@@ -99,7 +99,7 @@ export default function TaskHistory() {
                 onClick={() => setClearUserId(auth.user?.id || null)}
               >
                 <Icon name="trash" size={15} />
-                {store.historyMutating ? "正在删除…" : "隐藏全部记录"}
+                {store.historyMutating ? "正在删除…" : "删除全部记录"}
               </button>
               <button
                 className="text-button"
@@ -110,9 +110,7 @@ export default function TaskHistory() {
               </button>
             </div>
           </div>
-          <p className="history-delete-hint">
-            隐藏仅移除历史记录，不取消任务或删除原文件。
-          </p>
+          <p className="history-delete-hint">删除的历史记录无法恢复。</p>
           <ErrorNotice error={error} />
           {store.historyLoading && !store.historyLoaded && (
             <p className="muted" role="status">
@@ -140,12 +138,12 @@ export default function TaskHistory() {
                 )}
                 <button
                   className="history-delete"
-                  aria-label={`隐藏任务记录：${task.title}`}
+                  aria-label={`删除任务记录：${task.title}`}
                   disabled={store.historyLoading || store.historyMutating}
                   onClick={() => void remove(task.id)}
                 >
                   <Icon name="trash" size={15} />
-                  隐藏
+                  删除
                 </button>
               </div>
               {store.findContent(task.videoKey) && (

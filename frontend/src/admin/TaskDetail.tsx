@@ -118,11 +118,11 @@ export function TaskDetail({ id }: { id: string }) {
         </dd>
         <dt>执行尝试</dt>
         <dd>{task.attempts ?? "—"}</dd>
-        <dt>用户已隐藏</dt>
+        <dt>历史记录已删除</dt>
         <dd>
-          {task.history_hidden == null
+          {(task.history_deleted ?? task.history_hidden) == null
             ? "—"
-            : task.history_hidden
+            : (task.history_deleted ?? task.history_hidden)
               ? "是"
               : "否"}
         </dd>

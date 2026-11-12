@@ -94,7 +94,7 @@ function RecentTasks() {
     <Panel
       title="最近任务"
       busy={query.isFetching}
-      description="最新 5 条 · 包含所有用户及已隐藏的历史"
+      description="最新 5 条 · 全部用户任务"
       className="admin-recent"
       action={
         <Link className="admin-text-button" to="/admin/tasks">

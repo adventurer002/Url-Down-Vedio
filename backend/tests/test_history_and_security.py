@@ -25,7 +25,7 @@ from app.modules.media.models import MediaFile
 from app.modules.media.repository import MediaRepository
 from app.modules.media.service import MediaService
 from app.modules.tasks.history import TaskHistoryService
-from app.modules.tasks.models import Task
+from app.modules.tasks.models import Task, TaskHistoryEntry
 from app.modules.tasks.repository import utcnow
 from app.modules.tasks.router import get_history_service
 from app.modules.tasks.service import TaskService
@@ -208,6 +208,10 @@ async def test_history_delete_is_owned_persistent_and_keeps_jobs_and_grants(repo
         assert (await client.delete(f"/api/v1/tasks/history/{uuid4()}")).status_code == 404
         deleted = await client.delete(f"/api/v1/tasks/history/{active.id}")
         assert deleted.json()["data"]["deleted_count"] == 1
+        with repository.sessions() as session:
+            assert session.get(TaskHistoryEntry, active.id) is None
+            assert session.get(TaskHistoryEntry, completed.id) is not None
+            assert session.get(TaskHistoryEntry, foreign.id) is not None
         assert (await client.get("/api/v1/tasks")).json()["data"]["total"] == 1
         assert repository.get(active.id).status == "running"
         assert not repository.get(active.id).cancel_requested
@@ -221,6 +225,9 @@ async def test_history_delete_is_owned_persistent_and_keeps_jobs_and_grants(repo
         assert (await client.get("/api/v1/tasks")).json()["data"]["total"] == 0
         assert (await client.delete("/api/v1/tasks/history")).json()["data"]["deleted_count"] == 0
         assert (await client.delete(f"/api/v1/tasks/history/{active.id}")).json()["data"]["deleted_count"] == 0
+        with repository.sessions() as session:
+            remaining = session.scalars(select(TaskHistoryEntry.task_id)).all()
+            assert remaining == [foreign.id]
     assert repository.get(completed.id).result_payload["file_id"] == str(file_id)
     assert repository.has_result_grant("file_id", [file_id], owner.id)
     assert (await service.list(20, 0, user_id=other.id))["total"] == 1
