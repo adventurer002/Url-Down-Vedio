@@ -22,7 +22,7 @@ def inspect(path):
         raise ValueError("missing ffprobe")
     result = subprocess.run([executable, "-v", "error", "-protocol_whitelist", "file,pipe",
         "-format_whitelist", "mov,matroska,webm,mp3", "-probesize", "5000000", "-analyzeduration", "5000000",
-        "-show_entries", "format=start_time,duration:stream=index,codec_type,codec_name,start_time,duration,time_base,width,height,avg_frame_rate:stream_disposition=attached_pic:stream_side_data=rotation",
+        "-show_entries", "format=start_time,duration:stream=index,codec_type,codec_name,start_time,duration,time_base,width,height,avg_frame_rate:stream_disposition=attached_pic:stream_side_data_list",
         "-of", "json", str(path)], timeout=15, check=True, capture_output=True)
     data = json.loads(result.stdout)
     video = next(s for s in data["streams"] if s.get("codec_type") == "video" and not s.get("disposition", {}).get("attached_pic"))
@@ -57,7 +57,11 @@ def inspect(path):
 
 if __name__ == "__main__":
     try:
-        print(json.dumps({"media": inspect(Path(sys.argv[2]))}), flush=True)
+        if sys.argv[1] == "features":
+            from app.modules.video.preflight import ffmpeg_features
+            print(json.dumps({"features": ffmpeg_features(shutil.which("ffmpeg"))}), flush=True)
+        else:
+            print(json.dumps({"media": inspect(Path(sys.argv[2]))}), flush=True)
     except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError):
         print(json.dumps({"error_code": "CLIP_MEDIA_INVALID"}), flush=True)
         raise SystemExit(1)
