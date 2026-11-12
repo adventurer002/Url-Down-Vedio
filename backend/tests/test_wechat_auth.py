@@ -440,3 +440,56 @@ async def test_result_routes_block_cross_user_and_preserve_shared_cache_grants(a
     for path in paths:
         response = await auth.client.get(path)
         assert response.status_code == 401 and response.json()['error']['code'] == 'WECHAT_UNSUBSCRIBED'
+
+
+async def test_profile_update_persists_nickname_and_keeps_session_identity(auth):
+    openid, result = await login(auth)
+    headers = {"Authorization": "Bearer " + result["access_token"]}
+    user_id = UUID(result["user"]["id"])
+    other = auth.service.users.subscription("other-profile-user", True, login=True)
+    response = await auth.client.patch('/api/v1/auth/me', headers=headers, json={"nickname": "  新名字🌻  "})
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data == {**result["user"], "nickname": "新名字🌻"}
+    assert auth.service.users.get(user_id).nickname == "新名字🌻"
+    assert auth.service.users.get(other.id).nickname == other.nickname
+    assert (await auth.client.get('/api/v1/auth/me', headers=headers)).json()["data"] == data
+    auth.service.users.subscription(openid, True, login=True)
+    assert auth.service.users.get(user_id).nickname == "新名字🌻"
+    assert auth.service.users.get(user_id).auth_version == 0
+
+
+@pytest.mark.parametrize("body", [
+    {"nickname": ""}, {"nickname": "   "}, {"nickname": "a" * 65},
+    {"nickname": "a\x00b"}, {"nickname": "a\nb"}, {"nickname": 123},
+    {"nickname": "新名", "role": "admin"},
+])
+async def test_profile_update_rejects_invalid_or_privileged_fields(auth, body):
+    _, result = await login(auth)
+    response = await auth.client.patch('/api/v1/auth/me', headers={"Authorization": "Bearer " + result["access_token"]}, json=body)
+    assert response.status_code == 422
+    assert auth.service.users.get(UUID(result["user"]["id"])).nickname == result["user"]["nickname"]
+
+
+async def test_profile_update_requires_active_current_login(auth):
+    assert (await auth.client.patch('/api/v1/auth/me', json={"nickname": "新名"})).status_code == 401
+    _, result = await login(auth)
+    user_id = UUID(result["user"]["id"])
+    stale = auth.service.users.get(user_id)
+    with auth.repository.sessions.begin() as session:
+        user = session.get(User, user_id)
+        user.status = "disabled"
+        user.auth_version += 1
+    with pytest.raises(AppException) as error:
+        await auth.service.update_profile(stale, "新名")
+    assert error.value.code == "INVALID_TOKEN"
+
+
+async def test_profile_update_cors_preflight_allows_patch(auth):
+    response = await auth.client.options('/api/v1/auth/me', headers={
+        "Origin": settings.CORS_ORIGINS[0],
+        "Access-Control-Request-Method": "PATCH",
+        "Access-Control-Request-Headers": "authorization,content-type",
+    })
+    assert response.status_code == 200
+    assert "PATCH" in response.headers["access-control-allow-methods"]

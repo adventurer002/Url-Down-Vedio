@@ -38,6 +38,15 @@ class UserRepository:
             user = session.get(User, user_id)
             return record(user) if user else None
 
+    def update_nickname(self, user_id, auth_version, nickname):
+        with self.sessions.begin() as session:
+            user = session.scalar(select(User).where(User.id == user_id).with_for_update())
+            if user is None or user.status != "active" or user.auth_version != auth_version:
+                raise AppException("INVALID_TOKEN", "登录凭证已失效，请重新登录", 401)
+            user.nickname = nickname
+            session.flush()
+            return record(user)
+
     @staticmethod
     def admin_record(user):
         return {**{name: getattr(user, name) for name in (

@@ -52,6 +52,10 @@ class AuthService:
     def __init__(self, users, redis, qr=None):
         self.users, self.redis, self.qr = users, redis, qr
 
+    async def update_profile(self, user, nickname):
+        updated = await database_call(self.users.update_nickname, user.id, user.auth_version, nickname)
+        return public_user(updated)
+
     async def create_session(self):
         scene_id = str(uuid4())
         qr_url = await (self.qr or get_qr_provider()).create(scene_id)

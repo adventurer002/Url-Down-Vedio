@@ -12,7 +12,7 @@ import {
 } from "./OperationDialog";
 function GrantForm({ id }: { id: string }) {
   const operation = useOperation("grant", id);
-  const [product, setProduct] = useState<GrantProduct>("monthly");
+  const [product, setProduct] = useState<GrantProduct>("plus_monthly");
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   useEffect(() => {
@@ -89,7 +89,9 @@ function GrantForm({ id }: { id: string }) {
             setConfirmed(false);
           }}
         >
-          <option value="monthly">月会员</option>
+          <option value="plus_monthly">Plus 月会员</option>
+          <option value="pro_monthly">Pro 月会员</option>
+          <option value="monthly">旧版月会员</option>
           <option value="asr_120">120 分钟转写包</option>
           <option value="ai_100">100 次 AI 包</option>
         </select>
@@ -106,6 +108,9 @@ function GrantForm({ id }: { id: string }) {
       ) : (
         <>
           {preview.isFetching && <Loading label="正在更新发放预览…" compact />}
+          <p className="admin-footnote">
+            有效会员按原到期时间顺延，所选等级在下方预计生效时间开始。
+          </p>
           <dl className="admin-details admin-grant-preview">
             <dt>权益内容</dt>
             <dd>

@@ -1,3 +1,4 @@
+import { membershipLabel } from "../utils/billing";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { adminApi } from "./api";
@@ -91,8 +92,10 @@ export default function UserDetailPage() {
                   <dd>{query.data.status_version}</dd>
                   <dt>公众号关注</dt>
                   <dd>{query.data.is_subscribed ? "已关注" : "未关注"}</dd>
-                  <dt>会员状态</dt>
-                  <dd>{query.data.member ? "有效期内" : "无有效会员"}</dd>
+                  <dt>会员等级</dt>
+                  <dd>
+                    {membershipLabel(query.data.member_tier, query.data.member)}
+                  </dd>
                   <dt>会员到期</dt>
                   <dd>{formatDateTime(query.data.member_until)}</dd>
                   <dt>注册时间</dt>

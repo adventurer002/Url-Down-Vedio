@@ -52,14 +52,14 @@ function PurchaseNotice({
       >
         <Icon name="close" />
       </button>
-      <span className="pricing-coming">新方案待开放</span>
+      <span className="pricing-coming">在线购买待开放</span>
       <h2 id="purchase-title">{selection.name}</h2>
       <p className="purchase-price pricing-dialog-price">
         ¥{offerPrice(selection.priceFen)}
       </p>
       <p>{selection.detail}</p>
       <p>
-        暂未开放在线购买。支付与权益发放接通后再开放购买，当前展示为新方案预告，尚未生效；已获得的会员与额度仍按原规则使用，可在个人中心查看。
+        暂未开放在线购买。会员权益可由管理员发放，实际等级、生效时间及可用额度可在个人中心查看。
       </p>
       <button
         className="pricing-button pricing-button-primary"
@@ -198,7 +198,7 @@ export default function SubscriptionView() {
         会员额度每月发放，当月有效，不结转。一次购买，到期手动续费。
       </p>
       <p className="pricing-availability" role="status">
-        新方案待开放：月付、季付、年付与额度包暂未开放购买。已有权益仍按原规则使用，
+        在线购买待开放：月付、季付、年付与额度包暂未开放购买。已有权益仍按原规则使用，
         <Link to="/account">查看我的实际额度</Link>。
       </p>
       <section className="pricing-addons" aria-labelledby="addons-title">

@@ -9,12 +9,11 @@ export default function AppFooter() {
         <span className="footer-divider">|</span>
         <span>让内容成为你的知识。</span>
       </span>
-      <nav className="footer-links" aria-label="帮助与偏好设置">
+      <nav className="footer-links" aria-label="帮助与信息">
         <Link to="/library">知识库</Link>
         <Link to="/subscription">订阅方案</Link>
         <a href="/help">使用帮助</a>
         <a href="/privacy">隐私说明</a>
-        <Link to="/settings">设置</Link>
       </nav>
     </footer>
   );

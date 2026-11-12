@@ -1,3 +1,4 @@
+import type { MembershipTier } from "../types/billing";
 import { ApiError, client, get } from "../api/client";
 import { authStore } from "../stores/auth";
 
@@ -159,6 +160,7 @@ export interface AdminUser {
   status_version: number;
   is_subscribed: boolean;
   member: boolean;
+  member_tier?: MembershipTier;
   member_until: string | null;
   created_at: string;
   last_login_at: string | null;
@@ -184,6 +186,7 @@ export interface AdminAllowances {
   account_active: boolean;
   subscribed: boolean;
   member: boolean;
+  member_tier?: MembershipTier;
   member_until: string | null;
   trial_claimed_at: string | null;
   balances: Record<
@@ -193,7 +196,7 @@ export interface AdminAllowances {
   limits: {
     video_seconds: number;
     file_bytes: number;
-    daily_egress_bytes: number;
+    daily_egress_bytes: number | null;
     download_concurrency: number;
   };
   daily: {
@@ -218,7 +221,12 @@ function queryString(filters: object) {
   return params.toString();
 }
 
-export type GrantProduct = "monthly" | "asr_120" | "ai_100";
+export type GrantProduct =
+  | "monthly"
+  | "plus_monthly"
+  | "pro_monthly"
+  | "asr_120"
+  | "ai_100";
 export interface OperationRequest {
   reason: string;
   key: string;

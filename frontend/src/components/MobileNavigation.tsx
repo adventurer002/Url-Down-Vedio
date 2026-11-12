@@ -48,7 +48,6 @@ export default function MobileNavigation() {
             ["/subscription", "订阅方案"],
             ["/help", "使用帮助"],
             ["/privacy", "隐私说明"],
-            ["/settings", "设置"],
           ].map(([path, label]) => (
             <Link
               key={path}

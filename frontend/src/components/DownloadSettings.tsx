@@ -3,8 +3,6 @@ import type { DownloadOption, JobKind } from "../types/api";
 import { filesize } from "../utils";
 import Icon from "./Icon";
 
-const AUDIO_FORMAT = "audio:mp3";
-
 export default function DownloadSettings({
   options,
   downloading,
@@ -17,10 +15,10 @@ export default function DownloadSettings({
   onCreate: (kind: JobKind, label: string, presetId?: string) => void;
 }) {
   const [format, setFormat] = useState("");
+  const [audio, setAudio] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const videos = options.filter((option) => option.height != null);
   const containers = [...new Set(videos.map((option) => option.container))];
-  const audio = format === AUDIO_FORMAT;
   const currentContainer = containers.includes(format)
     ? format
     : containers[0] || "";
@@ -35,26 +33,26 @@ export default function DownloadSettings({
     <div className="download-settings">
       <div className="download-settings-heading">
         <h3>下载设置</h3>
-      </div>
-      <div className="container-setting">
-        <label htmlFor="download-container">格式</label>
-        <select
-          id="download-container"
-          value={audio ? AUDIO_FORMAT : currentContainer}
-          onChange={(event) => setFormat(event.target.value)}
+        <div
+          className="download-media-toggle"
+          role="group"
+          aria-label="下载内容"
         >
-          {!containers.length && (
-            <option value="" disabled>
-              暂无视频格式
-            </option>
-          )}
-          {containers.map((container) => (
-            <option key={container} value={container}>
-              {container.toUpperCase()} 视频
-            </option>
-          ))}
-          <option value={AUDIO_FORMAT}>MP3 音频</option>
-        </select>
+          <button
+            type="button"
+            aria-pressed={!audio}
+            onClick={() => setAudio(false)}
+          >
+            视频
+          </button>
+          <button
+            type="button"
+            aria-pressed={audio}
+            onClick={() => setAudio(true)}
+          >
+            仅音频
+          </button>
+        </div>
       </div>
       {!audio && (
         <fieldset className="quality-options" disabled={downloading}>
@@ -83,6 +81,32 @@ export default function DownloadSettings({
           {!formats.length && <p className="muted">该视频暂无可下载的档位。</p>}
         </fieldset>
       )}
+      <div className="container-setting">
+        <label htmlFor="download-container">格式</label>
+        <select
+          id="download-container"
+          value={audio ? "mp3" : currentContainer}
+          disabled={pending || audio}
+          onChange={(event) => setFormat(event.target.value)}
+        >
+          {audio ? (
+            <option value="mp3">MP3</option>
+          ) : containers.length ? (
+            containers.map((container) => (
+              <option key={container} value={container}>
+                {container.toUpperCase()} 视频
+              </option>
+            ))
+          ) : (
+            <option value="" disabled>
+              暂无视频格式
+            </option>
+          )}
+        </select>
+        <span className="muted">
+          {audio ? "仅包含音频。" : "包含视频与音频。"}
+        </span>
+      </div>
       <button
         className="button primary full download-submit"
         disabled={pending || (!audio && !selected)}

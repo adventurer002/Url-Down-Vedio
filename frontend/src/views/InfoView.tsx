@@ -25,8 +25,7 @@ export default function InfoView({ kind }: { kind: "help" | "privacy" }) {
           <section className="preferences-card">
             <h2>管理下载和存储</h2>
             <p>
-              任务完成后可保存文件。下载文件可能在过期后被清理；请及时保存需要保留的内容。过期缓存清理入口位于
-              <Link to="/settings">设置</Link>。
+              任务完成后可保存文件。下载文件可能在过期后被清理，请及时保存需要保留的内容。
             </p>
           </section>
         </>

@@ -1,6 +1,6 @@
 import { authStore, useAuth } from "./stores/auth";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { UploadTray } from "./components/UploadStatus";
 import AppHeader from "./components/AppHeader";
 import AppFooter from "./components/AppFooter";
@@ -18,7 +18,6 @@ import { cleanPath } from "./marketing/routes";
 const LibraryView = lazy(() => import("./views/LibraryView"));
 const SubscriptionView = lazy(() => import("./views/SubscriptionView"));
 const AccountView = lazy(() => import("./views/AccountView"));
-const SettingsView = lazy(() => import("./views/SettingsView"));
 const VideoWorkspaceView = lazy(() => import("./views/VideoWorkspaceView"));
 
 export default function PublicApp() {
@@ -146,7 +145,10 @@ export default function PublicApp() {
                 path="/video/:id"
                 element={<VideoWorkspaceView key={pathname} />}
               />
-              <Route path="/settings" element={<SettingsView />} />
+              <Route
+                path="/settings"
+                element={<Navigate to="/account" replace />}
+              />
               <Route path="/library" element={<LibraryView />} />
               <Route path="/account" element={<AccountView />} />
               <Route path="/subscription" element={<SubscriptionView />} />

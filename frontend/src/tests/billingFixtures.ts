@@ -19,6 +19,18 @@ export const catalog: BillingCatalog = {
       asr_seconds: 18000,
       ai_generations: 100,
     },
+    plus_monthly: {
+      name: "Plus 月会员",
+      price_fen: 990,
+      asr_seconds: 9000,
+      ai_generations: 50,
+    },
+    pro_monthly: {
+      name: "Pro 月会员",
+      price_fen: 1690,
+      asr_seconds: 18000,
+      ai_generations: 100,
+    },
     asr_120: {
       name: "120 分钟转写包",
       price_fen: 990,

@@ -8,13 +8,15 @@ import { useWorkspaceStore } from "../hooks/useWorkspace";
 import type { BillingCatalog } from "../types/billing";
 import {
   allowanceSourceLabel,
+  membershipLabel,
   dateLabel,
   durationLabel,
 } from "../utils/billing";
 import ErrorNotice from "../components/ErrorNotice";
 import Icon from "../components/Icon";
 
-function trafficLabel(bytes: number) {
+function trafficLabel(bytes: number | null) {
+  if (bytes === null) return "不限量";
   return bytes >= 1024 ** 3
     ? `${Number((bytes / 1024 ** 3).toFixed(1))} GiB`
     : `${Number((bytes / 1024 ** 2).toFixed(1))} MiB`;
@@ -25,7 +27,7 @@ export default function AccountView() {
   return (
     <div className="account-page">
       <nav className="subscription-breadcrumb" aria-label="面包屑">
-        <a href="/">首页</a>
+        <Link to="/app">工作台</Link>
         <span>/</span>
         <span>个人中心</span>
       </nav>
@@ -98,10 +100,14 @@ function AccountSpace() {
       <section className="account-profile" aria-label="账户与会员状态">
         <div className="account-profile-identity">
           <span className="account-avatar">
-            <Icon name="user" size={25} />
+            <img
+              className="default-avatar"
+              src="/media/default-avatar.png"
+              alt="默认头像"
+            />
           </span>
           <div>
-            <h2>{user?.nickname || "微信用户"}</h2>
+            <NicknameEditor nickname={user?.nickname || "微信用户"} />
             <p>
               <Icon name={subscribed ? "shield" : "user"} size={15} />
               {subscribed ? "公众号已关注" : "公众号未关注"}
@@ -111,7 +117,9 @@ function AccountSpace() {
         <div className={"account-membership" + (data?.member ? " member" : "")}>
           <p>当前权益</p>
           <strong>
-            {data ? (data.member ? "月度会员" : "免费用户") : "权益暂未读取"}
+            {data
+              ? membershipLabel(data.member_tier, data.member)
+              : "权益暂未读取"}
           </strong>
           <p>
             {data?.member
@@ -315,13 +323,87 @@ function AccountSpace() {
             任务历史
             <Icon name="arrow" size={15} />
           </button>
-          <Link to="/settings">
-            <Icon name="menu" size={17} />
-            设置
-            <Icon name="arrow" size={15} />
-          </Link>
         </nav>
       </section>
     </>
+  );
+}
+
+function NicknameEditor({ nickname }: { nickname: string }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(nickname);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="account-nickname">
+      {editing ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (saving || !value.trim()) return;
+            setSaving(true);
+            setError(null);
+            void authStore
+              .updateNickname(value.trim())
+              .then((updated) => {
+                if (updated) {
+                  setEditing(false);
+                  setSaved(true);
+                }
+              })
+              .catch((cause) => setError(normalizeError(cause)))
+              .finally(() => setSaving(false));
+          }}
+        >
+          <label htmlFor="account-nickname">昵称</label>
+          <input
+            id="account-nickname"
+            autoFocus
+            value={value}
+            maxLength={64}
+            required
+            disabled={saving}
+            onChange={(event) => setValue(event.target.value)}
+          />
+          <div className="account-nickname-actions">
+            <button
+              className="button primary"
+              disabled={saving || !value.trim()}
+            >
+              {saving ? "正在保存…" : "保存昵称"}
+            </button>
+            <button
+              className="text-button"
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                setEditing(false);
+                setError(null);
+              }}
+            >
+              取消
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="account-name-row">
+          <h2>{nickname}</h2>
+          <button
+            className="text-button"
+            onClick={() => {
+              setValue(nickname);
+              setSaved(false);
+              setError(null);
+              setEditing(true);
+            }}
+          >
+            修改昵称
+          </button>
+        </div>
+      )}
+      <ErrorNotice error={error} />
+      {saved && <p role="status">昵称已保存</p>}
+    </div>
   );
 }

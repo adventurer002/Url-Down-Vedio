@@ -15,7 +15,7 @@ import { WorkspaceProvider } from "../hooks/useWorkspace";
 import SubscriptionView from "../views/SubscriptionView";
 import AllowanceConfirm from "../components/AllowanceConfirm";
 import { api } from "../api";
-import { ApiError } from "../api/client";
+import { client, ApiError } from "../api/client";
 import { authStore } from "../stores/auth";
 import { billingStore } from "../stores/billing";
 import { catalog, allowances, quote } from "./billingFixtures";
@@ -103,7 +103,7 @@ it("publishes the proposed prices independently of the legacy live entitlement c
   );
   mount();
   expect(screen.getByText("¥16.9")).toBeTruthy();
-  expect(screen.getByText(/新方案待开放/)).toBeTruthy();
+  expect(screen.getByText(/在线购买待开放/)).toBeTruthy();
   expect(api.catalog).not.toHaveBeenCalled();
   expect(api.allowances).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "购买AI 额度包" }));
@@ -270,7 +270,7 @@ it("keeps paid membership separate from following status", async () => {
     subscribed: false,
   });
   mount("/account");
-  expect(await screen.findByText("月度会员")).toBeTruthy();
+  expect(await screen.findByText("旧版会员")).toBeTruthy();
   expect(screen.getByText("公众号未关注")).toBeTruthy();
   expect(screen.getByText("不按次数计费")).toBeTruthy();
   fireEvent.click(screen.getByText("额度明细"));
@@ -330,3 +330,74 @@ it.each([
     ),
   ).toBeNull();
 });
+
+it("saves a nickname from the personal center and shows the uploaded default avatar", async () => {
+  login();
+  const patch = vi
+    .spyOn(client, "patch")
+    .mockResolvedValue({ data: { ...user, nickname: "新名字" } });
+  mount("/account");
+  expect(screen.getByAltText("默认头像").getAttribute("src")).toBe(
+    "/media/default-avatar.png",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "修改昵称" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "昵称" }), {
+    target: { value: "  新名字  " },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存昵称" }));
+  expect(await screen.findByRole("heading", { name: "新名字" })).toBeTruthy();
+  expect(screen.getByText("昵称已保存")).toBeTruthy();
+  expect(patch).toHaveBeenCalledWith(
+    "/auth/me",
+    { nickname: "新名字" },
+    expect.objectContaining({
+      contentIdentity: { userId: user.id, token: "test-token" },
+    }),
+  );
+  expect(authStore.getState().token).toBe("test-token");
+});
+
+it("retains nickname input after a failed save so it can be retried", async () => {
+  login();
+  vi.spyOn(client, "patch")
+    .mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "保存失败"))
+    .mockResolvedValueOnce({ data: { ...user, nickname: "再试一次" } });
+  mount("/account");
+  fireEvent.click(screen.getByRole("button", { name: "修改昵称" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "昵称" }), {
+    target: { value: "再试一次" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存昵称" }));
+  expect(await screen.findByText("保存失败")).toBeTruthy();
+  expect(screen.getByRole("textbox", { name: "昵称" })).toHaveProperty(
+    "value",
+    "再试一次",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存昵称" }));
+  expect(await screen.findByRole("heading", { name: "再试一次" })).toBeTruthy();
+});
+
+it.each(["plus", "pro"] as const)(
+  "shows the %s membership level and unlimited Pro traffic",
+  async (tier) => {
+    login();
+    vi.mocked(api.allowances).mockResolvedValue({
+      ...allowances,
+      member: true,
+      member_tier: tier,
+      limits: {
+        ...allowances.limits,
+        daily_egress_bytes: tier === "pro" ? null : 10_000_000_000,
+      },
+    });
+    mount("/account");
+    expect(
+      await screen.findByText(tier === "pro" ? "Pro 会员" : "Plus 会员"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        tier === "pro" ? /今日流量.*不限量/ : /今日流量.*9.3 GiB/,
+      ),
+    ).toBeTruthy();
+  },
+);

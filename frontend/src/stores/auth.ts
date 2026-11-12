@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { get, post, normalizeError } from "../api/client";
+import { client, get, post, normalizeError } from "../api/client";
 
 export interface AuthUser {
   id: string;
@@ -112,6 +112,24 @@ export const authStore = {
       if (failure.status === 401) authStore.clear();
       else update({ restoring: false, restoreError: failure.message });
     }
+  },
+  async updateNickname(nickname: string) {
+    const expected = revision;
+    const userId = state.user?.id;
+    if (!userId) throw new Error("请先登录");
+    const { data: user } = await client.patch<AuthUser>(
+      "/auth/me",
+      { nickname },
+      {
+        contentIdentity: { userId, token: state.token },
+        timeout: 10000,
+      },
+    );
+    if (expected !== revision || state.user?.id !== userId) return false;
+    // Discard a profile snapshot requested before this update completed.
+    restoreAttempt++;
+    update({ user, restoring: false, restoreError: "" });
+    return true;
   },
   async logout() {
     await post("/auth/logout");
