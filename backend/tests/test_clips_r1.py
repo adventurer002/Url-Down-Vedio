@@ -424,7 +424,7 @@ async def test_adjacent_and_exact_maximum_ranges_complete_alignment(clips, monke
     assert all(item["end"] - item["start"] <= 90 + 1e-6 for item in ordered)
     assert all(a["end"] <= b["start"] for a, b in zip(ordered, ordered[1:]))
     assert not any(path.exists() for path in paths)
-    assert timeline["version"] == "timing-v3"
+    assert timeline["version"] == "timing-v4"
 
 
 @pytest.mark.parametrize("gap", [0, .001, .1, .25, 1])

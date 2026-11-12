@@ -111,18 +111,22 @@ async def test_transcription_waits_for_brief_lease_then_charges_once(uploads, me
 async def test_storage_wait_is_bounded_and_cancellable_with_no_charge(uploads, media_samples, monkeypatch, cancel):
     u = uploads
     item = await ready(u, media_samples["sample.mp3"])
-    monkeypatch.setattr(storage_retry, "LOCK_WAIT_SECONDS", .3)
+    monkeypatch.setattr(storage_retry, "LOCK_WAIT_SECONDS", 5 if cancel else .3)
+    waiting = asyncio.Event()
+    publish = u.tasks.bus.publish
+
+    async def observe_wait(*args, **kwargs):
+        await publish(*args, **kwargs)
+        if u.tasks.bus.value.get("stage") == "waiting_for_storage":
+            waiting.set()
+
+    monkeypatch.setattr(u.tasks.bus, "publish", observe_wait)
     before = u.billing.repository.balance(u.user.id)["balances"]
     with u.storage.lease():
         operation = asyncio.create_task(transcribe(u, item))
         if cancel:
-            for _ in range(100):
-                if u.tasks.bus.value.get("stage") == "waiting_for_storage":
-                    u.repository.request_cancel(UUID(u.tasks.bus.value["task_id"]))
-                    break
-                await asyncio.sleep(.005)
-            else:
-                pytest.fail("Task did not enter cancellable storage wait")
+            await asyncio.wait_for(waiting.wait(), 3)
+            u.repository.request_cancel(UUID(u.tasks.bus.value["task_id"]))
         task, outcome = await asyncio.wait_for(operation, 2)
     stored = u.repository.get(task.id)
     assert outcome["status"] == ("cancelled" if cancel else "failed")
