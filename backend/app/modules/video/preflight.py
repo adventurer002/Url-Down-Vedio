@@ -48,7 +48,11 @@ def ffmpeg_features(executable):
         output = result.stdout if result.returncode == 0 else ""
     except (OSError, subprocess.TimeoutExpired):
         output = ""
-    return {"fps_mode": "-fps_mode " in output, "vsync": "-vsync " in output, "render_verified": False}
+    return {
+        "fps_mode": bool(re.search(r"(?m)^\s*-fps_mode(?:\[[^\]\n]+\])?\s", output)),
+        "vsync": bool(re.search(r"(?m)^\s*-vsync(?:\[[^\]\n]+\])?\s", output)),
+        "render_verified": False,
+    }
 
 
 async def check(url: str | None = None, parser: VideoParser | None = None, *, platform: str | None = None) -> dict:

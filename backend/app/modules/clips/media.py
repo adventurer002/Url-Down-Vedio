@@ -19,6 +19,7 @@ class ClipRenderer(Protocol):
 class FFmpegClipAdapter:
     def __init__(self, timeout, max_bytes):
         self.runner = ProcessRunner(timeout, max_bytes)
+        self.features = None
 
     async def run(self, command, directory, failure, **controls):
         try:
@@ -66,6 +67,17 @@ class FFmpegClipAdapter:
         return ["-noaccurate_seek", *FFmpegClipAdapter.input_args(source, info, start)]
 
     async def render(self, source, output, info, start, end, **controls):
+        if self.features is None:
+            capabilities = await self.run(
+                [sys.executable, "-m", "app.modules.clips.media_child", "features"],
+                output.parent, "FFMPEG_UNAVAILABLE", **controls)
+            self.features = capabilities.get("features", {})
+        if self.features.get("fps_mode"):
+            frame_sync = ["-fps_mode", "vfr"]
+        elif self.features.get("vsync"):
+            frame_sync = ["-vsync", "vfr"]
+        else:
+            raise AppException("FFMPEG_UNAVAILABLE", "FFmpeg 缺少可用的帧率同步参数", 503)
         absolute_start, absolute_end = info["origin"] + start, info["origin"] + end
         # Anchor the output grid at the cut. Global-grid rounding could choose the next
         # 30 fps source frame instead of the frame actually held at a fractional cut.
@@ -79,7 +91,7 @@ class FFmpegClipAdapter:
             "-filter_complex_threads", "1", "-filter_complex", filters,
             "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-threads", "1",
-            "-fps_mode", "vfr", "-movflags", "+faststart", str(output)]
+            *frame_sync, "-movflags", "+faststart", str(output)]
         await self.run(command, output.parent, "CLIP_RENDER_FAILED", **controls)
         result = await self.inspect(output, output.parent, **controls)
         if abs(result["duration"] - (end - start)) > .5:
