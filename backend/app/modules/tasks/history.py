@@ -12,7 +12,7 @@ class TaskHistoryService:
         self.tasks, self.videos, self.media = tasks, videos, media
 
     async def delete(self, user_id: UUID, task_id: UUID | None = None):
-        count = await database_call(self.tasks.repository.hide_history, user_id, task_id)
+        count = await database_call(self.tasks.repository.delete_history, user_id, task_id)
         return {"deleted_count": count}
 
     async def list(self, limit: int, offset: int, user_id: UUID | None = None):

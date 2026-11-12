@@ -631,20 +631,20 @@ it("deletes a history item and clears the remaining records without cancelling j
   const dialog = await screen.findByRole("dialog");
   await within(dialog).findByText("单条记录");
   fireEvent.click(
-    within(dialog).getByRole("button", { name: "隐藏任务记录：单条记录" }),
+    within(dialog).getByRole("button", { name: "删除任务记录：单条记录" }),
   );
   await waitFor(() =>
     expect(within(dialog).queryByText("单条记录")).toBeNull(),
   );
   expect(remove).toHaveBeenCalledWith("history-0");
-  fireEvent.click(within(dialog).getByRole("button", { name: "隐藏全部记录" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "删除全部记录" }));
   const confirmation = await screen.findByRole("dialog", {
-    name: "隐藏全部历史记录？",
+    name: "删除全部历史记录？",
   });
   expect(clear).not.toHaveBeenCalled();
   expect(within(confirmation).getByText(/当前账号共有 1 条/)).toBeTruthy();
   fireEvent.click(
-    within(confirmation).getByRole("button", { name: "确认隐藏记录" }),
+    within(confirmation).getByRole("button", { name: "确认删除记录" }),
   );
   expect(await within(dialog).findByText("从第一份内容开始")).toBeTruthy();
   expect(clear).toHaveBeenCalledOnce();

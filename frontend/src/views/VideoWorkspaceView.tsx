@@ -792,7 +792,7 @@ export default function VideoWorkspaceView() {
             id="panel-summary"
             aria-labelledby="tab-summary"
             hidden={tab !== "summary"}
-            className="content-panel"
+            className="content-panel content-panel-scrollable"
           >
             <div className="content-panel-heading">
               <div>
@@ -813,36 +813,43 @@ export default function VideoWorkspaceView() {
                 </button>
               )}
             </div>
-            {summary ? (
-              <ContentSummary result={summary} onCitation={setCitation} />
-            ) : (
-              <EmptyPanel
-                icon="sparkles"
-                title={
-                  busy("ai_summary") ? "正在梳理内容要点" : "读懂内容里的关键"
-                }
-                description={
-                  busy("ai_summary")
-                    ? "生成完成后可阅读总结，并从引用回到原文。"
-                    : "提取核心结论与章节脉络，每个要点都能回到文稿核对。"
-                }
-              >
-                <button
-                  className="button primary"
-                  disabled={!canAI || contentActive || !!quoting}
-                  onClick={() => void create("ai_summary", "生成 AI 总结")}
+            <div
+              className="content-panel-body"
+              role="region"
+              aria-label="总结内容"
+              tabIndex={0}
+            >
+              {summary ? (
+                <ContentSummary result={summary} onCitation={setCitation} />
+              ) : (
+                <EmptyPanel
+                  icon="sparkles"
+                  title={
+                    busy("ai_summary") ? "正在梳理内容要点" : "读懂内容里的关键"
+                  }
+                  description={
+                    busy("ai_summary")
+                      ? "生成完成后可阅读总结，并从引用回到原文。"
+                      : "提取核心结论与章节脉络，每个要点都能回到文稿核对。"
+                  }
                 >
-                  {busy("ai_summary") ? "正在总结…" : "生成 AI 总结"}
-                </button>
-              </EmptyPanel>
-            )}
+                  <button
+                    className="button primary"
+                    disabled={!canAI || contentActive || !!quoting}
+                    onClick={() => void create("ai_summary", "生成 AI 总结")}
+                  >
+                    {busy("ai_summary") ? "正在总结…" : "生成 AI 总结"}
+                  </button>
+                </EmptyPanel>
+              )}
+            </div>
           </section>
           <section
             role="tabpanel"
             id="panel-mindmap"
             aria-labelledby="tab-mindmap"
             hidden={tab !== "mindmap"}
-            className="content-panel"
+            className="content-panel content-panel-scrollable"
           >
             <div className="content-panel-heading">
               <div>
@@ -865,38 +872,45 @@ export default function VideoWorkspaceView() {
                 </button>
               )}
             </div>
-            {mindmap ? (
-              <MindMapViewer result={mindmap} />
-            ) : (
-              <EmptyPanel
-                icon="map"
-                title={
-                  busy("ai_mindmap") ? "正在整理知识结构" : "把要点连成一张图"
-                }
-                description={
-                  busy("ai_mindmap")
-                    ? "总结与导图生成后，可在这里展开、缩放和导出。"
-                    : "将主题、结论与细节连接起来，帮助理解内容之间的关系。"
-                }
-              >
-                <button
-                  className="button primary"
-                  disabled={!canAI || contentActive || !!quoting}
-                  onClick={() =>
-                    void create("ai_mindmap", "生成总结与思维导图")
+            <div
+              className="content-panel-body"
+              role="region"
+              aria-label="思维导图内容"
+              tabIndex={0}
+            >
+              {mindmap ? (
+                <MindMapViewer result={mindmap} />
+              ) : (
+                <EmptyPanel
+                  icon="map"
+                  title={
+                    busy("ai_mindmap") ? "正在整理知识结构" : "把要点连成一张图"
+                  }
+                  description={
+                    busy("ai_mindmap")
+                      ? "总结与导图生成后，可在这里展开、缩放和导出。"
+                      : "将主题、结论与细节连接起来，帮助理解内容之间的关系。"
                   }
                 >
-                  {busy("ai_mindmap") ? "正在构建…" : "生成总结与导图"}
-                </button>
-              </EmptyPanel>
-            )}
+                  <button
+                    className="button primary"
+                    disabled={!canAI || contentActive || !!quoting}
+                    onClick={() =>
+                      void create("ai_mindmap", "生成总结与思维导图")
+                    }
+                  >
+                    {busy("ai_mindmap") ? "正在构建…" : "生成总结与导图"}
+                  </button>
+                </EmptyPanel>
+              )}
+            </div>
           </section>
           <section
             role="tabpanel"
             id="panel-questions"
             aria-labelledby="tab-questions"
             hidden={tab !== "questions"}
-            className="content-panel"
+            className="content-panel content-panel-scrollable"
           >
             <div className="content-panel-heading">
               <div>
@@ -904,26 +918,33 @@ export default function VideoWorkspaceView() {
                 <p>带着问题阅读，让回答回到原文。</p>
               </div>
             </div>
-            {transcript ? (
-              <VideoQuestions
-                video={video}
-                transcriptId={transcript.id}
-                onJump={setCitation}
-              />
-            ) : (
-              <EmptyPanel
-                icon="chat"
-                title="获取文稿后，就可以提问"
-                description="先提取文稿或生成总结，再针对这份内容提问。"
-              >
-                <button
-                  className="button secondary"
-                  onClick={() => setTab("transcript")}
+            <div
+              className="content-panel-body"
+              role="region"
+              aria-label="问答内容"
+              tabIndex={0}
+            >
+              {transcript ? (
+                <VideoQuestions
+                  video={video}
+                  transcriptId={transcript.id}
+                  onJump={setCitation}
+                />
+              ) : (
+                <EmptyPanel
+                  icon="chat"
+                  title="获取文稿后，就可以提问"
+                  description="先提取文稿或生成总结，再针对这份内容提问。"
                 >
-                  前往文稿
-                </button>
-              </EmptyPanel>
-            )}
+                  <button
+                    className="button secondary"
+                    onClick={() => setTab("transcript")}
+                  >
+                    前往文稿
+                  </button>
+                </EmptyPanel>
+              )}
+            </div>
           </section>
           {showClips && (
             <section

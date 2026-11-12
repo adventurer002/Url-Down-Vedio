@@ -44,10 +44,21 @@ def test_shared_assets_migration_preserves_old_artifacts_and_guards_downgrade():
             video_id = videos.get_or_create(ParsedVideo("youtube", "old-source", "old source", duration=12),
                                            "https://example.com/old-source")
             tasks = TaskRepository(sessions)
+            legacy_tasks = sa.Table("tasks", sa.MetaData(), autoload_with=engine)
+
+            def create_legacy_task(payload=None):
+                identifier = uuid4()
+                with sessions.begin() as session:
+                    session.execute(legacy_tasks.insert().values(
+                        id=identifier, user_id=user.id, video_id=video_id,
+                        task_type="simulate_progress", input_payload=payload or {},
+                    ))
+                return tasks.get(identifier)
+
             transcript = TranscriptRepository(sessions)
             clips = ClipRepository(sessions)
             media = MediaRepository(sessions)
-            plan_task = tasks.create("simulate_progress", video_id, user_id=user.id)
+            plan_task = create_legacy_task()
             assert tasks.start(plan_task.id)
             holder = {}
             def plan_writer(session):
@@ -58,7 +69,7 @@ def test_shared_assets_migration_preserves_old_artifacts_and_guards_downgrade():
             tasks.complete_with(plan_task.id, {}, plan_writer)
             plan_id, file_id = holder["plan_id"], uuid4()
             old_export, new_export = uuid4(), uuid4()
-            seed = tasks.create("simulate_progress", video_id, {"plan_id": str(plan_id), "export_key": "old"}, user_id=user.id)
+            seed = create_legacy_task({"plan_id": str(plan_id), "export_key": "old"})
             assert tasks.start(seed.id)
             expiry = utcnow() + timedelta(hours=3)
             record = MediaRecord(file_id, seed.id, video_id, "clip_720_mp4", f"files/{file_id}.mp4",

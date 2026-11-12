@@ -17,6 +17,7 @@ from app.modules.admin.service import AdminService
 from app.modules.audit.models import AuditEvent
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
+from app.modules.tasks.repository import TaskRepository
 
 
 def test_postgres_only_one_first_admin_across_distinct_users(postgres):
@@ -182,12 +183,21 @@ def test_postgres_0008_migration_preserves_users_and_matches_models():
             assert "audit_events" not in inspect(scoped).get_table_names()
             sessions = sessionmaker(bind=scoped, expire_on_commit=False)
             user_id = uuid4()
+            visible_task, removed_task = uuid4(), uuid4()
             # Seed the old schema without selecting columns introduced after 0007.
             with scoped.begin() as connection:
                 connection.execute(text("INSERT INTO users (id,wechat_openid,nickname,role,status,last_login_at) "
                     "VALUES (:id,'migration-existing-user','fixture','user','active',now())"), {"id": user_id})
+                connection.execute(text(
+                    "INSERT INTO tasks (id,user_id,task_type,history_hidden) "
+                    "VALUES (:id,:user_id,'simulate_progress',:hidden)"
+                ), [{"id": visible_task, "user_id": user_id, "hidden": False},
+                    {"id": removed_task, "user_id": user_id, "hidden": True}])
             command.upgrade(config, "head")
             command.check(config)
+            with scoped.connect() as connection:
+                assert connection.execute(text("SELECT task_id FROM task_history_entries")).scalars().all() == [visible_task]
+            assert TaskRepository(sessions).delete_history(user_id, visible_task) == 1
             result = AdminService(sessions).bootstrap(user_id, "operator", "migration QA", "migration-key")
             assert not result["duplicate"]
             command.downgrade(config, "0007")
@@ -196,6 +206,8 @@ def test_postgres_0008_migration_preserves_users_and_matches_models():
                 assert connection.scalar(text("SELECT role FROM users WHERE id=:id"), {"id": user_id}) == "admin"
             command.upgrade(config, "head")
             command.check(config)
+            with scoped.connect() as connection:
+                assert connection.scalar(text("SELECT count(*) FROM task_history_entries")) == 0
     finally:
         scoped.dispose()
         with base.begin() as connection:

@@ -53,7 +53,7 @@ async def test_audit_filters_failed_attempts_and_beijing_overview(admin_data):
     today = now().astimezone(BEIJING).replace(hour=0, minute=0, second=0, microsecond=0)
     old = d.tasks.create("download", user_id=d.target.id)
     d.tasks.create("download", user_id=d.target.id)
-    d.tasks.hide_history(d.target.id, old.id)
+    d.tasks.delete_history(d.target.id, old.id)
     with d.sessions.begin() as session:
         session.execute(update(Task).where(Task.id == old.id).values(created_at=(today - timedelta(seconds=1)).astimezone(timezone.utc)))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(d.app), base_url="http://test", headers=headers(d)) as client:

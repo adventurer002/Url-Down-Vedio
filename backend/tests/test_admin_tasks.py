@@ -30,7 +30,7 @@ async def test_global_queries_include_hidden_records_and_exclude_private_payload
     d.tasks.finish(private.id, "completed", 100,
         {"answer_id": str(answer_id), "private_answer": "PRIVATE_ANSWER", "file_id": "not-a-uuid"},
         error_message="PRIVATE_ERROR")
-    d.tasks.hide_history(d.target.id, private.id)
+    d.tasks.delete_history(d.target.id, private.id)
     queued = d.tasks.create("download", user_id=d.target.id)
     anonymous = d.tasks.create("transcription")
     bus = MemoryBus()

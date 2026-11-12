@@ -55,10 +55,10 @@ export default function ClearHistoryConfirm({
         if (!pending) onClose();
       }}
     >
-      <h2 id="clear-history-title">隐藏全部历史记录？</h2>
+      <h2 id="clear-history-title">删除全部历史记录？</h2>
       <p id="clear-history-description">
         当前账号共有 {count}{" "}
-        条历史记录。隐藏后将不再出现在历史列表中，正在执行的任务、源文件和知识库收藏仍会保留。
+        条历史记录。确认后将永久删除这些历史记录，无法恢复。
       </p>
       <ErrorNotice error={error} />
       <div className="quote-actions">
@@ -75,7 +75,7 @@ export default function ClearHistoryConfirm({
           disabled={pending || count === 0}
           onClick={() => void confirm()}
         >
-          {pending ? "正在隐藏…" : "确认隐藏记录"}
+          {pending ? "正在删除…" : "确认删除记录"}
         </button>
       </div>
     </dialog>

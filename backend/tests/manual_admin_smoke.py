@@ -127,7 +127,7 @@ def main():
             request("/api/v1/auth/me", 401, token=target_token)
             request("/api/v1/auth/me", token=issue_token(target.id, 2))
             task = tasks.create("simulate_progress", user_id=target.id, input_payload={"question": "PRIVATE_FIXTURE"})
-            tasks.hide_history(target.id, task.id)
+            tasks.delete_history(target.id, task.id)
             assert "PRIVATE_FIXTURE" not in json.dumps(request("/api/v1/admin/tasks"))
             request(f"/api/v1/admin/tasks/{task.id}")
             assert request(f"/api/v1/admin/tasks/{task.id}/cancel", body={"reason": "fixture cancel", "key": "smoke-cancel"})["data"]["status"] == "cancelled"

@@ -62,7 +62,7 @@ it("blocks duplicate clearing, keeps failures visible and closes only after succ
   render(
     <ClearHistoryConfirm count={5} onConfirm={onConfirm} onClose={onClose} />,
   );
-  const confirm = screen.getByRole("button", { name: "确认隐藏记录" });
+  const confirm = screen.getByRole("button", { name: "确认删除记录" });
   fireEvent.click(confirm);
   fireEvent.click(confirm);
   expect(onConfirm).toHaveBeenCalledOnce();
@@ -74,7 +74,7 @@ it("blocks duplicate clearing, keeps failures visible and closes only after succ
   reject(new ApiError("NETWORK_ERROR", "网络暂不可用"));
   expect(await screen.findByText("网络暂不可用")).toBeTruthy();
   expect(onClose).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "确认隐藏记录" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认删除记录" }));
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   expect(onConfirm).toHaveBeenCalledTimes(2);
 });
