@@ -91,7 +91,6 @@ function GrantForm({ id }: { id: string }) {
         >
           <option value="plus_monthly">Plus 月会员</option>
           <option value="pro_monthly">Pro 月会员</option>
-          <option value="monthly">旧版月会员</option>
           <option value="asr_120">120 分钟转写包</option>
           <option value="ai_100">100 次 AI 包</option>
         </select>
