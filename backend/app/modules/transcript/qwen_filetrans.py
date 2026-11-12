@@ -314,8 +314,57 @@ class QwenFiletransASRProvider:
             text = sentence["text"]
             if not isinstance(text, str):
                 raise ValueError
-            segments.append({"start": start / 1000, "end": end / 1000, "text": text})
+            segments.extend(QwenFiletransASRProvider.sentence_segments(sentence))
             previous_end = end
             if not detected or detected == "und":
                 detected = sentence.get("language") or "und"
         return make_transcript(detected or "und", segments)
+
+    @staticmethod
+    def sentence_segments(sentence):
+        """Use verified word times for clause boundaries inside a vendor sentence."""
+        words = sentence.get("words")
+        if words is None:
+            return [{"start": sentence["begin_time"] / 1000,
+                     "end": sentence["end_time"] / 1000, "text": sentence["text"]}]
+        if not isinstance(words, list) or not 1 <= len(words) <= 20000:
+            raise ValueError
+        previous_end = sentence["begin_time"]
+        pieces = []
+        for word in words:
+            start, end = word["begin_time"], word["end_time"]
+            text, punctuation = word["text"], word.get("punctuation", "")
+            if (
+                isinstance(start, bool) or isinstance(end, bool)
+                or not isinstance(start, (int, float))
+                or not isinstance(end, (int, float))
+                or not math.isfinite(start) or not math.isfinite(end)
+                or start < previous_end or end <= start
+                or end > sentence["end_time"]
+                or not isinstance(text, str) or not text.strip()
+                or not isinstance(punctuation, str)
+            ):
+                raise ValueError
+            pieces.append(text + punctuation)
+            previous_end = end
+        # Word boundaries are usable only when they account for the entire sentence.
+        if "".join("".join(pieces).split()) != "".join(sentence["text"].split()):
+            raise ValueError
+        segments, current = [], []
+        clause_start = words[0]["begin_time"]
+        for index, word in enumerate(words):
+            current.append(pieces[index])
+            punctuation = word.get("punctuation", "")
+            next_text = words[index + 1]["text"] if index + 1 < len(words) else ""
+            decimal = (punctuation in {".", ","} and word["text"][-1:].isdigit()
+                       and next_text[:1].isdigit())
+            if index + 1 == len(words) or (
+                re.search(r"[,，。.!?！？;；:：]", punctuation) and not decimal
+            ):
+                segments.append({"start": clause_start / 1000,
+                                 "end": word["end_time"] / 1000,
+                                 "text": "".join(current)})
+                current = []
+                if index + 1 < len(words):
+                    clause_start = words[index + 1]["begin_time"]
+        return segments

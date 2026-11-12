@@ -1,7 +1,7 @@
 """Versioned cache identities; user scope and exact bytes/ranges are mandatory."""
 from app.modules.clips.selection import digest
 
-TIMING_VERSION = "timing-v3"
+TIMING_VERSION = "timing-v4"
 RENDERER_VERSION = "renderer-v2"
 
 
