@@ -7,6 +7,12 @@ import pytest
 from deploy import deploy_release as deploy
 
 
+def test_upload_creation_proxy_preserves_post_without_a_trailing_slash_redirect():
+    config = Path(deploy.__file__).with_name('openresty-api.conf').read_text()
+    assert 'location /api/v1/uploads {' in config
+    assert 'location /api/v1/uploads/ {' not in config
+
+
 def release(tmp_path, name, files):
     root = tmp_path / name
     for filename, body in files.items():
