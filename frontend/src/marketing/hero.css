@@ -257,7 +257,7 @@ body:has(.marketing-site.m-landing-site) {
   width: min(969px, 86.45vw, calc(57svh * 1.644));
   aspect-ratio: 1200 / 730;
   min-height: 0;
-  margin: -19px 0 0;
+  margin: 11px 0 0;
   overflow: hidden;
   mix-blend-mode: normal;
   -webkit-mask-image: linear-gradient(
@@ -378,7 +378,7 @@ body:has(.marketing-site.m-landing-site) {
     padding-top: calc(116px + env(safe-area-inset-top, 0px));
   }
   .m-hero-stage {
-    margin-top: 53px;
+    margin-top: 83px;
   }
   .m-landing-site .m-hero-resource-note {
     position: static;
@@ -464,7 +464,7 @@ body:has(.marketing-site.m-landing-site) {
   }
   .m-hero-stage {
     width: min(532px, calc(100% + 24px));
-    margin: 70px -24px 0;
+    margin: 100px -24px 0;
   }
   .m-hero-composite {
     translate: none;
@@ -551,7 +551,7 @@ body:has(.marketing-site.m-landing-site) {
     grid-row: 1;
     justify-self: center;
     width: min(100%, calc((100svh - 132px) * 1.644));
-    margin: 30px 0 0;
+    margin: 60px 0 0;
   }
   .m-landing-site .m-hero-composite {
     translate: none;
@@ -687,7 +687,7 @@ body:has(.marketing-site.m-landing-site) {
   margin-top: 12px;
   color: #62626b;
   font-size: 21px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.7;
   text-wrap: balance;
 }

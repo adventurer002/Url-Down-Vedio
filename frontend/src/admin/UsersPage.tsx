@@ -1,3 +1,4 @@
+import { membershipLabel } from "../utils/billing";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { adminApi } from "./api";
@@ -61,7 +62,7 @@ export default function UsersPage({
         description={
           allowances
             ? "按用户查看会员期限、额度余额、权益批次与流水。"
-            : "查看账号信息、关注情况与会员状态。"
+            : "查看账号信息、关注情况与会员等级。"
         }
       />
       <PageSummary
@@ -119,7 +120,7 @@ export default function UsersPage({
                 <span>2</span>
                 <div>
                   <strong>预览固定产品</strong>
-                  <p>月会员、转写包或 AI 包，先确认生效时间。</p>
+                  <p>Plus、Pro 月会员、转写包或 AI 包，先确认生效时间。</p>
                 </div>
               </li>
               <li>
@@ -135,7 +136,7 @@ export default function UsersPage({
       )}
       <Panel
         title={allowances ? "选择用户查看权益" : "用户列表"}
-        description="会员状态按有效期判断，与公众号关注和账号状态分别展示。"
+        description="显示当前生效的会员等级与有效期。"
         busy={query.isFetching}
       >
         {query.isError && query.data && (
@@ -175,7 +176,7 @@ export default function UsersPage({
                         "角色",
                         "账号状态",
                         "公众号关注",
-                        "会员状态",
+                        "会员等级",
                         "会员到期（北京）",
                         "最近登录（北京）",
                         "操作",
@@ -208,7 +209,7 @@ export default function UsersPage({
                           <span
                             className={`admin-badge ${user.member ? "admin-badge-completed" : ""}`}
                           >
-                            {user.member ? "有效期内" : "无有效会员"}
+                            {membershipLabel(user.member_tier, user.member)}
                           </span>
                         </td>
                         <td>

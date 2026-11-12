@@ -4,6 +4,7 @@ import hmac
 import logging
 import re
 import time
+import unicodedata
 from uuid import UUID
 from xml.sax.saxutils import escape
 
@@ -11,6 +12,7 @@ from defusedxml import ElementTree
 from defusedxml.common import DefusedXmlException
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from xml.etree.ElementTree import ParseError
 
 from app.core.config import settings
@@ -81,6 +83,24 @@ async def mock_confirm(scene_id: UUID, service=Depends(get_auth_service)):
 @router.get("/me")
 async def me(user=Depends(required_user)):
     return success_response(public_user(user))
+
+
+class ProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    nickname: str = Field(min_length=1, max_length=64)
+
+    @field_validator("nickname")
+    @classmethod
+    def validate_nickname(cls, value):
+        value = value.strip()
+        if not value or any(unicodedata.category(char).startswith("C") for char in value):
+            raise ValueError("昵称须为 1–64 个可见字符")
+        return value
+
+
+@router.patch("/me")
+async def update_profile(body: ProfileRequest, user=Depends(required_user), service=Depends(get_auth_service)):
+    return success_response(await service.update_profile(user, body.nickname))
 
 
 @router.post("/logout")

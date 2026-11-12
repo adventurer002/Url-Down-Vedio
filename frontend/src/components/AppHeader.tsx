@@ -7,6 +7,7 @@ import Icon from "./Icon";
 import StarBorder from "./StarBorder";
 import { useWorkspaceStore, useWorkspaceValue } from "../hooks/useWorkspace";
 import { useBilling } from "../stores/billing";
+import { membershipLabel } from "../utils/billing";
 import MobileNavigation from "./MobileNavigation";
 export default function AppHeader() {
   const store = useWorkspaceStore();
@@ -64,7 +65,7 @@ export default function AppHeader() {
           (pathname.startsWith("/video/") ? " workspace-header" : "")
         }
       >
-        <a href="/" className="brand" aria-label="VideoHub 首页">
+        <a href="/app" className="brand" aria-label="VideoHub 工作台">
           <span className="brand-icon">
             <Icon name="play" size={20} />
           </span>
@@ -91,7 +92,9 @@ export default function AppHeader() {
           >
             <Icon name="sparkles" size={16} />
             <span>订阅方案</span>
-            {billing.data?.member && <small>会员</small>}
+            {billing.data?.member && (
+              <small>{membershipLabel(billing.data.member_tier, true)}</small>
+            )}
           </Link>
           <button
             className="history-button"
@@ -118,7 +121,11 @@ export default function AppHeader() {
                 aria-controls="account-options"
                 onClick={() => setOpen((value) => !value)}
               >
-                <Icon name="user" size={20} />
+                <img
+                  className="default-avatar"
+                  src="/media/default-avatar.png"
+                  alt=""
+                />
               </button>
               {open && (
                 <div id="account-options" className="account-popover">
@@ -139,7 +146,6 @@ export default function AppHeader() {
                     </Link>
                     <Link to="/subscription">订阅方案</Link>
                     <Link to="/library">我的知识库</Link>
-                    <Link to="/settings">设置</Link>
                     <a href="/help">使用帮助</a>
                     {auth.user.role === "admin" && (
                       <Link to="/admin">管理界面</Link>

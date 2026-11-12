@@ -34,7 +34,7 @@ class StatusRequest(OperationRequest):
 
 
 class GrantRequest(OperationRequest):
-    product: Literal["monthly", "asr_120", "ai_100"]
+    product: Literal["monthly", "plus_monthly", "pro_monthly", "asr_120", "ai_100"]
 
 
 TaskType = Literal["download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap", "ai_question", "ai_clip_plan", "clips_export", "media_probe", "simulate_progress", "model_test"]
@@ -118,7 +118,7 @@ async def cleanup(body: OperationRequest, request: Request, actor=Depends(admin_
 
 
 @router.get("/users/{user_id}/grants/preview")
-async def grant_preview(user_id: UUID, product: Literal["monthly", "asr_120", "ai_100"],
+async def grant_preview(user_id: UUID, product: Literal["monthly", "plus_monthly", "pro_monthly", "asr_120", "ai_100"],
                         service=Depends(get_admin_service)):
     return success_response(await database_call(service.grant_preview, user_id, product))
 

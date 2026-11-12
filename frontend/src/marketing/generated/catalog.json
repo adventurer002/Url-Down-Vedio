@@ -8,6 +8,18 @@
       "asr_seconds": 18000,
       "ai_generations": 100
     },
+    "plus_monthly": {
+      "name": "Plus 月会员",
+      "price_fen": 990,
+      "asr_seconds": 9000,
+      "ai_generations": 50
+    },
+    "pro_monthly": {
+      "name": "Pro 月会员",
+      "price_fen": 1690,
+      "asr_seconds": 18000,
+      "ai_generations": 100
+    },
     "asr_120": {
       "name": "120 分钟转写包",
       "price_fen": 990,
@@ -40,6 +52,32 @@
     "file_bytes": 536870912,
     "daily_egress_bytes": 5368709120,
     "download_concurrency": 3
+  },
+  "tier_limits": {
+    "legacy": {
+      "video_seconds": 3600,
+      "file_bytes": 536870912,
+      "daily_egress_bytes": 5368709120,
+      "download_concurrency": 3
+    },
+    "plus": {
+      "video_seconds": 3600,
+      "file_bytes": 536870912,
+      "daily_egress_bytes": 10000000000,
+      "download_concurrency": 3
+    },
+    "pro": {
+      "video_seconds": 7200,
+      "file_bytes": 536870912,
+      "daily_egress_bytes": null,
+      "download_concurrency": 3
+    },
+    "free": {
+      "video_seconds": 1200,
+      "file_bytes": 268435456,
+      "daily_egress_bytes": 1073741824,
+      "download_concurrency": 1
+    }
   },
   "max_text_chars": 60000,
   "max_output_tokens_per_call": 4096,

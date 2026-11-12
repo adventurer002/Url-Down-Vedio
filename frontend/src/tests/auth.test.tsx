@@ -330,3 +330,47 @@ it("does not open a second login while the existing session is being restored", 
     client.defaults.adapter = original;
   }
 });
+
+it("ignores nickname save responses after the login identity changes", async () => {
+  authStore.accept(authenticated);
+  let finish!: (value: { data: typeof authenticated.user }) => void;
+  vi.spyOn(client, "patch").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const pending = authStore.updateNickname("新名");
+  authStore.clear();
+  authStore.accept({
+    ...authenticated,
+    access_token: "token-b",
+    user: { ...authenticated.user!, id: "user-b" },
+  });
+  finish({ data: { ...authenticated.user!, nickname: "新名" } });
+  expect(await pending).toBe(false);
+  expect(authStore.getState().user?.id).toBe("user-b");
+  expect(authStore.getState().user?.nickname).toBe(
+    authenticated.user!.nickname,
+  );
+});
+
+it("does not let an earlier session restore overwrite a saved nickname", async () => {
+  authStore.accept(authenticated);
+  let finish!: (value: { data: typeof authenticated.user }) => void;
+  vi.spyOn(client, "get").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const restoring = authStore.restore();
+  vi.spyOn(client, "patch").mockResolvedValue({
+    data: { ...authenticated.user!, nickname: "新名" },
+  });
+  expect(await authStore.updateNickname("新名")).toBe(true);
+  finish({ data: authenticated.user });
+  await restoring;
+  expect(authStore.getState().user?.nickname).toBe("新名");
+  expect(authStore.getState().restoring).toBe(false);
+});

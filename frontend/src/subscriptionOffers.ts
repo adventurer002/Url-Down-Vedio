@@ -1,4 +1,4 @@
-/** Approved public proposal. These values do not grant or change live entitlements. */
+/** Public offer copy. Effective membership and quota come from the billing API. */
 export const billingPeriods = [
   { id: "monthly", label: "月付", unit: "月", months: 1 },
   { id: "quarterly", label: "季付", unit: "季", months: 3 },

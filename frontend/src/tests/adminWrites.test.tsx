@@ -285,7 +285,7 @@ it("previews fixed products and never sends price, amount or expiry in a grant",
   ).toBeTruthy();
   const body = vi.mocked(adminApi.grant).mock.calls[0]![1];
   expect(Object.keys(body).sort()).toEqual(["key", "product", "reason"]);
-  expect(body.product).toBe("monthly");
+  expect(body.product).toBe("plus_monthly");
   expect(screen.queryByText(/已收到付款/)).toBeNull();
   fireEvent.click(within(dialog).getByRole("button", { name: "开始新的发放" }));
   await within(dialog).findByText(/月会员 · 转写/);
@@ -525,4 +525,34 @@ it("keeps a confirmed receipt visible even if the following detail refresh fails
     screen.getByRole("complementary", { name: "已确认的管理操作" }),
   ).toBeTruthy();
   expect(adminApi.changeStatus).toHaveBeenCalledTimes(1);
+});
+
+it("lets an administrator choose Pro and submits the selected membership product", async () => {
+  const dialog = await grantSetup();
+  expect(
+    within(dialog).getByRole("option", { name: "Plus 月会员" }),
+  ).toBeTruthy();
+  fireEvent.change(within(dialog).getByLabelText("发放产品"), {
+    target: { value: "pro_monthly" },
+  });
+  await waitFor(() =>
+    expect(adminApi.grantPreview).toHaveBeenLastCalledWith(
+      target,
+      "pro_monthly",
+      expect.any(AbortSignal),
+    ),
+  );
+  await within(dialog).findByText(/月会员 · 转写/);
+  await waitFor(() =>
+    expect(within(dialog).getByRole("checkbox")).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
+  confirmGrant(dialog);
+  await within(dialog).findByText(/权益已发放，排队任务唤醒待恢复/);
+  expect(vi.mocked(adminApi.grant).mock.calls[0]![1].product).toBe(
+    "pro_monthly",
+  );
+  expect(within(dialog).getByText("Pro 月会员")).toBeTruthy();
 });

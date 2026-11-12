@@ -499,7 +499,7 @@ it("prompts and focuses an empty video link without calling the parse API", asyn
 });
 
 it.each(["anonymous", "user", "disabled", "admin"])(
-  "keeps cleanup in the admin area and settings permissions consistent for %s",
+  "redirects retired settings to the personal center for %s",
   async (role) => {
     const clean = vi.spyOn(api, "cleanup");
     authStore.clear();
@@ -520,12 +520,11 @@ it.each(["anonymous", "user", "disabled", "admin"])(
     expect(api.ready).not.toHaveBeenCalled();
     home.unmount();
     mount("/settings");
-    await screen.findByRole("heading", { name: "设置" });
+    await screen.findByRole("heading", { name: "个人中心", level: 1 });
     expect(screen.queryByRole("button", { name: /清理/ })).toBeNull();
     const link = screen.queryByRole("link", { name: "前往存储与服务 →" });
-    if (role === "admin")
-      expect(link).toHaveProperty("pathname", "/admin/system");
-    else expect(link).toBeNull();
+    expect(link).toBeNull();
+    expect(screen.queryByRole("link", { name: "设置" })).toBeNull();
     expect(clean).not.toHaveBeenCalled();
   },
 );

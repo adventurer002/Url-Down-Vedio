@@ -1,11 +1,13 @@
-import type { Allowances } from "../types/billing";
+import type { Allowances, MembershipTier } from "../types/billing";
 
 export function allowanceSourceLabel(source: string) {
   return (
     (
       {
         trial: "体验",
-        monthly: "月会员",
+        monthly: "旧版月会员",
+        plus_monthly: "Plus 月会员",
+        pro_monthly: "Pro 月会员",
         asr_120: "120 分钟转写包",
         ai_100: "100 次 AI 包",
         addon: "加购",
@@ -50,4 +52,17 @@ export function dateLabel(value: string | null) {
     month: "long",
     day: "numeric",
   }).format(new Date(value));
+}
+
+export function membershipLabel(
+  tier: MembershipTier | undefined,
+  member: boolean,
+) {
+  if (!member) return "免费用户";
+  return {
+    free: "免费用户",
+    legacy: "旧版会员",
+    plus: "Plus 会员",
+    pro: "Pro 会员",
+  }[tier || "legacy"];
 }

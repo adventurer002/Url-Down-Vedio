@@ -1,3 +1,4 @@
+export type MembershipTier = "free" | "legacy" | "plus" | "pro";
 import type { JobKind } from "./api";
 
 export interface Product {
@@ -9,13 +10,16 @@ export interface Product {
 export interface ResourceLimits {
   video_seconds: number;
   file_bytes: number;
-  daily_egress_bytes: number;
+  daily_egress_bytes: number | null;
   download_concurrency: number;
 }
 export interface BillingCatalog {
   version: string;
   currency: string;
-  products: Record<"monthly" | "asr_120" | "ai_100", Product>;
+  products: Record<
+    "monthly" | "plus_monthly" | "pro_monthly" | "asr_120" | "ai_100",
+    Product
+  >;
   trial: { asr_seconds: number; ai_generations: number; valid_days: number };
   addon_valid_days: number;
   rollover: boolean;
@@ -32,6 +36,7 @@ export interface BillingCatalog {
 export interface Allowances {
   version: string;
   member: boolean;
+  member_tier?: MembershipTier;
   member_until: string | null;
   subscribed: boolean;
   balances: Record<

@@ -9,11 +9,20 @@ VERSION = "allowances-v1"
 BEIJING = ZoneInfo("Asia/Shanghai")
 PRODUCTS = {
     "monthly": {"name": "月会员", "price_fen": 1990, "asr_seconds": 18000, "ai_generations": 100},
+    "plus_monthly": {"name": "Plus 月会员", "price_fen": 990, "asr_seconds": 9000, "ai_generations": 50},
+    "pro_monthly": {"name": "Pro 月会员", "price_fen": 1690, "asr_seconds": 18000, "ai_generations": 100},
     "asr_120": {"name": "120 分钟转写包", "price_fen": 990, "asr_seconds": 7200, "ai_generations": 0},
     "ai_100": {"name": "100 次 AI 包", "price_fen": 990, "asr_seconds": 0, "ai_generations": 100},
 }
 FREE_LIMITS = {"video_seconds": 1200, "file_bytes": 256 * 1024**2, "daily_egress_bytes": 1024**3, "download_concurrency": 1}
 MEMBER_LIMITS = {"video_seconds": 3600, "file_bytes": 512 * 1024**2, "daily_egress_bytes": 5 * 1024**3, "download_concurrency": 3}
+MEMBERSHIP_TIERS = {"monthly": "legacy", "plus_monthly": "plus", "pro_monthly": "pro"}
+TIER_LIMITS = {
+    "legacy": MEMBER_LIMITS,
+    "plus": {**MEMBER_LIMITS, "daily_egress_bytes": 10_000_000_000},
+    "pro": {**MEMBER_LIMITS, "video_seconds": 7200, "daily_egress_bytes": None},
+    "free": FREE_LIMITS,
+}
 MAX_TEXT_CHARS = 60000
 MAX_OUTPUT_TOKENS = 4096
 MAX_PENDING_TASKS = 10
@@ -48,7 +57,7 @@ def catalog():
     return {"version": VERSION, "currency": "CNY", "products": PRODUCTS,
             "trial": {"asr_seconds": 1800, "ai_generations": 5, "valid_days": 30},
             "addon_valid_days": 30, "rollover": False, "free_daily_downloads": 2,
-            "free_limits": FREE_LIMITS, "member_limits": MEMBER_LIMITS,
+            "free_limits": FREE_LIMITS, "member_limits": MEMBER_LIMITS, "tier_limits": TIER_LIMITS,
             "max_text_chars": MAX_TEXT_CHARS, "max_output_tokens_per_call": MAX_OUTPUT_TOKENS,
             "max_total_output_tokens": 16384, "max_llm_calls": 16,
             "asr_rounding": "完整音频按秒向上取整；字幕及转写缓存不扣分钟",

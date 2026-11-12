@@ -173,7 +173,9 @@ export function OperationState({
             <dd>
               {
                 {
-                  monthly: "月会员",
+                  monthly: "旧版月会员",
+                  plus_monthly: "Plus 月会员",
+                  pro_monthly: "Pro 月会员",
                   asr_120: "120 分钟转写包",
                   ai_100: "100 次 AI 包",
                 }[(record.body as import("./api").GrantRequest).product]

@@ -52,10 +52,9 @@ it("selects real presets without creating a task until download is clicked", () 
     "1080P WebM",
     "high_webm",
   );
-  fireEvent.change(screen.getByLabelText("格式"), {
-    target: { value: "audio:mp3" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "仅音频" }));
   expect(screen.queryByRole("radio")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "视频" }));
   fireEvent.change(screen.getByLabelText("格式"), { target: { value: "mp4" } });
   expect(
     (screen.getByRole("radio", { name: /720P/ }) as HTMLInputElement).checked,
@@ -79,9 +78,7 @@ it("disables missing video presets while keeping the separate audio workflow", (
       }) as HTMLButtonElement
     ).disabled,
   ).toBe(true);
-  fireEvent.change(screen.getByLabelText("格式"), {
-    target: { value: "audio:mp3" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "仅音频" }));
   expect(screen.queryByRole("group", { name: "清晰度" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "提取音频" }));
   expect(create).toHaveBeenCalledWith("audio_extraction", "纯音频 MP3");

@@ -161,3 +161,22 @@ def test_unresolved_database_failure_is_audited_as_unknown_not_failed(admin_data
         event = session.scalar(select(AuditEvent).where(AuditEvent.action == "allowance.grant"))
         assert event.outcome == "unknown" and event.result["error_code"] == "DATABASE_OUTCOME_UNKNOWN"
         assert "secret" not in str(event.result) and session.get(AllowanceGrant, "uncertain") is None
+
+
+@pytest.mark.parametrize("product,tier", [("plus_monthly", "plus"), ("pro_monthly", "pro")])
+async def test_admin_can_preview_and_grant_both_membership_tiers(admin_data, monkeypatch, product, tier):
+    d = admin_data
+    bootstrap(d)
+    from app.modules.billing import service as billing_service
+    monkeypatch.setattr(billing_service, "resume_queued", AsyncMock(return_value=0))
+    path = f"/api/v1/admin/users/{d.target.id}"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(d.app), base_url="http://test") as client:
+        preview = await client.get(path + "/grants/preview", params={"product": product}, headers=headers(d))
+        assert preview.status_code == 200
+        body = {"product": product, "reason": "人工发放", "key": "tier-" + tier}
+        response = await client.post(path + "/grants", json=body, headers=headers(d))
+        assert response.status_code == 200
+        repeated = await client.post(path + "/grants", json=body, headers=headers(d))
+        assert repeated.json()["data"]["duplicate"]
+    assert d.service.user_allowances(d.target.id)["member_tier"] == tier
+    assert d.service.user_detail(d.target.id)["member_tier"] == tier

@@ -549,7 +549,10 @@ export default function VideoWorkspaceView() {
           aria-label="视频下载"
         >
           <div className="content-download-heading">
-            <h2>视频下载</h2>
+            <div>
+              <h2>视频下载</h2>
+              <p>选择格式与清晰度，保存精彩内容。</p>
+            </div>
             <button
               className="text-button"
               onClick={() => setDownloadOpen(false)}
@@ -558,19 +561,32 @@ export default function VideoWorkspaceView() {
             </button>
           </div>
           <div className="content-download-body">
-            <div className="content-download-preview">
-              {video.metadata.thumbnail ? (
-                <img
-                  src={video.metadata.thumbnail}
-                  alt="视频封面"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <Icon name="play" size={34} />
-              )}
-              <span>{timecode(video.metadata.duration)}</span>
+            <div className="content-download-media">
+              <div className="content-download-preview">
+                {video.metadata.thumbnail ? (
+                  <img
+                    src={video.metadata.thumbnail}
+                    alt="视频封面"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <p className="muted">暂无封面</p>
+                )}
+                <span>{timecode(video.metadata.duration)}</span>
+              </div>
+              <div className="content-download-info">
+                <div>
+                  <p className="content-download-title">
+                    {video.metadata.title}
+                  </p>
+                  {video.metadata.uploader && <p>{video.metadata.uploader}</p>}
+                </div>
+                <a href={video.url} target="_blank" rel="noopener noreferrer">
+                  查看原视频
+                </a>
+              </div>
             </div>
-            <div>
+            <div className="content-download-controls">
               {video.partial && (
                 <button
                   className="button secondary"

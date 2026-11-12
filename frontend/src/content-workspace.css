@@ -264,19 +264,89 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 15px 22px;
+  padding: 22px 26px;
   border-bottom: 1px solid var(--content-line);
 }
 .public-app .content-download-heading h2 {
-  font-size: 17px;
+  font-size: 22px;
   margin: 0;
   font-weight: 600;
 }
+.content-download-heading p {
+  margin-top: 5px;
+  color: var(--content-muted);
+  font-size: 14px;
+}
 .content-download-body {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
   gap: 28px;
-  padding: 22px;
+  padding: 26px;
+}
+.content-download-media {
+  min-width: 0;
+}
+.content-download-controls {
+  min-width: 0;
+  border-left: 1px solid var(--content-line);
+  padding-left: 28px;
+}
+.content-download-info {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+.content-download-info .content-download-title {
+  margin-top: 0;
+  color: var(--content-ink);
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.content-download-info p {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--content-muted);
+}
+.content-download-info a {
+  flex-shrink: 0;
+  margin-top: 4px;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.download-media-toggle {
+  display: flex;
+  gap: 6px;
+}
+.download-media-toggle button {
+  min-height: 36px;
+  padding: 7px 16px;
+  border: 1px solid var(--content-line);
+  border-radius: 7px;
+  background: white;
+  color: var(--content-ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.download-media-toggle button[aria-pressed="true"] {
+  background: #18181b;
+  border-color: #18181b;
+  color: white;
+}
+.content-download .container-setting {
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.content-download .container-setting .muted {
+  font-size: 12px;
+}
+.content-download .download-rights {
+  text-align: center;
 }
 .content-download-preview {
   position: relative;
@@ -835,8 +905,11 @@
     gap: 18px;
   }
   .content-download-preview {
-    max-width: 320px;
     width: 100%;
+  }
+  .content-download-controls {
+    border-left: 0;
+    padding-left: 0;
   }
   .content-download-heading {
     padding: 15px 16px;

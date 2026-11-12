@@ -436,3 +436,80 @@ async def test_production_cannot_mint_allowances_through_mock_login(billing, mon
         assert response.status_code == 403
     with pytest.raises(AppException, match="模拟公众号身份"):
         b.quotas.balance(b.user.id)
+
+
+@pytest.mark.parametrize("product,tier,asr,ai,video_limit,traffic_limit", [
+    ("plus_monthly", "plus", 9000, 50, 3600, 10_000_000_000),
+    ("pro_monthly", "pro", 18000, 100, 7200, None),
+])
+def test_tier_grants_drive_quota_admission_and_transfer_limits(billing, product, tier, asr, ai, video_limit, traffic_limit):
+    b = billing
+    first = b.quotas.grant(b.user.id, product, "tier-grant", "test")
+    assert b.quotas.grant(b.user.id, product, "tier-grant", "test")["duplicate"]
+    balance = b.quotas.balance(b.user.id)
+    assert balance["member_tier"] == tier
+    assert balance["balances"]["asr_seconds"]["available"] == asr + 1800
+    assert balance["balances"]["ai_generations"]["available"] == ai + 5
+    assert balance["limits"]["video_seconds"] == video_limit
+    assert balance["limits"]["daily_egress_bytes"] == traffic_limit
+    task = b.create(duration=video_limit)
+    assert b.tasks.start(task.id)
+    with b.tasks.sessions() as session:
+        assert b.quotas.execution_limits(session, task.id)["video_seconds"] == video_limit
+        summary = b.quotas.membership_summaries(session, [b.user.id], now())[b.user.id]
+        assert summary["member_tier"] == tier
+        assert aware(summary["member_until"]) == aware(first["expires_at"])
+        snapshot = b.quotas.admin_snapshot(session, b.user.id, True, True)
+        assert snapshot["member_tier"] == tier
+        assert snapshot["limits"] == balance["limits"]
+    with pytest.raises(AppException) as error:
+        b.create(duration=video_limit + 1)
+    assert error.value.code == "VIDEO_TOO_LONG"
+    transfer = b.quotas.reserve_transfer(b.user.id, 10_000_000_000 if tier == "plus" else 20_000_000_000)
+    if tier == "plus":
+        with pytest.raises(AppException) as error:
+            b.quotas.reserve_transfer(b.user.id, 1)
+        assert error.value.code == "DAILY_TRAFFIC_EXCEEDED"
+    b.quotas.finish_transfer(transfer, 1234)
+    b.quotas.finish_transfer(transfer, 9999)
+    assert b.quotas.balance(b.user.id)["daily"]["egress_used_bytes"] == 1234
+    assert b.quotas.balance(b.user.id)["daily"]["egress_held_bytes"] == 0
+
+
+def test_mixed_tier_renewals_activate_at_period_boundaries(billing, monkeypatch):
+    from app.modules.billing import repository as module
+    b = billing
+    instant = datetime(2027, 1, 31, 12, tzinfo=BEIJING).astimezone(timezone.utc)
+    monkeypatch.setattr(module, "now", lambda: instant)
+    first = b.quotas.grant(b.user.id, "plus_monthly", "plus", "test")
+    with b.tasks.sessions() as session:
+        preview = b.quotas.grant_preview(session, b.user.id, "pro_monthly")
+    second = b.quotas.grant(b.user.id, "pro_monthly", "pro", "test")
+    third = b.quotas.grant(b.user.id, "plus_monthly", "plus-renew", "test")
+    assert aware(second["starts_at"]) == aware(first["expires_at"]) == aware(preview["starts_at"])
+    assert aware(third["starts_at"]) == aware(second["expires_at"])
+    assert b.quotas.balance(b.user.id)["member_tier"] == "plus"
+    instant = aware(second["starts_at"])
+    assert b.quotas.balance(b.user.id)["member_tier"] == "pro"
+    assert b.quotas.balance(b.user.id)["balances"]["ai_generations"]["available"] == 105
+    instant = aware(third["starts_at"])
+    assert b.quotas.balance(b.user.id)["member_tier"] == "plus"
+    instant = aware(third["expires_at"])
+    balance = b.quotas.balance(b.user.id)
+    assert balance["member_tier"] == "free" and not balance["member"]
+    assert balance["limits"]["daily_egress_bytes"] == 1024**3
+
+
+def test_memberships_without_grant_records_keep_legacy_limits(billing):
+    b = billing
+    b.quotas.balance(b.user.id)
+    with b.tasks.sessions.begin() as session:
+        account = session.get(AllowanceAccount, b.user.id)
+        account.member_until = now() + timedelta(days=10)
+    balance = b.quotas.balance(b.user.id)
+    assert balance["member_tier"] == "legacy"
+    assert balance["limits"]["daily_egress_bytes"] == 5 * 1024**3
+
+    scheduled = b.quotas.grant(b.user.id, "pro_monthly", "legacy-renewal", "test")
+    assert aware(scheduled["starts_at"]) == aware(balance["member_until"])
+    assert b.quotas.balance(b.user.id)["member_tier"] == "legacy"

@@ -7,13 +7,14 @@ import hashlib
 from uuid import UUID, uuid4
 
 from sqlalchemy import case, func, select
+from sqlalchemy.orm import object_session
 
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.auth.repository import UserRepository
 from app.modules.billing.models import (Allowance, AllowanceAccount, AllowanceAllocation,
     AllowanceEvent, AllowanceGrant, AllowanceQuote, AllowanceReservation, AllowanceTransfer, DailyAllowance)
-from app.modules.billing.policy import (BEIJING, FREE_LIMITS, MEMBER_LIMITS, PRODUCTS, VERSION,
+from app.modules.billing.policy import (BEIJING, MEMBERSHIP_TIERS, TIER_LIMITS, PRODUCTS, VERSION,
     aware, month_boundary, now)
 
 
@@ -79,7 +80,21 @@ class AllowanceRepository:
         return account.member_until is not None and aware(account.member_until) > now()
 
     def limits(self, account):
-        return dict(MEMBER_LIMITS if self.member(account) else FREE_LIMITS)
+        return dict(TIER_LIMITS[self.membership_tier(account)])
+
+    @staticmethod
+    def active_membership_grants(user_ids, instant):
+        return select(AllowanceGrant).where(AllowanceGrant.user_id.in_(user_ids),
+            AllowanceGrant.product.in_(MEMBERSHIP_TIERS), AllowanceGrant.starts_at <= instant,
+            AllowanceGrant.expires_at > instant).order_by(AllowanceGrant.starts_at)
+
+    def membership_tier(self, account):
+        if account is None or not self.member(account):
+            return "free"
+        grant = object_session(account).scalar(self.active_membership_grants([account.user_id], now())
+            .order_by(None).order_by(AllowanceGrant.starts_at.desc()).limit(1))
+        # Old accounts may predate grant records. Retain their original entitlements.
+        return MEMBERSHIP_TIERS[grant.product] if grant else "legacy"
 
     def daily(self, session, user_id, day=None):
         day = day or now().astimezone(BEIJING).date()
@@ -108,6 +123,7 @@ class AllowanceRepository:
                     "held": sum(x.held for x in lots if x.kind == kind)}
             daily = self.daily(session, user_id)
             return {"version": VERSION, "member": self.member(account), "member_until": account.member_until,
+                "member_tier": self.membership_tier(account),
                 "subscribed": identity["subscribed"], "balances": totals, "limits": self.limits(account),
                 "daily": {"date": daily.day, "downloads_used": daily.downloads_used,
                     "downloads_held": daily.downloads_held, "egress_used_bytes": daily.egress_used,
@@ -128,11 +144,14 @@ class AllowanceRepository:
         return select(AllowanceAccount.user_id).where(AllowanceAccount.member_until > instant)
 
     def membership_summaries(self, session, user_ids, instant):
-        result = {identifier: {"member": False, "member_until": None} for identifier in user_ids}
+        result = {identifier: {"member": False, "member_until": None, "member_tier": "free"} for identifier in user_ids}
         if user_ids:
+            tiers = {item.user_id: MEMBERSHIP_TIERS[item.product]
+                     for item in session.scalars(self.active_membership_grants(user_ids, instant))}
             for account in session.scalars(select(AllowanceAccount).where(AllowanceAccount.user_id.in_(user_ids))):
-                result[account.user_id] = {"member": bool(account.member_until and aware(account.member_until) > instant),
-                                           "member_until": account.member_until}
+                member = bool(account.member_until and aware(account.member_until) > instant)
+                result[account.user_id] = {"member": member, "member_until": account.member_until,
+                    "member_tier": tiers.get(account.user_id, "legacy") if member else "free"}
         return result
 
     def admin_snapshot(self, session, user_id, active, subscribed, limit=20, offset=0):
@@ -168,8 +187,9 @@ class AllowanceRepository:
         return {"version": VERSION, "as_of": instant, "account_exists": account is not None,
             "account_active": active, "subscribed": subscribed, "member": member,
             "member_until": account.member_until if account else None,
+            "member_tier": self.membership_tier(account),
             "trial_claimed_at": account.trial_claimed_at if account else None,
-            "balances": balances, "limits": dict(MEMBER_LIMITS if member else FREE_LIMITS),
+            "balances": balances, "limits": self.limits(account),
             "daily": {"date": day, "downloads_used": daily.downloads_used if daily else 0,
                 "downloads_held": daily.downloads_held if daily else 0,
                 "egress_used_bytes": daily.egress_used if daily else 0,
@@ -208,17 +228,21 @@ class AllowanceRepository:
         with self.sessions.begin() as session:
             return self.grant_in_transaction(session, user_id, product, key, actor)
 
+    def next_membership_month(self, account):
+        if account and self.member(account):
+            if account.member_anchor is not None:
+                return account.member_anchor, account.member_months
+            return account.member_until, 0
+        return now(), 0
+
     def grant_preview(self, session, user_id, product):
         if product not in PRODUCTS:
             raise AppException("INVALID_GRANT", "需要有效商品", 422)
         account = session.get(AllowanceAccount, user_id)
         start = now()
-        if product == "monthly":
-            if account and self.member(account):
-                start = month_boundary(account.member_anchor, account.member_months)
-                end = month_boundary(account.member_anchor, account.member_months + 1)
-            else:
-                end = month_boundary(start, 1)
+        if product in MEMBERSHIP_TIERS:
+            anchor, offset = self.next_membership_month(account)
+            start, end = month_boundary(anchor, offset), month_boundary(anchor, offset + 1)
         else:
             end = start + timedelta(days=30)
         return {"product": product, "offer": dict(PRODUCTS[product]), "starts_at": start, "expires_at": end,
@@ -238,12 +262,10 @@ class AllowanceRepository:
                     "expires_at": existing.expires_at, "duplicate": True}
         offer = PRODUCTS[product]
         start = now()
-        if product == "monthly":
-            if not self.member(account):
-                account.member_anchor, account.member_months = start, 0
-            start = month_boundary(account.member_anchor, account.member_months)
-            account.member_months += 1
-            end = month_boundary(account.member_anchor, account.member_months)
+        if product in MEMBERSHIP_TIERS:
+            anchor, offset = self.next_membership_month(account)
+            start, end = month_boundary(anchor, offset), month_boundary(anchor, offset + 1)
+            account.member_anchor, account.member_months = anchor, offset + 1
             account.member_until = end
         else:
             end = start + timedelta(days=30)
@@ -451,7 +473,8 @@ class AllowanceRepository:
         with self.sessions.begin() as session:
             account, _ = self.lock_account(session, user_id)
             daily = self.daily(session, user_id)
-            if daily.egress_used + daily.egress_held + length > self.limits(account)["daily_egress_bytes"]:
+            limit = self.limits(account)["daily_egress_bytes"]
+            if limit is not None and daily.egress_used + daily.egress_held + length > limit:
                 raise AppException("DAILY_TRAFFIC_EXCEEDED", "今日下载流量额度不足", 429)
             daily.egress_held += length
             item = AllowanceTransfer(id=uuid4(), user_id=user_id, day=daily.day, reserved=length)

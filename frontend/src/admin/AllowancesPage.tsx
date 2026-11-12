@@ -1,3 +1,4 @@
+import { membershipLabel } from "../utils/billing";
 import GrantAction from "./GrantAction";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +20,9 @@ export function quantity(kind: AllowanceKind, amount: number) {
 }
 const sourceLabels: Record<string, string> = {
   trial: "首次体验",
-  monthly: "月会员",
+  monthly: "旧版月会员",
+  plus_monthly: "Plus 月会员",
+  pro_monthly: "Pro 月会员",
   asr_120: "转写加购",
   ai_100: "AI 加购",
 };
@@ -174,7 +177,7 @@ export default function AllowancesDetailPage() {
                 <div className="admin-info-strip">
                   <p>
                     {data.account_exists
-                      ? `会员：${data.member ? "有效期内" : "无有效会员"} · 到期 ${formatDateTime(data.member_until)} · ${data.account_active ? "账号正常" : "账号停用"} · ${data.subscribed ? "已关注" : "未关注"}`
+                      ? `会员：${membershipLabel(data.member_tier, data.member)} · 到期 ${formatDateTime(data.member_until)} · ${data.account_active ? "账号正常" : "账号停用"} · ${data.subscribed ? "已关注" : "未关注"}`
                       : "尚未建立额度账户；本页仅查询，不会创建账户或领取体验权益。"}
                   </p>
                   <span>截至 {formatDateTime(data.as_of)}</span>
@@ -229,7 +232,11 @@ export default function AllowancesDetailPage() {
                       <dt>单文件上限</dt>
                       <dd>{bytes(data.limits.file_bytes)}</dd>
                       <dt>每日下行</dt>
-                      <dd>{bytes(data.limits.daily_egress_bytes)}</dd>
+                      <dd>
+                        {data.limits.daily_egress_bytes === null
+                          ? "不限量"
+                          : bytes(data.limits.daily_egress_bytes)}
+                      </dd>
                       <dt>任务并发额度</dt>
                       <dd>{data.limits.download_concurrency}</dd>
                     </dl>

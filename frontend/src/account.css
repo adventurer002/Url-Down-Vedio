@@ -52,6 +52,38 @@
   border-radius: 50%;
   background: #f4f4f5;
 }
+.account-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.account-nickname form {
+  display: grid;
+  gap: 8px;
+  max-width: 280px;
+}
+.account-nickname label {
+  font-size: 14px;
+}
+.account-nickname input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 7px;
+  font: inherit;
+}
+.account-nickname-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.account-nickname-actions .button {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
 .account-profile-identity p {
   display: flex;
   align-items: center;
