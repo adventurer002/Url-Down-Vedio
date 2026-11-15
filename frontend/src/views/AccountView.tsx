@@ -102,7 +102,7 @@ function AccountSpace() {
           <span className="account-avatar">
             <img
               className="default-avatar"
-              src="/media/default-avatar.png"
+              src="/media/default-avatar.jpg"
               alt="默认头像"
             />
           </span>

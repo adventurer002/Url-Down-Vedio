@@ -171,6 +171,9 @@
   height: 32px;
   border-radius: 50%;
   background: #f1f2f4;
+  padding: 0;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 .admin-identity strong {
   font-size: 12px;
@@ -229,6 +232,9 @@
   height: 32px;
   border-radius: 6px;
   color: #3f3f46;
+}
+.admin-icon-button.admin-avatar {
+  border-radius: 50%;
 }
 .admin-icon-button:hover {
   background: #f0f1f3;

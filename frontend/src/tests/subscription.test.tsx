@@ -338,7 +338,7 @@ it("saves a nickname from the personal center and shows the uploaded default ava
     .mockResolvedValue({ data: { ...user, nickname: "新名字" } });
   mount("/account");
   expect(screen.getByAltText("默认头像").getAttribute("src")).toBe(
-    "/media/default-avatar.png",
+    "/media/default-avatar.jpg",
   );
   fireEvent.click(screen.getByRole("button", { name: "修改昵称" }));
   fireEvent.change(screen.getByRole("textbox", { name: "昵称" }), {

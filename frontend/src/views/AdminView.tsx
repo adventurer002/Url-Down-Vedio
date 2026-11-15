@@ -109,7 +109,11 @@ function Sidebar({ close }: { close?: () => void }) {
         </Link>
         <div className="admin-identity">
           <span className="admin-avatar">
-            <Icon name="user" size={20} />
+            <img
+              className="default-avatar"
+              src="/media/default-avatar.jpg"
+              alt="管理员头像"
+            />
           </span>
           <div>
             <strong>{auth.user?.nickname}</strong>
@@ -141,7 +145,11 @@ function AccountMenu() {
           className="admin-icon-button admin-avatar"
           aria-label="管理员账户菜单"
         >
-          <Icon name="user" size={18} />
+          <img
+            className="default-avatar"
+            src="/media/default-avatar.jpg"
+            alt="管理员头像"
+          />
         </Dropdown.Trigger>
         <Dropdown.Portal>
           <Dropdown.Content

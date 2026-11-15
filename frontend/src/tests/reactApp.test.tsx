@@ -226,9 +226,9 @@ it("reacts to SSE progress, fetches the completed result and exposes the control
   mount("/video/demo_one", savedStore());
   await screen.findByRole("radio", { name: /720P/ });
   fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
-  expect(api.confirmQuote).not.toHaveBeenCalled();
-  fireEvent.click(await screen.findByRole("button", { name: "确认并开始" }));
   await waitFor(() => expect(FakeSource.instances.length).toBe(1));
+  expect(api.confirmQuote).toHaveBeenCalledWith("quote-1");
+  expect(screen.queryByRole("dialog", { name: "确认本次额度" })).toBeNull();
   act(() =>
     FakeSource.instances[0]!.emit({
       ...snapshot("running", 2),
@@ -313,13 +313,78 @@ it("cancels an active task through the store and updates the React task card", a
   mount("/video/demo_one", savedStore());
   await screen.findByRole("radio", { name: /720P/ });
   fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
-  fireEvent.click(await screen.findByRole("button", { name: "确认并开始" }));
   fireEvent.click(await screen.findByRole("button", { name: "取消任务" }));
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "取消任务" })).toBeNull(),
   );
   expect(screen.getAllByText(/已取消/).length).toBeGreaterThan(0);
   expect(api.cancel).toHaveBeenCalledWith("job-1");
+});
+
+it("starts audio extraction directly without an allowance dialog", async () => {
+  mount("/video/demo_one", savedStore());
+  fireEvent.click(await screen.findByRole("button", { name: "仅音频" }));
+  fireEvent.click(screen.getByRole("button", { name: "提取音频" }));
+  await waitFor(() => expect(api.confirmQuote).toHaveBeenCalledWith("quote-1"));
+  expect(api.quote).toHaveBeenCalledWith(
+    "audio_extraction",
+    "https://example.com/video",
+    undefined,
+    expect.any(AbortSignal),
+  );
+  expect(screen.queryByRole("dialog", { name: "确认本次额度" })).toBeNull();
+});
+
+it("submits a direct download once while its confirmation is pending", async () => {
+  let finish!: (value: { task_id: string; status: "queued" }) => void;
+  vi.mocked(api.confirmQuote).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  mount("/video/demo_one", savedStore());
+  const download = await screen.findByRole("button", { name: "下载视频" });
+  fireEvent.click(download);
+  fireEvent.click(download);
+  await waitFor(() => expect(api.confirmQuote).toHaveBeenCalledTimes(1));
+  expect(api.quote).toHaveBeenCalledTimes(1);
+  expect(download).toHaveProperty("disabled", true);
+  expect(screen.queryByRole("dialog", { name: "确认本次额度" })).toBeNull();
+  await act(async () => finish({ task_id: "job-1", status: "queued" }));
+  await screen.findByRole("button", { name: "取消任务" });
+});
+
+it("shows only the newest video or audio task in the download card", async () => {
+  const store = savedStore();
+  for (const [id, kind, label] of [
+    ["latest-audio", "audio_extraction", "最新音频任务"],
+    ["older-video", "download", "旧视频任务"],
+    ["oldest-video", "download", "更早视频任务"],
+  ]) {
+    store.tasks.push({
+      id: id!,
+      kind: kind!,
+      label: label!,
+      videoKey: "demo_one",
+      title: metadata.title,
+      createdAt: "2026-11-15T00:00:00Z",
+      event: { ...snapshot("completed"), task_id: id! },
+      snapshot: { ...snapshot("completed"), task_id: id! },
+    });
+  }
+  mount("/video/demo_one", store);
+  expect(
+    await screen.findByRole("progressbar", { name: "最新音频任务" }),
+  ).toBeTruthy();
+  const downloads = within(
+    document.querySelector<HTMLElement>(".content-download")!,
+  );
+  expect(downloads.queryByText("旧视频任务")).toBeNull();
+  expect(downloads.queryByText("更早视频任务")).toBeNull();
+  expect(
+    document.querySelectorAll(".content-download .task-card"),
+  ).toHaveLength(1);
 });
 
 it("restores a summary and transcript and switches workspace tabs", async () => {
@@ -543,6 +608,9 @@ it("groups account actions behind an avatar and closes the menu on Escape", asyn
   });
   mount();
   const trigger = screen.getByRole("button", { name: "账户菜单" });
+  expect(trigger.querySelector("img")?.getAttribute("src")).toBe(
+    "/media/default-avatar.jpg",
+  );
   expect(screen.queryByText("微信用户_1234")).toBeNull();
   expect(screen.queryByRole("button", { name: "退出登录" })).toBeNull();
   fireEvent.click(trigger);
@@ -574,6 +642,10 @@ it("keeps service health in the administrator page", async () => {
   expect(document.querySelector(".app-header")).toBeNull();
   expect(api.history).not.toHaveBeenCalled();
   expect(api.allowances).not.toHaveBeenCalled();
+  const avatars = screen.getAllByRole("img", { name: "管理员头像" });
+  expect(avatars).toHaveLength(2);
+  for (const avatar of avatars)
+    expect(avatar.getAttribute("src")).toBe("/media/default-avatar.jpg");
 });
 
 it("does not poll service health for non-admin visitors", async () => {
@@ -749,7 +821,9 @@ it("lets a subscribed signed-in user paste and parse normally", async () => {
   );
 });
 
-it("keeps the confirmed quote on a transient submission failure and sends it once on retry", async () => {
+it("reuses the download quote after a transient submission failure without a dialog", async () => {
+  const pendingQuote = { ...quote };
+  vi.mocked(api.quote).mockResolvedValue(pendingQuote);
   const confirm = vi
     .mocked(api.confirmQuote)
     .mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "提交暂时失败"))
@@ -758,9 +832,10 @@ it("keeps the confirmed quote on a transient submission failure and sends it onc
   mount("/video/demo_one", savedStore());
   await screen.findByRole("radio", { name: /720P/ });
   fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
-  fireEvent.click(await screen.findByRole("button", { name: "确认并开始" }));
   await screen.findByText("提交暂时失败");
-  fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
+  pendingQuote.expires_at = "2000-01-01T00:00:00Z";
+  expect(screen.queryByRole("dialog", { name: "确认本次额度" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
   await waitFor(() => expect(FakeSource.instances).toHaveLength(1));
   expect(confirm.mock.calls).toEqual([["quote-1"], ["quote-1"]]);
   expect(api.quote).toHaveBeenCalledTimes(1);
@@ -769,8 +844,7 @@ it("keeps the confirmed quote on a transient submission failure and sends it onc
 
 it("does not create a task when the user closes an allowance quote", async () => {
   mount("/video/demo_one", savedStore());
-  await screen.findByRole("radio", { name: /720P/ });
-  fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
+  fireEvent.click(await screen.findByRole("button", { name: /只提取文稿/ }));
   fireEvent.click(await screen.findByRole("button", { name: "暂不开始" }));
   expect(screen.queryByRole("dialog", { name: "确认本次额度" })).toBeNull();
   expect(api.confirmQuote).not.toHaveBeenCalled();

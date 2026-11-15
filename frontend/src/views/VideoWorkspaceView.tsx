@@ -124,6 +124,10 @@ export default function VideoWorkspaceView() {
     generation = useRef(0),
     lock = useRef(false),
     alive = useRef(true);
+  const downloadQuotes = useRef(new Map<string, AllowanceQuote>());
+  useEffect(() => {
+    downloadQuotes.current.clear();
+  }, [key, user?.id]);
   useEffect(() => {
     alive.current = true;
     const timer = setInterval(() => setClock(Date.now()), 30000);
@@ -193,11 +197,13 @@ export default function VideoWorkspaceView() {
     );
   }
   async function create(kind: JobKind, label: string, presetId?: string) {
-    if (!video || !authStore.requireLogin()) return;
+    if (!video || busy(kind) || !authStore.requireLogin()) return;
     request.current?.abort();
     const controller = new AbortController(),
       expected = ++generation.current,
       owner = authStore.getState().user?.id || "";
+    const immediate = kind === "download" || kind === "audio_extraction";
+    const quoteKey = `${owner}:${key}:${kind}:${presetId || ""}`;
     request.current = controller;
     setError(null);
     setQuoteError(null);
@@ -205,17 +211,25 @@ export default function VideoWorkspaceView() {
     setQuoting(kind);
     try {
       const input = processingInput(video, kind, transcript?.id);
-      const quote = await api.quote(
+      let quote = immediate ? downloadQuotes.current.get(quoteKey) : undefined;
+      quote ||= await api.quote(
         kind,
         input.url ?? input,
         presetId,
         controller.signal,
       );
       if (
-        expected === generation.current &&
-        !controller.signal.aborted &&
-        owner === (authStore.getState().user?.id || "")
+        expected !== generation.current ||
+        controller.signal.aborted ||
+        owner !== (authStore.getState().user?.id || "")
       )
+        return;
+      if (immediate) {
+        downloadQuotes.current.set(quoteKey, quote);
+        await store.create(video, kind, label, presetId, quote.quote_id);
+        downloadQuotes.current.delete(quoteKey);
+        void billingStore.refresh();
+      } else {
         setProposal({
           quote,
           kind,
@@ -224,9 +238,18 @@ export default function VideoWorkspaceView() {
           owner,
           text: !!input.transcript_id,
         });
+      }
     } catch (cause) {
+      const problem = normalizeError(cause);
+      if (
+        problem.status &&
+        problem.status >= 400 &&
+        problem.status < 500 &&
+        problem.status !== 408
+      )
+        downloadQuotes.current.delete(quoteKey);
       if (expected === generation.current && !controller.signal.aborted)
-        setError(normalizeError(cause));
+        setError(problem);
     } finally {
       if (expected === generation.current) setQuoting(undefined);
     }
@@ -608,7 +631,7 @@ export default function VideoWorkspaceView() {
                 .filter((task) =>
                   ["download", "audio_extraction"].includes(task.kind),
                 )
-                .slice(0, 2)
+                .slice(0, 1)
                 .map((task) => (
                   <TaskCard key={task.id} task={task} />
                 ))}
