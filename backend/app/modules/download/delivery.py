@@ -25,7 +25,7 @@ class DeliveryPreparer:
 
     async def prepare(self, task, maximum):
         if (task.task_type != "download" or task.user_id is None or
-                task.input_payload.get("delivery_preference") == "server" or server_proxy(task.input_payload["url"])):
+                task.input_payload.get("delivery_preference", "server") != "auto" or server_proxy(task.input_payload["url"])):
             return None
         video = await self.parser.parse(task.input_payload["url"])
         if (video.platform, video.platform_video_id) != (task.input_payload["platform"], task.input_payload["platform_video_id"]):

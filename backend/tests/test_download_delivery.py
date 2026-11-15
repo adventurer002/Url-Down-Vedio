@@ -202,16 +202,36 @@ async def test_worker_prepares_delivery_without_downloading_full_file(billing, s
     assert b.quotas.balance(b.user.id)["daily"]["downloads_used"] == 0
 
 
-async def test_preparer_rejects_split_tracks_and_server_preference(video, monkeypatch):
+@pytest.mark.parametrize("preference", ["server", None])
+async def test_preparer_requires_explicit_auto_preference(video, monkeypatch, preference):
     monkeypatch.setattr("app.modules.download.delivery.server_proxy", lambda url: None)
     parser = SimpleNamespace(parse=AsyncMock(return_value=video))
     adapter = SimpleNamespace(inspect=AsyncMock(return_value={"delivery_mode": "relay"}))
     task = SimpleNamespace(task_type="download", user_id=uuid4(), input_payload={
-        "url": "https://example.com/watch", "platform": "youtube", "platform_video_id": "fixture", "preset_id": "video_720_mp4"})
+        "url": "https://example.com/watch", "platform": "youtube", "platform_video_id": "fixture", "preset_id": "video_720_mp4",
+        "delivery_preference": "auto"})
     assert await DeliveryPreparer(parser, adapter).prepare(task, 1000)
-    task.input_payload["delivery_preference"] = "server"
+    if preference is None:
+        task.input_payload.pop("delivery_preference")
+    else:
+        task.input_payload["delivery_preference"] = preference
     assert await DeliveryPreparer(parser, adapter).prepare(task, 1000) is None
     assert adapter.inspect.await_count == 1
+    assert parser.parse.await_count == 1
+
+
+async def test_saved_legacy_quote_keeps_file_result_through_download_worker(billing, storage):
+    b = billing
+    task = b.create("download")
+    assert "delivery_preference" not in task.input_payload
+    parser = SimpleNamespace(parse=AsyncMock())
+    await execute_download(task.id, TaskService(b.tasks, MemoryBus()), MediaRepository(b.tasks.sessions),
+        storage, FixtureAdapter(), preparer=DeliveryPreparer(parser=parser))
+    completed = b.tasks.get(task.id)
+    assert completed.status == "completed" and "file_id" in completed.result_payload
+    assert "delivery_id" not in completed.result_payload
+    assert b.quotas.balance(b.user.id)["daily"]["downloads_used"] == 1
+    parser.parse.assert_not_called()
 
 
 @pytest.mark.parametrize("if_range", [None, '"fixture"', '"stale"'])
