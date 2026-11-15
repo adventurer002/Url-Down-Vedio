@@ -55,6 +55,7 @@ class DeliveryRepository:
                     "fallback_task_id": item.fallback_task_id,
                     "active": bool(item.active_until and aware(item.active_until) > now()),
                     "started": item.charged,
+                    "etag": item.source["etag"],
                     "last_error": item.last_error or ("DELIVERY_EXPIRED" if aware(item.expires_at) <= now() else None),
                     "delivery_mode": item.source["delivery_mode"]}
 

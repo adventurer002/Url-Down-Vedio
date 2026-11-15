@@ -96,8 +96,9 @@ class DeliveryService:
         await self.authorize(identifier, user)
         range_header = request.headers.get("range")
         if request.headers.get("if-range"):
-            # Request the full representation when the client validator cannot be verified here.
-            range_header = None
+            details = await database_call(self.repository.get, identifier, user.id)
+            if request.headers["if-range"] != details["etag"]:
+                range_header = None
         lease = await database_call(self.repository.reserve, identifier, user.id, range_header)
         connection = None
         try:

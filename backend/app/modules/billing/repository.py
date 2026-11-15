@@ -390,11 +390,11 @@ class AllowanceRepository:
         if task.input_payload.get("source_kind") == "upload" and task.input_payload["size_bytes"] > min(limits["file_bytes"], settings.MAX_FILE_SIZE_MB * 1024**2):
             return "entitlement"
         download = task.task_type in {"download", "audio_extraction"}
-        prepaid = False
+        prepaid = task.task_type == "download" and task.input_payload.get("_download_execution_mode") == "cache"
         if task.input_payload.get("delivery_origin"):
             from app.modules.download.repository import DeliveryRepository
             prepaid = DeliveryRepository(self.sessions).fallback_prepaid(session,
-                UUID(task.input_payload["delivery_origin"]), task.user_id, task.id)
+                UUID(task.input_payload["delivery_origin"]), task.user_id, task.id) or prepaid
         slot = "download" if download else "ai"
         running = session.scalar(select(func.count()).select_from(AllowanceReservation).where(
             AllowanceReservation.user_id == task.user_id, AllowanceReservation.state == "held", AllowanceReservation.slot == slot))

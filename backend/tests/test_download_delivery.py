@@ -214,18 +214,21 @@ async def test_preparer_rejects_split_tracks_and_server_preference(video, monkey
     assert adapter.inspect.await_count == 1
 
 
-async def test_download_endpoint_ticket_scope_range_bytes_and_authentication(billing, source, monkeypatch):
+@pytest.mark.parametrize("if_range", [None, '"fixture"', '"stale"'])
+async def test_download_endpoint_ticket_scope_range_bytes_and_authentication(billing, source, monkeypatch, if_range):
     b = billing
     monkeypatch.setattr(settings, "JWT_SECRET_KEY", "delivery-test-only-secret-at-least-32-characters")
     task = prepared(b, source)
     adapter = SimpleNamespace(open=AsyncMock())
     closed = []
+    partial = if_range != '"stale"'
     async def opened(descriptor, maximum, header):
-        assert header == "bytes=10-19"
-        response = httpx.Response(206, headers={"content-range": "bytes 10-19/100"}, stream=Chunks(b"x" * 10))
+        assert header == ("bytes=10-19" if partial else None)
+        response = httpx.Response(206 if partial else 200, headers={"content-range": "bytes 10-19/100"},
+            stream=Chunks(b"x" * (10 if partial else 100)))
         client = httpx.AsyncClient()
         closed.append(client)
-        return RelayConnection(client, response, 10, 100)
+        return RelayConnection(client, response, 10 if partial else 100, 100)
     adapter.open.side_effect = opened
     service = DeliveryService(TaskService(b.tasks, MemoryBus()), DeliveryRepository(b.tasks.sessions), adapter=adapter)
     app = create_app()
@@ -239,14 +242,17 @@ async def test_download_endpoint_ticket_scope_range_bytes_and_authentication(bil
         status = (await client.get(f"/api/v1/deliveries/{task.id}", headers=auth)).json()["data"]
         assert not status["active"] and not status["started"]
         assert "source" not in status and "url" not in status
-        result = await client.get(endpoint, params={"access_token": ticket}, headers={"Range": "bytes=10-19"})
-        assert result.status_code == 206 and result.content == b"x" * 10
+        headers = {"Range": "bytes=10-19"}
+        if if_range:
+            headers["If-Range"] = if_range
+        result = await client.get(endpoint, params={"access_token": ticket}, headers=headers)
+        assert result.status_code == (206 if partial else 200) and result.content == b"x" * (10 if partial else 100)
         assert result.headers["x-accel-buffering"] == "no" and "attachment" in result.headers["content-disposition"]
         wrong = issue_resource_access(b.user.id, 0, "file_download", task.id)["access_token"]
         assert (await client.get(endpoint, params={"access_token": wrong})).status_code == 401
     assert closed[0].is_closed
     daily = b.quotas.balance(b.user.id)["daily"]
-    assert daily["downloads_used"] == 1 and daily["egress_used_bytes"] == 10 and daily["egress_held_bytes"] == 0
+    assert daily["downloads_used"] == 1 and daily["egress_used_bytes"] == (10 if partial else 100) and daily["egress_held_bytes"] == 0
 
 
 async def test_verified_attachment_host_can_use_direct_delivery(monkeypatch):
@@ -421,12 +427,17 @@ async def test_delivery_preparation_cancellation_waits_for_cleanup():
     assert error.value.code == "TASK_CANCELLED" and cleaned.is_set()
 
 
-async def test_worker_reuses_only_owned_matching_cached_download(billing, storage, source):
+@pytest.mark.parametrize("exhausted", [False, True])
+async def test_worker_reuses_only_owned_matching_cached_download(billing, storage, source, exhausted):
     b = billing
     service = TaskService(b.tasks, MemoryBus())
     media = MediaRepository(b.tasks.sessions)
     first = b.create("download")
     await execute_download(first.id, service, media, storage, FixtureAdapter())
+    if exhausted:
+        from app.modules.billing.models import DailyAllowance
+        with b.tasks.sessions.begin() as session:
+            session.scalar(select(DailyAllowance).where(DailyAllowance.user_id == b.user.id)).downloads_used = 2
     second = b.create("download")
     preparer = SimpleNamespace(prepare=AsyncMock(return_value=source))
     downloader = SimpleNamespace(download=AsyncMock())
@@ -435,7 +446,7 @@ async def test_worker_reuses_only_owned_matching_cached_download(billing, storag
     assert result["cache_hit"] and result["file_id"] == b.tasks.get(first.id).result_payload["file_id"]
     preparer.prepare.assert_not_called()
     downloader.download.assert_not_called()
-    assert b.quotas.balance(b.user.id)["daily"]["downloads_used"] == 1
+    assert b.quotas.balance(b.user.id)["daily"]["downloads_used"] == (2 if exhausted else 1)
     other = b.users.subscription("other-cache-user", True, login=True)
     quote = b.quotas.save_quote(other.id, "download", {**{key: value for key, value in first.input_payload.items()
         if key not in {"quote_id", "allowance"}},
@@ -445,6 +456,31 @@ async def test_worker_reuses_only_owned_matching_cached_download(billing, storag
     await execute_download(third.id, service, media, storage, downloader, preparer=preparer)
     assert b.tasks.get(third.id).result_payload["delivery_id"] == str(third.id)
     preparer.prepare.assert_awaited_once()
+
+
+async def test_disappearing_cache_cannot_start_unreserved_render(billing, storage, source, monkeypatch):
+    b = billing
+    service = TaskService(b.tasks, MemoryBus())
+    media = MediaRepository(b.tasks.sessions)
+    first = b.create("download")
+    await execute_download(first.id, service, media, storage, FixtureAdapter())
+    second = b.create("download")
+    original = b.tasks.start
+    def start(identifier, **kwargs):
+        assert kwargs["download_cache_ready"]
+        candidate = media.reusable(b.video_id, now())[0]
+        storage.resolve_file(candidate.storage_key).unlink()
+        return original(identifier, **kwargs)
+    monkeypatch.setattr(b.tasks, "start", start)
+    preparer = SimpleNamespace(prepare=AsyncMock(return_value=source))
+    downloader = SimpleNamespace(download=AsyncMock())
+    await execute_download(second.id, service, media, storage, downloader, preparer=preparer)
+    task = b.tasks.get(second.id)
+    assert task.status == "failed" and task.error_code == "DOWNLOAD_REQUOTE_REQUIRED"
+    preparer.prepare.assert_not_called()
+    downloader.download.assert_not_called()
+    daily = b.quotas.balance(b.user.id)["daily"]
+    assert daily["downloads_used"] == 1 and daily["downloads_held"] == 0
 
 
 async def test_old_quote_clients_get_file_delivery_and_new_clients_opt_in(billing):

@@ -246,7 +246,8 @@ class TaskRepository:
                 raise AppException("TASK_NOT_FOUND", "任务不存在", 404)
             return record(task)
 
-    def start(self, task_id: UUID, *, execution_id: str | None = None, clip_cache_ready=False) -> bool:
+    def start(self, task_id: UUID, *, execution_id: str | None = None, clip_cache_ready=False,
+              download_cache_ready=False) -> bool:
         with self.sessions.begin() as session:
             task = self._lock_task(session, task_id)
             if task.status != TaskStatus.queued or task.cancel_requested:
@@ -268,6 +269,8 @@ class TaskRepository:
                     return False
             if task.task_type == "clips_export":
                 task.input_payload = {**task.input_payload, "_clip_execution_mode": "cache" if clip_cache_ready or task.input_payload.get("reuse_result") or task.input_payload.get("reuse_assets") else "reserved"}
+            if task.task_type == "download":
+                task.input_payload = {**task.input_payload, "_download_execution_mode": "cache" if download_cache_ready else "render"}
             if settings.ALLOWANCES_ENABLED and task.task_type not in {"simulate_progress", "media_probe", "model_test"}:
                 reason = self._billing().admit(session, record(task))
                 if reason:
