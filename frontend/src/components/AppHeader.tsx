@@ -123,7 +123,7 @@ export default function AppHeader() {
               >
                 <img
                   className="default-avatar"
-                  src="/media/default-avatar.png"
+                  src="/media/default-avatar.jpg"
                   alt=""
                 />
               </button>
