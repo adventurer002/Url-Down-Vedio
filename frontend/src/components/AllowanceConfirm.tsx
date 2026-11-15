@@ -130,7 +130,7 @@ export default function AllowanceConfirm({
         {exporting
           ? "本次不消耗转写和 AI 次数，仍受每日处理次数及下载流量限制。"
           : ["download", "audio_extraction"].includes(quote.task_type)
-            ? "下载按当前免费次数或会员权益执行，不消耗转写和 AI 额度。"
+            ? "下载按当前免费次数或会员权益执行。完整单文件将尝试边接收边下载，合并或转换由后台生成成品。服务器流量按实际发送字节结算。"
             : quote.task_type === "ai_question"
               ? "使用当前文稿回答，不重复转写。相同版本的已有回答免费；新的问答成功后扣 1 次 AI，原文依据不足时不扣次数。"
               : quote.task_type === "ai_clip_plan"
@@ -140,7 +140,9 @@ export default function AllowanceConfirm({
       <p className="task-confirmation-note">
         {exporting
           ? "实际开始处理后，失败或取消也可能占用处理次数。确认后关闭页面不影响后台处理。"
-          : "失败或有效取消不扣额度，自动重试不重复核销。确认后关闭页面不影响后台处理。"}
+          : quote.task_type === "download"
+            ? "准备下载会话不扣次数，开始传输后计次。重试及改为生成成品共用本次下载，已发送的服务器流量计入用量。"
+            : "失败或有效取消不扣额度，自动重试不重复核销。确认后关闭页面不影响后台处理。"}
       </p>
       {exporting && maximum.clip_limits && (
         <p className="task-confirmation-note">

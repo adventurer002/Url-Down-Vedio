@@ -19,7 +19,8 @@ class BillingService:
     def __init__(self, repository, resolver, videos, tasks):
         self.repository, self.resolver, self.videos, self.tasks = repository, resolver, videos, tasks
 
-    async def quote(self, user_id, url, action, preset_id, language, *, upload_id=None, transcript_id=None):
+    async def quote(self, user_id, url, action, preset_id, language, *, upload_id=None, transcript_id=None,
+                    delivery_preference="server"):
         from app.modules.video.sources import resolve_input
         with metadata_budget():
             if upload_id is not None and action not in {"transcription", "ai_summary", "ai_mindmap"}:
@@ -36,6 +37,8 @@ class BillingService:
             payload.update(duration_seconds=duration, preset_id=preset_id if action == "download" else "audio_mp3",
                 language=None if action.startswith("ai_") else language,
                 output_language=language or "zh", content_version=payload.get("content_version", settings.TRANSCRIPT_CONTENT_VERSION))
+            if action == "download":
+                payload["delivery_preference"] = delivery_preference
             if action == "download" and preset_id == "video_source_mp4":
                 payload["source_selection"] = await self.resolver.download_selection(payload)
                 payload["duration_seconds"] = seconds(payload["source_selection"]["duration"])

@@ -45,6 +45,9 @@ export interface TaskEvent {
   updated_at: string;
 }
 export interface TaskResultPayload {
+  delivery_id?: string;
+  delivery_mode?: "direct" | "relay" | "cached";
+  range_supported?: boolean;
   upload_id?: string;
   video_id?: string;
   file_id?: string;

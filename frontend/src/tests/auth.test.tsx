@@ -160,7 +160,11 @@ it("keeps login credentials in API headers and exchanges scoped tickets for nati
   };
   try {
     expect(await get("/auth/me")).toEqual({ ok: true });
-    for (const path of ["/tasks/test/events", "/files/test/download"]) {
+    for (const path of [
+      "/tasks/test/events",
+      "/files/test/download",
+      "/deliveries/test/download",
+    ]) {
       expect(new URL(authenticatedUrl(path)).search).toBe("");
       const url = new URL(await resourceAccessUrl(path));
       expect(url.searchParams.get("token")).toBeNull();

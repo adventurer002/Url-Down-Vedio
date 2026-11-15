@@ -38,7 +38,9 @@ async def resource_user(request: Request, service=Depends(get_auth_service), cre
     ticket = request.query_params.get("access_token")
     if ticket:
         try:
-            if "task_id" in request.path_params:
+            if "delivery_id" in request.path_params:
+                purpose, resource_id = "delivery_download", UUID(str(request.path_params["delivery_id"]))
+            elif "task_id" in request.path_params:
                 purpose, resource_id = "task_events", UUID(str(request.path_params["task_id"]))
             else:
                 purpose, resource_id = "file_download", UUID(str(request.path_params["file_id"]))

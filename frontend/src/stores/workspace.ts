@@ -483,6 +483,17 @@ export function createWorkspace() {
       void billingStore.refresh();
     }
   }
+  async function prepareDownloadFallback(item: LocalTask) {
+    const expectedIdentity = identityVersion;
+    const video = state.videos.find((entry) => entry.key === item.videoKey);
+    const deliveryId = item.snapshot?.result_payload?.delivery_id;
+    if (!video || !deliveryId)
+      throw new ApiError("DELIVERY_NOT_FOUND", "请重新打开原视频下载。");
+    const created = await api.deliveryFallback(deliveryId);
+    if (expectedIdentity !== identityVersion)
+      throw new ApiError("AUTH_CHANGED", "登录身份已变化，请重新打开任务。");
+    return registerTask(created, video, "download", "生成视频成品");
+  }
   function registerTask(
     created: TaskCreated,
     video: SavedVideo,
@@ -864,6 +875,7 @@ export function createWorkspace() {
     rememberUpload,
     remember,
     create,
+    prepareDownloadFallback,
     cancel,
     restore,
     stopAll,

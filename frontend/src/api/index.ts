@@ -32,6 +32,19 @@ import type {
   ClipExportQuoteInput,
 } from "../types/clips";
 export const api = {
+  deliveryStatus: (id: string, signal?: AbortSignal) =>
+    get<{
+      active: boolean;
+      started: boolean;
+      last_error: string | null;
+      fallback_task_id: string | null;
+    }>(`/deliveries/${encodeURIComponent(id)}`, signal),
+  deliveryFallback: (id: string, signal?: AbortSignal) =>
+    post<TaskCreated>(
+      `/deliveries/${encodeURIComponent(id)}/fallback`,
+      undefined,
+      signal,
+    ),
   clipPlanQuote: (input: ClipPlanQuoteInput, signal?: AbortSignal) =>
     post<AllowanceQuote>("/clips/plans/quotes", input, signal),
   clipPlan: (id: string, signal?: AbortSignal) =>
@@ -162,6 +175,7 @@ export const api = {
         action: kind,
         ...(typeof url === "string" ? { url } : url),
         ...(presetId ? { preset_id: presetId } : {}),
+        ...(kind === "download" ? { delivery_preference: "auto" } : {}),
         language: "zh",
       },
       signal,

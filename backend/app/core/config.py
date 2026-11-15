@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     YTDLP_JS_RUNTIME: Literal["disabled", "deno"] = "disabled"
     YTDLP_DENO_PATH: str = ""
     VIDEO_EGRESS_MODE: Literal["legacy", "platform"] = "legacy"
+    DOWNLOAD_DIRECT_HOSTS: list[str] = []
     YOUTUBE_PROXY: SecretStr = SecretStr("")
     YOUTUBE_DNS_MODE: Literal["system", "proxy_doh"] = "system"
     DOUYIN_SOURCE_BACKEND: Literal["native", "browser"] = "native"

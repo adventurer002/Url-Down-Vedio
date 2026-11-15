@@ -38,6 +38,7 @@ class QuoteRequest(AIInputRequest):
     action: Literal["download", "audio_extraction", "transcription", "ai_summary", "ai_mindmap"]
     preset_id: Literal["video_1080_mp4", "video_720_mp4", "video_480_mp4", "video_source_mp4", "audio_mp3"] = "video_720_mp4"
     language: str = Field(default="zh", pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$", max_length=32)
+    delivery_preference: Literal["auto", "server"] = "server"
 
 
     @model_validator(mode="after")
@@ -71,6 +72,8 @@ async def ledger(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge
 @router.post("/quotes")
 async def quote(body: QuoteRequest, user=Depends(required_user), service=Depends(get_billing_service)):
     options = {"upload_id": body.upload_id}
+    if body.action == "download":
+        options["delivery_preference"] = body.delivery_preference
     if body.transcript_id:
         options["transcript_id"] = body.transcript_id
     return success_response(await service.quote(user.id, body.url, body.action, body.preset_id, body.language.lower(), **options))

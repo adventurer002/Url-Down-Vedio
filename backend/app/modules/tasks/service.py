@@ -106,6 +106,7 @@ class TaskService:
         data["input_payload"].pop("model_config", None)
         data["input_payload"].pop("_execution_id", None)
         data["input_payload"].pop("_clip_execution_mode", None)
+        data["input_payload"].pop("_download_execution_mode", None)
         data["task_id"] = str(data.pop("id"))
         data.update(seq=0, stage=task.status, updated_at=(task.finished_at or task.started_at or task.created_at).isoformat())
         if snapshot and snapshot["status"] == task.status:

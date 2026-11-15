@@ -108,6 +108,12 @@ class TaskRepository:
                     reference).limit(1)) is not None
         if task.task_type == "ai_clip_plan" and (task.result_payload or {}).get("outcome") == "no_highlights":
             owned = True  # Explicit no-delivery policy for clips only; release all held allowance.
+        if task.status == TaskStatus.completed and (task.result_payload or {}).get("delivery_id"):
+            owned = True  # Preparation releases the task hold. Streaming claims a download on first use.
+        if task.status == TaskStatus.completed and task.input_payload.get("delivery_origin"):
+            from app.modules.download.repository import DeliveryRepository
+            DeliveryRepository(self.sessions).settle_fallback(session,
+                UUID(task.input_payload["delivery_origin"]), task.user_id, task.id)
         if task.status in {TaskStatus.completed, TaskStatus.failed, TaskStatus.cancelled, TaskStatus.expired}:
             self._billing().finalize(session, record(task), task.status == TaskStatus.completed, owned)
 
@@ -140,6 +146,12 @@ class TaskRepository:
                 quote = self._billing().bind_quote(session, user_id, input_payload or {}, task_type)
                 if quote.task_id:
                     return record(session.get(Task, quote.task_id))
+                if input_payload.get("delivery_origin"):
+                    from app.modules.download.repository import DeliveryRepository
+                    previous = DeliveryRepository(self.sessions).bind_fallback(session,
+                        UUID(input_payload["delivery_origin"]), user_id, quote.id)
+                    if previous:
+                        return record(session.get(Task, previous))
                 if task_type in {"transcription","ai_summary","ai_mindmap","ai_question","ai_clip_plan","clips_export"}:
                     from app.modules.model_config.runtime import validate_snapshot
                     validate_snapshot(session,input_payload or {})
@@ -166,6 +178,9 @@ class TaskRepository:
                 probe_upload.bind_probe(session, UUID(input_payload["upload_id"]), user_id, task.id)
             if quote:
                 quote.task_id = task.id
+                if input_payload.get("delivery_origin"):
+                    DeliveryRepository(self.sessions).bind_fallback(session,
+                        UUID(input_payload["delivery_origin"]), user_id, quote.id, task.id)
             return record(task)
 
     def active_model_test_ids(self, session):
@@ -231,7 +246,8 @@ class TaskRepository:
                 raise AppException("TASK_NOT_FOUND", "任务不存在", 404)
             return record(task)
 
-    def start(self, task_id: UUID, *, execution_id: str | None = None, clip_cache_ready=False) -> bool:
+    def start(self, task_id: UUID, *, execution_id: str | None = None, clip_cache_ready=False,
+              download_cache_ready=False) -> bool:
         with self.sessions.begin() as session:
             task = self._lock_task(session, task_id)
             if task.status != TaskStatus.queued or task.cancel_requested:
@@ -253,6 +269,8 @@ class TaskRepository:
                     return False
             if task.task_type == "clips_export":
                 task.input_payload = {**task.input_payload, "_clip_execution_mode": "cache" if clip_cache_ready or task.input_payload.get("reuse_result") or task.input_payload.get("reuse_assets") else "reserved"}
+            if task.task_type == "download":
+                task.input_payload = {**task.input_payload, "_download_execution_mode": "cache" if download_cache_ready else "render"}
             if settings.ALLOWANCES_ENABLED and task.task_type not in {"simulate_progress", "media_probe", "model_test"}:
                 reason = self._billing().admit(session, record(task))
                 if reason:

@@ -354,6 +354,11 @@ class AllowanceRepository:
                 raise AppException("QUOTE_EXPIRED", "报价已过期，请重新获取", 409)
             return item.task_type, {**item.payload, "quote_id": str(item.id)}, item.task_id
 
+    @staticmethod
+    def quote_usable(session, quote_id):
+        quote = session.get(AllowanceQuote, quote_id)
+        return quote is not None and (quote.task_id is not None or aware(quote.expires_at) > now())
+
     def bind_quote(self, session, user_id, payload, task_type):
         self.lock_account(session, user_id)
         try:
@@ -385,9 +390,17 @@ class AllowanceRepository:
         if task.input_payload.get("source_kind") == "upload" and task.input_payload["size_bytes"] > min(limits["file_bytes"], settings.MAX_FILE_SIZE_MB * 1024**2):
             return "entitlement"
         download = task.task_type in {"download", "audio_extraction"}
+        prepaid = task.task_type == "download" and task.input_payload.get("_download_execution_mode") == "cache"
+        if task.input_payload.get("delivery_origin"):
+            from app.modules.download.repository import DeliveryRepository
+            prepaid = DeliveryRepository(self.sessions).fallback_prepaid(session,
+                UUID(task.input_payload["delivery_origin"]), task.user_id, task.id) or prepaid
         slot = "download" if download else "ai"
         running = session.scalar(select(func.count()).select_from(AllowanceReservation).where(
             AllowanceReservation.user_id == task.user_id, AllowanceReservation.state == "held", AllowanceReservation.slot == slot))
+        if download:
+            from app.modules.download.repository import DeliveryRepository
+            running += DeliveryRepository.active_count(session, task.user_id)
         if running >= (limits["download_concurrency"] if download else 1):
             return "capacity"
         if task.task_type == "clips_export" and task.input_payload.get("_clip_execution_mode") != "cache" and not task.input_payload.get("reuse_result") and not task.input_payload.get("reuse_assets"):
@@ -397,7 +410,7 @@ class AllowanceRepository:
             if counts[0] >= clips["max_daily_exports"] or counts[1] >= clips["max_daily_plan_exports"]:
                 return "clip_render_limit"
         daily = self.daily(session, task.user_id)
-        if download and not member and daily.downloads_used + daily.downloads_held >= 2:
+        if download and not prepaid and not member and daily.downloads_used + daily.downloads_held >= 2:
             return "daily_downloads"
         amounts = {kind: snapshot[kind] for kind in ("asr_seconds", "ai_generations")}
         lots = {kind: self.available(session, task.user_id, kind) for kind in amounts}
@@ -406,7 +419,7 @@ class AllowanceRepository:
         if any(sum(x.granted - x.used - x.held for x in lots[kind]) < amount for kind, amount in amounts.items()):
             return "allowance"
         reservation = AllowanceReservation(task_id=task.id, user_id=task.user_id, state="held", slot=slot,
-            business_date=daily.day, free_download=int(download and not member), asr_seconds=0,
+            business_date=daily.day, free_download=int(download and not prepaid and not member), asr_seconds=0,
             snapshot={**snapshot, "limits": limits})
         session.add(reservation)
         session.flush()
@@ -472,23 +485,48 @@ class AllowanceRepository:
     def reserve_transfer(self, user_id, length):
         with self.sessions.begin() as session:
             account, _ = self.lock_account(session, user_id)
-            daily = self.daily(session, user_id)
-            limit = self.limits(account)["daily_egress_bytes"]
-            if limit is not None and daily.egress_used + daily.egress_held + length > limit:
-                raise AppException("DAILY_TRAFFIC_EXCEEDED", "今日下载流量额度不足", 429)
-            daily.egress_held += length
-            item = AllowanceTransfer(id=uuid4(), user_id=user_id, day=daily.day, reserved=length)
-            session.add(item)
-            return item.id
+            return self.reserve_transfer_in_transaction(session, account, length)
+
+    def active_downloads(self, session, user_id):
+        from app.modules.download.repository import DeliveryRepository
+        running = session.scalar(select(func.count()).select_from(AllowanceReservation).where(
+            AllowanceReservation.user_id == user_id, AllowanceReservation.state == "held",
+            AllowanceReservation.slot == "download"))
+        return running + DeliveryRepository.active_count(session, user_id)
+
+    def reserve_transfer_in_transaction(self, session, account, length):
+        daily = self.daily(session, account.user_id)
+        limit = self.limits(account)["daily_egress_bytes"]
+        if limit is not None and daily.egress_used + daily.egress_held + length > limit:
+            raise AppException("DAILY_TRAFFIC_EXCEEDED", "今日下载流量额度不足", 429)
+        daily.egress_held += length
+        item = AllowanceTransfer(id=uuid4(), user_id=account.user_id, day=daily.day, reserved=length)
+        session.add(item)
+        session.flush()
+        return item.id
+
+    def charge_delivery(self, session, account):
+        if not self.member(account):
+            daily = self.daily(session, account.user_id)
+            if daily.downloads_used + daily.downloads_held >= 2:
+                raise AppException("DAILY_DOWNLOADS_EXCEEDED", "今日免费下载次数已用完", 429)
+            daily.downloads_used += 1
+            return True
+        return False
+
+    def finish_transfer_in_transaction(self, session, transfer_id, sent, *, refund_download=False):
+        item = session.get(AllowanceTransfer, transfer_id, populate_existing=True)
+        if item.sent is not None:
+            return
+        item.sent = min(item.reserved, max(0, sent))
+        daily = self.daily(session, item.user_id, item.day)
+        daily.egress_held -= item.reserved
+        daily.egress_used += item.sent
+        if refund_download:
+            daily.downloads_used = max(0, daily.downloads_used - 1)
 
     def finish_transfer(self, transfer_id, sent):
         with self.sessions.begin() as session:
             item = session.get(AllowanceTransfer, transfer_id)
             self.lock_existing(session, item.user_id)
-            session.refresh(item)
-            if item.sent is not None:
-                return
-            item.sent = min(item.reserved, max(0, sent))
-            daily = self.daily(session, item.user_id, item.day)
-            daily.egress_held -= item.reserved
-            daily.egress_used += item.sent
+            self.finish_transfer_in_transaction(session, transfer_id, sent)
