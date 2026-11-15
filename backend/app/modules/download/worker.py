@@ -29,7 +29,8 @@ class DownloadDispatcher:
 
 
 async def execute_download(task_id: UUID, service: TaskService, media: MediaRepository,
-                           storage: StorageAdapter, downloader: DownloadAdapter, reuse_result=None) -> dict:
+                           storage: StorageAdapter, downloader: DownloadAdapter, reuse_result=None,
+                           preparer=None) -> dict:
     repository = service.repository
     if not await database_call(repository.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(repository.get, task_id)).status}
@@ -73,6 +74,41 @@ async def execute_download(task_id: UUID, service: TaskService, media: MediaRepo
                     await publish(task)
                     return {"task_id": str(task_id), "status": task.status}
         file_limit = task.input_payload.get("allowance", {}).get("limits", {}).get("file_bytes", settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+        if preparer is not None and settings.ALLOWANCES_ENABLED and task.user_id:
+            from types import SimpleNamespace
+            from app.modules.media.service import MediaService
+            for candidate in (await database_call(media.reusable, task.video_id, utcnow()))[:32]:
+                if candidate.preset_id != task.input_payload["preset_id"] or candidate.size_bytes > file_limit:
+                    continue
+                if not await service.can_read_results("file_id", [candidate.id], SimpleNamespace(id=task.user_id)):
+                    continue
+                if task.input_payload["preset_id"] == "video_source_mp4":
+                    original = await database_call(repository.get, candidate.task_id)
+                    if original.input_payload.get("source_selection") != task.input_payload.get("source_selection"):
+                        continue
+                try:
+                    await MediaService(media, storage).download(candidate.id)
+                except (AppException, OSError):
+                    continue
+                result = {"file_id": str(candidate.id), "filename": candidate.filename,
+                    "size_bytes": candidate.size_bytes, "expires_at": candidate.expires_at.isoformat(),
+                    "download_url": f"/api/v1/files/{candidate.id}/download", "delivery_mode": "cached", "cache_hit": True}
+                task = await database_call(repository.complete_with, task_id, result, lambda session: None)
+                await publish(task)
+                return {"task_id": str(task_id), "status": task.status}
+            await on_progress({"stage": "preparing_delivery", "progress": 5})
+            from app.modules.download.delivery import prepare_with_cancellation
+            source = await prepare_with_cancellation(preparer, task, file_limit, cancelled)
+            if source:
+                from app.modules.download.repository import DeliveryRepository
+                expires = utcnow() + timedelta(minutes=15)
+                result = {"delivery_id": str(task_id), "delivery_mode": source["delivery_mode"],
+                    "filename": source["filename"], "size_bytes": source["size_bytes"],
+                    "expires_at": expires.isoformat(), "range_supported": source["range_supported"]}
+                task = await database_call(repository.complete_with, task_id, result,
+                    lambda session: DeliveryRepository.register(session, task, source, expires))
+                await publish(task)
+                return {"task_id": str(task_id), "status": task.status}
         # Input streams and merged output coexist, but admissions need only a short mutex.
         async with wait_for_storage(lambda: storage.reservation(task_id, (2 if "allowance" in task.input_payload else 1) * file_limit),
                 is_cancel_requested=cancelled, on_wait=waiting):
@@ -131,7 +167,9 @@ def download_task(task_id: str) -> dict:
             service = TaskService(TaskRepository(SessionLocal), ProgressBus(redis))
             adapter = YtDlpDownloadAdapter(ProcessRunner(settings.DOWNLOAD_TIMEOUT_SECONDS,
                                                        settings.MAX_FILE_SIZE_MB * 1024 * 1024))
-            return await execute_download(UUID(task_id), service, MediaRepository(SessionLocal), storage, adapter)
+            from app.modules.download.delivery import DeliveryPreparer
+            return await execute_download(UUID(task_id), service, MediaRepository(SessionLocal), storage, adapter,
+                preparer=DeliveryPreparer())
         finally:
             await redis.aclose()
 

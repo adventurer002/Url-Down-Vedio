@@ -40,9 +40,9 @@ def decode_token(token):
 RESOURCE_ACCESS_SECONDS = 120
 
 
-def issue_resource_access(user_id, auth_version, purpose, resource_id):
+def issue_resource_access(user_id, auth_version, purpose, resource_id, *, lifetime=RESOURCE_ACCESS_SECONDS):
     instant = datetime.now(timezone.utc)
-    expires = instant + timedelta(seconds=RESOURCE_ACCESS_SECONDS)
+    expires = instant + timedelta(seconds=min(1800, max(1, lifetime)))
     token = jwt.encode({"sub": str(user_id), "ver": auth_version, "iat": instant,
                         "exp": expires, "iss": "videohub", "aud": "videohub-resource",
                         "purpose": purpose, "resource": str(resource_id)}, signing_key(), algorithm="HS256")

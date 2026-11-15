@@ -1,10 +1,12 @@
 """Redact URL credentials before API, Celery, HTTP-client or access-log formatting."""
 import logging
+from contextvars import ContextVar
 import re
 import traceback
 from urllib.parse import unquote
 
 REDACTED = "***REDACTED***"
+sensitive_http_urls = ContextVar("sensitive_http_urls", default=False)
 SENSITIVE_QUERY_KEYS = frozenset({"token", "access_token", "key", "api_key", "auth", "authorization",
                                   "sig", "signature", "cookie", "sessdata", "password", "secret"})
 _QUERY = re.compile(r"([?&;])([^?&;=#\s\"'<>]+)=([^&#\s\"'<>]*)")
@@ -60,6 +62,8 @@ class SensitiveURLFilter(logging.Filter):
         # which AccessFormatter needs to construct request_line/status_code.
         rendered = record.getMessage()
         safe = redact_urls(rendered)
+        if sensitive_http_urls.get() and record.name.startswith(("httpx", "httpcore")):
+            safe = re.sub(r'(https?://[^\s?"<>]+)\?[^\s"<>]+', lambda match: match[1] + "?" + REDACTED, safe)
         if rendered != safe and record.name != "uvicorn.access":
             record.msg, record.args = safe, ()
         for key, value in list(record.__dict__.items()):

@@ -3,6 +3,7 @@ from app.modules.auth.tokens import issue_resource_access
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,6 +46,43 @@ def get_media_service() -> MediaService:
 
 def get_file_task_service(media=Depends(get_media_service)):
     return TaskService(TaskRepository(media.repository.sessions), ProgressBus(redis_client))
+
+
+def get_delivery_service():
+    from app.modules.download.delivery import delivery_service
+    return delivery_service(SessionLocal)
+
+
+@router.post("/deliveries/{delivery_id}/download/access")
+async def delivery_access(delivery_id: UUID, user=Depends(required_user), service=Depends(get_delivery_service)):
+    from app.modules.tasks.service import database_call
+    await service.authorize(delivery_id, user)
+    await database_call(service.repository.validate_access, delivery_id, user.id)
+    return JSONResponse(success_response(issue_resource_access(user.id, user.auth_version, "delivery_download", delivery_id, lifetime=900)),
+        headers={"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer"})
+
+
+@router.get("/deliveries/{delivery_id}")
+async def delivery_status(delivery_id: UUID, user=Depends(required_user), service=Depends(get_delivery_service)):
+    from app.modules.tasks.service import database_call
+    await service.authorize(delivery_id, user, allow_expired=True)
+    return JSONResponse(jsonable_encoder(success_response(await database_call(service.repository.get, delivery_id, user.id))),
+        headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/deliveries/{delivery_id}/download")
+async def delivery_download(delivery_id: UUID, request: Request, user=Depends(resource_user),
+                            service=Depends(get_delivery_service)):
+    if user is None:
+        from app.core.exceptions import AppException
+        raise AppException("AUTH_REQUIRED", "请先登录后下载", 401)
+    return await service.response(delivery_id, user, request)
+
+
+@router.post("/deliveries/{delivery_id}/fallback", status_code=202)
+async def delivery_fallback(delivery_id: UUID, user=Depends(required_user), service=Depends(get_delivery_service)):
+    task = await service.fallback(delivery_id, user)
+    return success_response({"task_id": str(task.id), "status": task.status})
 
 
 @router.post("/downloads", status_code=202)

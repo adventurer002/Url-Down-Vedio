@@ -108,6 +108,12 @@ class TaskRepository:
                     reference).limit(1)) is not None
         if task.task_type == "ai_clip_plan" and (task.result_payload or {}).get("outcome") == "no_highlights":
             owned = True  # Explicit no-delivery policy for clips only; release all held allowance.
+        if task.status == TaskStatus.completed and (task.result_payload or {}).get("delivery_id"):
+            owned = True  # Preparation releases the task hold. Streaming claims a download on first use.
+        if task.status == TaskStatus.completed and task.input_payload.get("delivery_origin"):
+            from app.modules.download.repository import DeliveryRepository
+            DeliveryRepository(self.sessions).settle_fallback(session,
+                UUID(task.input_payload["delivery_origin"]), task.user_id, task.id)
         if task.status in {TaskStatus.completed, TaskStatus.failed, TaskStatus.cancelled, TaskStatus.expired}:
             self._billing().finalize(session, record(task), task.status == TaskStatus.completed, owned)
 
@@ -140,6 +146,12 @@ class TaskRepository:
                 quote = self._billing().bind_quote(session, user_id, input_payload or {}, task_type)
                 if quote.task_id:
                     return record(session.get(Task, quote.task_id))
+                if input_payload.get("delivery_origin"):
+                    from app.modules.download.repository import DeliveryRepository
+                    previous = DeliveryRepository(self.sessions).bind_fallback(session,
+                        UUID(input_payload["delivery_origin"]), user_id, quote.id)
+                    if previous:
+                        return record(session.get(Task, previous))
                 if task_type in {"transcription","ai_summary","ai_mindmap","ai_question","ai_clip_plan","clips_export"}:
                     from app.modules.model_config.runtime import validate_snapshot
                     validate_snapshot(session,input_payload or {})
@@ -166,6 +178,9 @@ class TaskRepository:
                 probe_upload.bind_probe(session, UUID(input_payload["upload_id"]), user_id, task.id)
             if quote:
                 quote.task_id = task.id
+                if input_payload.get("delivery_origin"):
+                    DeliveryRepository(self.sessions).bind_fallback(session,
+                        UUID(input_payload["delivery_origin"]), user_id, quote.id, task.id)
             return record(task)
 
     def active_model_test_ids(self, session):

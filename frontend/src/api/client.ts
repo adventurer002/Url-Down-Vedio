@@ -153,7 +153,11 @@ export async function resourceAccessUrl(
 ): Promise<string> {
   const { user, token } = authStore.getState();
   if (!user) return apiUrl(path);
-  if (!/^\/(tasks\/[^/]+\/events|files\/[^/]+\/download)$/.test(path))
+  if (
+    !/^\/(tasks\/[^/]+\/events|files\/[^/]+\/download|deliveries\/[^/]+\/download)$/.test(
+      path,
+    )
+  )
     throw new ApiError("INVALID_RESOURCE_PATH", "无法打开此资源");
   const access = (
     await client.post<{ access_token: string }>(`${path}/access`, undefined, {

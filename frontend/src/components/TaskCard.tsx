@@ -40,6 +40,7 @@ export const stages: Record<string, string> = {
   queued: "等待开始处理",
   download: "下载媒体",
   downloading: "下载媒体",
+  preparing_delivery: "检查下载方式",
   processing: "处理媒体",
   subtitles: "获取平台字幕",
   audio: "准备纯音频",
@@ -59,6 +60,10 @@ export default function TaskCard({ task }: { task: LocalTask }) {
     task.kind === "download" &&
     ["download", "downloading"].includes(task.event.stage);
   const completed = task.event.status === "completed";
+  const deliveryId = task.snapshot?.result_payload?.delivery_id;
+  const deliveryMode = task.snapshot?.result_payload?.delivery_mode;
+  const [handedOff, setHandedOff] = useState(false);
+  const [fallbackStarted, setFallbackStarted] = useState(false);
   useEffect(() => {
     if (completed && user) void billingStore.loadUsage(task.id);
   }, [completed, task.id, user?.id]);
@@ -66,6 +71,8 @@ export default function TaskCard({ task }: { task: LocalTask }) {
   const [downloading, setDownloading] = useState(false);
   useEffect(() => {
     setDownloading(false);
+    setHandedOff(false);
+    setFallbackStarted(false);
     return () => {
       downloadRequest.current?.abort();
       downloadRequest.current = null;
@@ -74,6 +81,39 @@ export default function TaskCard({ task }: { task: LocalTask }) {
   const store = useWorkspace(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<ApiError | null>(null);
+  useEffect(() => {
+    if (!handedOff || !deliveryId || !user) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    let attempts = 0;
+    async function check() {
+      try {
+        const status = await api.deliveryStatus(deliveryId!, controller.signal);
+        if (controller.signal.aborted) return;
+        if (status.fallback_task_id) setFallbackStarted(true);
+        if (status.last_error) {
+          setError(
+            new ApiError(
+              status.last_error,
+              "下载连接未能完成，可重试或改为生成成品。已发送的流量会计入用量。",
+            ),
+          );
+          return;
+        }
+        if ((!status.active && status.started) || status.fallback_task_id)
+          return;
+      } catch {
+        /* Native downloads continue while the page reconnects. */
+      }
+      if (!controller.signal.aborted && ++attempts < 600)
+        timer = setTimeout(() => void check(), 2000);
+    }
+    timer = setTimeout(() => void check(), 1000);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [handedOff, deliveryId, user?.id]);
   async function cancel() {
     if (busy) return;
     setBusy(true);
@@ -88,14 +128,17 @@ export default function TaskCard({ task }: { task: LocalTask }) {
   }
   async function download() {
     const fileId = task.snapshot?.result_payload?.file_id;
-    if (!fileId || downloadRequest.current) return;
+    if ((!fileId && !deliveryId) || downloadRequest.current) return;
     const controller = new AbortController();
     downloadRequest.current = controller;
     setDownloading(true);
+    setHandedOff(false);
     setError(null);
     try {
       const url = await resourceAccessUrl(
-        `/files/${encodeURIComponent(fileId)}/download`,
+        deliveryId
+          ? `/deliveries/${encodeURIComponent(deliveryId)}/download`
+          : `/files/${encodeURIComponent(fileId!)}/download`,
         controller.signal,
       );
       if (controller.signal.aborted) return;
@@ -104,6 +147,7 @@ export default function TaskCard({ task }: { task: LocalTask }) {
       anchor.download = "";
       anchor.referrerPolicy = "no-referrer";
       anchor.click();
+      if (deliveryId) setHandedOff(true);
     } catch (cause) {
       if (!controller.signal.aborted) setError(normalizeError(cause));
     } finally {
@@ -120,7 +164,9 @@ export default function TaskCard({ task }: { task: LocalTask }) {
         <span className="task-status" data-status={task.event.status}>
           {task.event.stage.startsWith("waiting_for_")
             ? stages[task.event.stage] || "等待执行"
-            : labels[task.event.status]}{" "}
+            : completed && deliveryId
+              ? "可开始下载"
+              : labels[task.event.status]}{" "}
           {determinate && <b>{task.event.progress}%</b>}
         </span>
       </div>
@@ -146,7 +192,11 @@ export default function TaskCard({ task }: { task: LocalTask }) {
       </div>
       <div className="task-bottom">
         <small>
-          {stages[task.event.stage] || labels[task.event.status]}
+          {completed && deliveryId
+            ? deliveryMode === "direct"
+              ? "平台直传"
+              : "边接收边下载"
+            : stages[task.event.stage] || labels[task.event.status]}
           {task.snapshot?.result_payload?.cache_hit && <span> · 来自缓存</span>}
         </small>
         {[
@@ -191,17 +241,50 @@ export default function TaskCard({ task }: { task: LocalTask }) {
           </button>
         )}
         {task.event.status === "completed" &&
-          task.snapshot?.result_payload?.file_id && (
+          (task.snapshot?.result_payload?.file_id || deliveryId) && (
             <button
               className="save-link"
               disabled={downloading}
               onClick={() => void download()}
             >
               <Icon name="download" size={14} />
-              {downloading ? "准备下载…" : "保存到本地"}
+              {downloading
+                ? "准备下载…"
+                : handedOff
+                  ? "重新下载"
+                  : "保存到本地"}
             </button>
           )}
+        {completed && deliveryId && (
+          <button
+            className="text-button"
+            disabled={busy || fallbackStarted}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await store.prepareDownloadFallback(task);
+                setFallbackStarted(true);
+              } catch (cause) {
+                setError(normalizeError(cause));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy
+              ? "正在提交…"
+              : fallbackStarted
+                ? "成品任务已创建"
+                : "改为生成成品"}
+          </button>
+        )}
       </div>
+      {handedOff && deliveryId && (
+        <p className="task-usage" role="status">
+          已交给浏览器下载。若下载失败，可重试或改为生成成品，同一会话只计一次下载。
+        </p>
+      )}
       {completed && usage && (
         <p className="task-usage">
           实际使用：转写{" "}

@@ -64,3 +64,10 @@ Worker配置为实际串行执行；会员3个任务额度不意味着服务器�
 1Panel 配置每日 PostgreSQL备份，至少保留7天并复制到服务器外；首次上线前实际恢复一次。Redis保持无淘汰策略，监控内存与磁盘；磁盘统计需包括合并/转码临时峰值。定时器失败查 journalctl，恢复任务遇到仍存活的孤儿进程组会保守保留冻结，需人工确认，不能盲目释放。当前尚无自动告警，需要定期检查容量、失败任务与备份。
 
 升级前备份数据库，保留上一版源代码和静态资源；数据库有新迁移时不能保证仅回滚文件即可恢复。此方案未接入OSS或真实支付。
+# Download delivery
+
+Single-file H.264/AAC MP4 downloads can use account-scoped streaming delivery. The API routes under `/api/v1/deliveries/` use the existing unbuffered API proxy configuration. Download preparation stays in Celery. Streaming transfers enforce time, size, concurrency and actual-byte traffic limits, and close upstream connections when the browser disconnects.
+
+`DOWNLOAD_DIRECT_HOSTS` is an optional JSON array of exact HTTPS media hostnames whose browser attachment download behavior has been verified. With its default `[]`, eligible files use authenticated streaming relay. Direct delivery additionally requires an upstream attachment response and a source with no required custom headers. Direct traffic is supplied by the platform and has no observable server byte count. Source links remain usable according to the platform's own expiry and access rules after a redirect.
+
+Prepared sessions expire after 15 minutes. Their scoped access tickets also last at most 15 minutes. A user can request a server-render fallback from the original session, including after its source link expires. Fallback requests share one task, and a stream started under the same session is counted once across resume and fallback. Zero-byte transfer failures release their newly charged free-download count and traffic reservation. Interrupted transfers retain actual sent-byte accounting. An expired source refreshes through a server-render fallback rather than joining byte ranges from different source versions.

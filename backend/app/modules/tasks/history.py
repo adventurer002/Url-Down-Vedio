@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.core.exceptions import AppException
@@ -47,7 +48,9 @@ class TaskHistoryService:
             result = dict(item["result_payload"] or {})
             # A retained completed task does not imply its media file is still downloadable.
             batch_ids = [value for value in result.get("file_ids", []) if value in available]
-            downloadable = item["status"] == "completed" and (result.get("file_id") in available or bool(batch_ids))
+            delivery_ready = bool(result.get("delivery_id") and result.get("expires_at") and
+                datetime.fromisoformat(result["expires_at"]) > datetime.now(timezone.utc))
+            downloadable = item["status"] == "completed" and (result.get("file_id") in available or bool(batch_ids) or delivery_ready)
             if "file_ids" in result:
                 result["file_ids"] = batch_ids
             if not downloadable:
