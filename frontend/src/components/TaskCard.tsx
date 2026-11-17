@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { LocalTask } from "../stores/workspace";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { terminal } from "../lib/taskTracker";
-import { ApiError, resourceAccessUrl, normalizeError } from "../api/client";
+import { ApiError, normalizeError } from "../api/client";
 import { useAuth } from "../stores/auth";
 import ErrorNotice from "./ErrorNotice";
 import { clipError, isClipTask } from "../lib/clips";
@@ -53,6 +53,10 @@ export const stages: Record<string, string> = {
   completed: "处理完成",
 };
 export default function TaskCard({ task }: { task: LocalTask }) {
+  const store = useWorkspace();
+  const downloadState = store.browserDownloads[task.id];
+  const handedOff = downloadState?.handedOff || false;
+  const downloading = downloadState?.pending || false;
   const { user } = useAuth();
   const billing = useBilling();
   const usage = billing.usage[task.id];
@@ -62,24 +66,14 @@ export default function TaskCard({ task }: { task: LocalTask }) {
   const completed = task.event.status === "completed";
   const deliveryId = task.snapshot?.result_payload?.delivery_id;
   const deliveryMode = task.snapshot?.result_payload?.delivery_mode;
-  const [handedOff, setHandedOff] = useState(false);
   const [fallbackStarted, setFallbackStarted] = useState(false);
   useEffect(() => {
     if (completed && user) void billingStore.loadUsage(task.id);
   }, [completed, task.id, user?.id]);
-  const downloadRequest = useRef<AbortController | null>(null);
-  const [downloading, setDownloading] = useState(false);
   useEffect(() => {
-    setDownloading(false);
-    setHandedOff(false);
     setFallbackStarted(false);
-    return () => {
-      downloadRequest.current?.abort();
-      downloadRequest.current = null;
-    };
   }, [user?.id, task.id]);
-  const store = useWorkspace(),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState<ApiError | null>(null);
   useEffect(() => {
     if (!handedOff || !deliveryId || !user) return;
@@ -126,36 +120,9 @@ export default function TaskCard({ task }: { task: LocalTask }) {
       setBusy(false);
     }
   }
-  async function download() {
-    const fileId = task.snapshot?.result_payload?.file_id;
-    if ((!fileId && !deliveryId) || downloadRequest.current) return;
-    const controller = new AbortController();
-    downloadRequest.current = controller;
-    setDownloading(true);
-    setHandedOff(false);
+  function download() {
     setError(null);
-    try {
-      const url = await resourceAccessUrl(
-        deliveryId
-          ? `/deliveries/${encodeURIComponent(deliveryId)}/download`
-          : `/files/${encodeURIComponent(fileId!)}/download`,
-        controller.signal,
-      );
-      if (controller.signal.aborted) return;
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "";
-      anchor.referrerPolicy = "no-referrer";
-      anchor.click();
-      if (deliveryId) setHandedOff(true);
-    } catch (cause) {
-      if (!controller.signal.aborted) setError(normalizeError(cause));
-    } finally {
-      if (downloadRequest.current === controller) {
-        downloadRequest.current = null;
-        setDownloading(false);
-      }
-    }
+    void store.saveDownload(task);
   }
   return (
     <div className="task-card">
@@ -280,9 +247,11 @@ export default function TaskCard({ task }: { task: LocalTask }) {
           </button>
         )}
       </div>
-      {handedOff && deliveryId && (
+      {handedOff && (
         <p className="task-usage" role="status">
-          已交给浏览器下载。若下载失败，可重试或改为生成成品，同一会话只计一次下载。
+          {deliveryId
+            ? "已交给浏览器下载。若下载失败，可重试或改为生成成品，同一会话只计一次下载。"
+            : "已交给浏览器下载，可在浏览器下载列表中查看进度。"}
         </p>
       )}
       {completed && usage && (
@@ -312,7 +281,7 @@ export default function TaskCard({ task }: { task: LocalTask }) {
           }
         />
       )}
-      <ErrorNotice error={error} />
+      <ErrorNotice error={error || downloadState?.error || null} />
       {task.trackingError && (
         <div className="task-error" role="status">
           <p>任务进度暂时未更新，正在尝试重新连接。</p>

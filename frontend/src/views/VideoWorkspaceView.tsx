@@ -226,7 +226,14 @@ export default function VideoWorkspaceView() {
         return;
       if (immediate) {
         downloadQuotes.current.set(quoteKey, quote);
-        await store.create(video, kind, label, presetId, quote.quote_id);
+        const task = await store.create(
+          video,
+          kind,
+          label,
+          presetId,
+          quote.quote_id,
+        );
+        store.downloadWhenReady(task);
         downloadQuotes.current.delete(quoteKey);
         void billingStore.refresh();
       } else {

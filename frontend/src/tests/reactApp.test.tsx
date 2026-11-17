@@ -123,6 +123,7 @@ beforeEach(() => {
   FakeSource.instances = [];
   vi.stubGlobal("EventSource", FakeSource);
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
     configurable: true,
     value() {
@@ -217,7 +218,18 @@ it("preserves the input and request ID on API errors and allows retry", async ()
   ).toBeTruthy();
 });
 
-it("reacts to SSE progress, fetches the completed result and exposes the controlled download", async () => {
+it("starts the local download automatically after the processing task completes", async () => {
+  const click = vi
+    .mocked(HTMLAnchorElement.prototype.click)
+    .mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.href).toBe(
+        new URL(
+          `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/files/file-1/download`,
+          window.location.origin,
+        ).href,
+      );
+      expect(this.referrerPolicy).toBe("no-referrer");
+    });
   vi.spyOn(api, "create").mockResolvedValue({
     task_id: "job-1",
     status: "queued",
@@ -239,20 +251,8 @@ it("reacts to SSE progress, fetches the completed result and exposes the control
     "30",
   );
   act(() => FakeSource.instances[0]!.emit(snapshot("completed")));
-  const download = await screen.findByRole("button", { name: "保存到本地" });
-  const click = vi
-    .spyOn(HTMLAnchorElement.prototype, "click")
-    .mockImplementation(function (this: HTMLAnchorElement) {
-      expect(this.href).toBe(
-        new URL(
-          `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/files/file-1/download`,
-          window.location.origin,
-        ).href,
-      );
-      expect(this.referrerPolicy).toBe("no-referrer");
-    });
-  fireEvent.click(download);
   await waitFor(() => expect(click).toHaveBeenCalledOnce());
+  expect(await screen.findByRole("button", { name: "重新下载" })).toBeTruthy();
   expect(FakeSource.instances[0]!.close).toHaveBeenCalled();
 });
 
