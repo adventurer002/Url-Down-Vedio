@@ -3,7 +3,7 @@ import { fromHistory, fromUpload, type UploadedSource } from "../lib/content";
 import type { UploadRecord } from "../types/uploads";
 import type { HistoryVideo, TaskCreated } from "../types/api";
 import { api } from "../api";
-import { ApiError, normalizeError } from "../api/client";
+import { ApiError, normalizeError, resourceAccessUrl } from "../api/client";
 import { billingStore } from "./billing";
 import { createTaskTracker, terminal } from "../lib/taskTracker";
 import type {
@@ -122,11 +122,21 @@ export function createWorkspace() {
   let identityVersion = 0;
   let historyRevision = 0;
   const listeners = new Set<() => void>();
+  const automaticDownloads = new Set<string>();
+  const downloadRequests = new Map<string, AbortController>();
   function notify() {
     version++;
     listeners.forEach((listener) => listener());
   }
   const state = {
+    browserDownloads: {} as Record<
+      string,
+      {
+        pending: boolean;
+        handedOff: boolean;
+        error: ApiError | null;
+      }
+    >,
     videos: readVideos(identity),
     tasks: readTasks(identity),
     historyOpen: false,
@@ -372,6 +382,7 @@ export function createWorkspace() {
             target.event = { ...snapshot, seq: target.event.seq };
           target.trackingError = undefined;
           persist(!terminal(snapshot.status));
+          downloadIfReady(target);
           if (target.kind === "media_probe" && terminal(snapshot.status)) {
             const source = state.videos.find(
               (video) => video.key === target.videoKey,
@@ -396,6 +407,66 @@ export function createWorkspace() {
       },
     });
     trackers.set(item.id, tracker);
+  }
+  function downloadWhenReady(task: LocalTask) {
+    if (!["download", "audio_extraction"].includes(task.kind)) return;
+    automaticDownloads.add(task.id);
+    downloadIfReady(state.tasks.find((item) => item.id === task.id) || task);
+  }
+  function downloadIfReady(task: LocalTask) {
+    if (!automaticDownloads.has(task.id) || !terminal(task.event.status))
+      return;
+    if (task.event.status !== "completed") {
+      automaticDownloads.delete(task.id);
+      return;
+    }
+    if (
+      !task.snapshot?.result_payload?.file_id &&
+      !task.snapshot?.result_payload?.delivery_id
+    )
+      return;
+    automaticDownloads.delete(task.id);
+    void saveDownload(task);
+  }
+  async function saveDownload(task: LocalTask) {
+    const { file_id: fileId, delivery_id: deliveryId } =
+      task.snapshot?.result_payload || {};
+    if ((!fileId && !deliveryId) || downloadRequests.has(task.id)) return;
+    const controller = new AbortController();
+    const expectedIdentity = identityVersion;
+    downloadRequests.set(task.id, controller);
+    state.browserDownloads[task.id] = {
+      pending: true,
+      handedOff: false,
+      error: null,
+    };
+    notify();
+    try {
+      const url = await resourceAccessUrl(
+        deliveryId
+          ? `/deliveries/${encodeURIComponent(deliveryId)}/download`
+          : `/files/${encodeURIComponent(fileId!)}/download`,
+        controller.signal,
+      );
+      if (controller.signal.aborted || expectedIdentity !== identityVersion)
+        return;
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "";
+      anchor.referrerPolicy = "no-referrer";
+      anchor.click();
+      state.browserDownloads[task.id].handedOff = true;
+    } catch (cause) {
+      if (!controller.signal.aborted && expectedIdentity === identityVersion)
+        state.browserDownloads[task.id].error = normalizeError(cause);
+    } finally {
+      if (downloadRequests.get(task.id) === controller)
+        downloadRequests.delete(task.id);
+      if (expectedIdentity === identityVersion) {
+        state.browserDownloads[task.id].pending = false;
+        notify();
+      }
+    }
   }
   async function create(
     video: SavedVideo,
@@ -492,7 +563,9 @@ export function createWorkspace() {
     const created = await api.deliveryFallback(deliveryId);
     if (expectedIdentity !== identityVersion)
       throw new ApiError("AUTH_CHANGED", "登录身份已变化，请重新打开任务。");
-    return registerTask(created, video, "download", "生成视频成品");
+    const task = registerTask(created, video, "download", "生成视频成品");
+    downloadWhenReady(task);
+    return task;
   }
   function registerTask(
     created: TaskCreated,
@@ -793,6 +866,9 @@ export function createWorkspace() {
     get tasks() {
       return state.tasks;
     },
+    get browserDownloads() {
+      return state.browserDownloads;
+    },
     get submitting() {
       return state.submitting;
     },
@@ -842,6 +918,10 @@ export function createWorkspace() {
       stopAll();
       identity = next;
       identityVersion++;
+      automaticDownloads.clear();
+      downloadRequests.forEach((controller) => controller.abort());
+      downloadRequests.clear();
+      state.browserDownloads = {};
       historyRevision++;
       state.historyMutating = false;
       state.tasks = readTasks(identity);
@@ -875,6 +955,8 @@ export function createWorkspace() {
     rememberUpload,
     remember,
     create,
+    downloadWhenReady,
+    saveDownload,
     prepareDownloadFallback,
     cancel,
     restore,
