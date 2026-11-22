@@ -37,6 +37,10 @@ class TaskRecord:
     wait_reason: str | None = None
     worker_pid: int | None = None
     worker_host: str | None = None
+    phase: str | None = None
+    phase_attempts: int = 0
+    prepared_transcript_id: UUID | None = None
+    last_dispatched_at: datetime | None = None
 
 
 def record(task: Task) -> TaskRecord:
@@ -169,6 +173,9 @@ class TaskRepository:
                 if recent >= 60:
                     raise AppException("TASK_RATE_LIMITED", "每小时最多创建 60 个任务，请稍后重试", 429)
             task = Task(user_id=user_id, task_type=task_type, video_id=video_id, input_payload=input_payload or {}, expires_at=expires_at)
+            if settings.STAGED_TASKS_ENABLED:
+                from app.modules.tasks.dispatch import first_phase
+                task.phase = first_phase(task_type, task.input_payload)
             session.add(task)
             session.flush()
             session.add(TaskHistoryEntry(task_id=task.id))
@@ -247,10 +254,10 @@ class TaskRepository:
             return record(task)
 
     def start(self, task_id: UUID, *, execution_id: str | None = None, clip_cache_ready=False,
-              download_cache_ready=False) -> bool:
+              download_cache_ready=False, phase=None) -> bool:
         with self.sessions.begin() as session:
             task = self._lock_task(session, task_id)
-            if task.status != TaskStatus.queued or task.cancel_requested:
+            if task.status != TaskStatus.queued or task.cancel_requested or task.phase != phase:
                 return False
             expiry = task.expires_at
             if expiry is not None and expiry.tzinfo is None:
@@ -275,6 +282,8 @@ class TaskRepository:
                 reason = self._billing().admit(session, record(task))
                 if reason:
                     task.wait_reason = reason
+                    if phase and reason == "capacity":
+                        task.last_dispatched_at = None  # A completed peer can wake it immediately.
                     return False
                 task.input_payload = {**task.input_payload, "allowance": {**task.input_payload["allowance"],
                     "limits": self._billing().execution_limits(session, task.id)}}
@@ -284,7 +293,48 @@ class TaskRepository:
             if execution_id is not None:
                 task.input_payload = {**task.input_payload, "_execution_id": execution_id}
             task.attempts += 1
+            if phase:
+                task.phase_attempts += 1
             session.flush()
+            return True
+
+    def claim_phase(self, task_id, phase, execution_id, *, download_cache_ready=False):
+        # First-stage admission and user quota are handled by the existing start contract.
+        if self.start(task_id, phase=phase, execution_id=execution_id,
+                      download_cache_ready=download_cache_ready):
+            return True
+        with self.sessions.begin() as session:
+            task = self._lock_task(session, task_id)
+            if (task.phase != phase or task.status != TaskStatus.processing or task.worker_pid is not None
+                    or task.cancel_requested):
+                return False
+            task.worker_pid, task.worker_host = os.getpid(), socket.gethostname()
+            task.phase_attempts += 1
+            task.input_payload = {**task.input_payload, "_execution_id": execution_id}
+            return True
+
+    def handoff_phase(self, task_id, execution_id, phase, next_phase, progress, transcript_id=None):
+        def handoff(session):
+            task = session.get(Task, task_id)
+            if task.phase != phase or task.input_payload.get("_execution_id") != execution_id:
+                raise AppException("TASK_EXECUTION_BUSY", "执行阶段已变化", 409)
+            task.prepared_transcript_id = transcript_id
+            task.input_payload = {key: value for key, value in task.input_payload.items() if key != "_execution_id"}
+            task.phase, task.phase_attempts = next_phase, 0
+            task.status, task.progress = TaskStatus.processing, max(progress, task.progress)
+            task.worker_pid = task.worker_host = task.last_dispatched_at = None
+        self.perform_if_active(task_id, handoff)
+
+    def requeue_phase(self, task_id, execution_id):
+        with self.sessions.begin() as session:
+            task = self._lock_task(session, task_id)
+            if (not task.phase or task.worker_pid is None or task.cancel_requested
+                    or task.phase_attempts >= 2 or task.status not in (TaskStatus.running, TaskStatus.processing)
+                    or task.input_payload.get("_execution_id") != execution_id):
+                return False
+            task.status = TaskStatus.processing
+            task.input_payload = {key: value for key, value in task.input_payload.items() if key != "_execution_id"}
+            task.worker_pid = task.worker_host = task.last_dispatched_at = None
             return True
 
     def mark_processing(self, task_id: UUID) -> bool:
@@ -302,7 +352,8 @@ class TaskRepository:
         original = self._lock_task(session, task_id)
         if before_change:
             before_change(record(original))
-        session.execute(update(Task).where(Task.id == task_id, Task.status == TaskStatus.queued).values(
+        session.execute(update(Task).where(Task.id == task_id, or_(Task.status == TaskStatus.queued,
+            (Task.status == TaskStatus.processing) & Task.phase.is_not(None) & Task.worker_pid.is_(None))).values(
             status=TaskStatus.cancelled, cancel_requested=True, finished_at=utcnow(),
             error_code="TASK_CANCELLED", error_message="任务已取消"))
         session.execute(update(Task).where(
@@ -445,9 +496,12 @@ class TaskRepository:
                 raise AppException("TASK_CANCELLED", "任务已取消或终止", 409)
             self._billing().record_asr(session, task_id, duration)
 
-    def queued(self, user_id=None, limit=100):
+    def queued(self, user_id=None, limit=100, *, dispatch=False):
         with self.sessions() as session:
-            query = select(Task).where(Task.status == TaskStatus.queued)
+            waiting = Task.status == TaskStatus.queued
+            if dispatch:
+                waiting = or_(waiting, (Task.status == TaskStatus.processing) & Task.phase.is_not(None) & Task.worker_pid.is_(None))
+            query = select(Task).where(waiting)
             if user_id is not None:
                 query = query.where(Task.user_id == user_id)
             return [record(x) for x in session.scalars(query.order_by(Task.last_dispatched_at.asc().nulls_first(), Task.created_at).limit(limit))]
@@ -456,6 +510,18 @@ class TaskRepository:
         with self.sessions.begin() as session:
             session.execute(update(Task).where(Task.id == task_id, Task.status == TaskStatus.queued)
                             .values(last_dispatched_at=utcnow()))
+
+    def reserve_phase_dispatch(self, task_id, phase):
+        with self.sessions.begin() as session:
+            task = self._lock_task(session, task_id)
+            if (task.phase != phase or task.worker_pid is not None or task.cancel_requested
+                    or task.status not in (TaskStatus.queued, TaskStatus.processing)):
+                return False
+            last = task.last_dispatched_at
+            if last and (last if last.tzinfo else last.replace(tzinfo=timezone.utc)) > utcnow() - timedelta(seconds=60):
+                return False
+            task.last_dispatched_at = utcnow()
+            return True
 
     def running(self, limit=100):
         with self.sessions() as session:

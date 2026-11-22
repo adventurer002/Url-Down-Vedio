@@ -95,26 +95,35 @@ async def create_download(body: DownloadRequest, service: DownloadService = Depe
 @router.get("/files/{file_id}/download")
 async def download_file(file_id: UUID, request: Request, service: MediaService = Depends(get_media_service),
                         tasks=Depends(get_file_task_service), user=Depends(resource_user)):
-    record, path, filename = await service.download(file_id)
+    record, filename = await service.download_record(file_id)
     await tasks.authorize_file(file_id, record.task_id, user)
     if settings.ALLOWANCES_ENABLED:
         from app.modules.billing.repository import AllowanceRepository
         from app.modules.billing.transfer import AllowanceFileResponse, transfer_length
+        from app.modules.media.delivery import redirect_download
         from app.modules.tasks.service import database_call
         repository = AllowanceRepository(service.repository.sessions)
+        redirect = await redirect_download(record, filename, request, user, repository)
+        if redirect is not None:
+            return redirect
+        path = service.local_download_path(record)
         length = transfer_length(record.size_bytes, request.headers.get("range"), request.headers.get("if-range"))
         transfer_id = await database_call(repository.reserve_transfer, user.id, length)
         return AllowanceFileResponse(path, filename=filename, media_type=record.mime_type,
             repository=repository, transfer_id=transfer_id,
             headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
-    return FileResponse(path, filename=filename, media_type=record.mime_type,
+    return FileResponse(service.local_download_path(record), filename=filename, media_type=record.mime_type,
                         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
 
 
 @router.post("/files/{file_id}/download/access")
 async def download_access(file_id: UUID, service: MediaService = Depends(get_media_service),
                           tasks=Depends(get_file_task_service), user=Depends(required_user)):
-    record, _, _ = await service.download(file_id)
+    from app.modules.media.delivery import delivery_destination
+
+    record, filename = await service.download_record(file_id)
     await tasks.authorize_file(file_id, record.task_id, user)
+    if not delivery_destination(record, filename):
+        service.local_download_path(record)
     return JSONResponse(success_response(issue_resource_access(user.id, user.auth_version, "file_download", file_id)),
                         headers={"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer"})

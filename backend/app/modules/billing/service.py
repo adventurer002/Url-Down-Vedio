@@ -14,6 +14,10 @@ class AllowanceDispatcher:
         from app.infrastructure.queue.celery_app import celery_app
         celery_app.send_task("billing.execute", args=[str(task_id)], task_id=str(task_id))
 
+    def enqueue_routed(self, task_id, queue):
+        from app.modules.tasks.dispatch import send
+        send("billing.execute", task_id, queue)
+
 
 class BillingService:
     def __init__(self, repository, resolver, videos, tasks):
@@ -97,21 +101,25 @@ class BillingService:
 
 
 async def resume_queued(tasks, user_id=None):
+    from app.modules.tasks.dispatch import enqueue
     dispatched = 0
-    for task in await database_call(tasks.queued, user_id):
-        if "allowance" in task.input_payload or task.task_type in {"media_probe","model_test"}:
+    for task in await database_call(tasks.queued, user_id, dispatch=True):
+        if task.phase or "allowance" in task.input_payload or task.task_type in {"media_probe", "model_test"}:
             try:
                 async with asyncio.timeout(5):
                     if task.task_type == "model_test":
                         from app.modules.model_config.worker import ModelTestDispatcher
-                        await asyncio.to_thread(ModelTestDispatcher().enqueue,task.id)
+                        dispatcher = ModelTestDispatcher()
                     elif task.task_type == "media_probe":
                         from app.modules.uploads.worker import UploadDispatcher
-                        await asyncio.to_thread(UploadDispatcher().enqueue, task.id)
+                        dispatcher = UploadDispatcher()
                     else:
-                        await asyncio.to_thread(AllowanceDispatcher().enqueue, task.id)
-                await database_call(tasks.mark_dispatched, task.id)
-                dispatched += 1
+                        dispatcher = AllowanceDispatcher()
+                    sent = await asyncio.to_thread(enqueue, tasks, task, dispatcher)
+                if sent:
+                    if not task.phase:
+                        await database_call(tasks.mark_dispatched, task.id)
+                    dispatched += 1
             except Exception:
                 break  # Durable queued rows remain retryable; no infinite broker retries.
     return dispatched

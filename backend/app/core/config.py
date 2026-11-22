@@ -28,12 +28,32 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     DATABASE_URL: str = "postgresql+psycopg://videohub_user:videohub_pass@localhost:5432/videohub_dev"
+    DATABASE_POOL_SIZE: int = Field(default=5, ge=1)
+    DATABASE_MAX_OVERFLOW: int = Field(default=10, ge=0)
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
     STORAGE_LOCAL_PATH: Path = Path("./storage")
     STORAGE_MAX_QUOTA_MB: int = Field(default=5120, gt=0)
     STORAGE_FILE_TTL_HOURS: int = Field(default=24, gt=0)
+    OBJECT_MIRROR_ENABLED: bool = False
+    OBJECT_DELIVERY_ENABLED: bool = False
+    OBJECT_DELIVERY_MODE: Literal["gateway", "direct"] = "gateway"
+    OBJECT_UPLOAD_ENDPOINT: str = ""
+    OBJECT_READ_ENDPOINT: str = ""
+    OBJECT_BUCKET: str = ""
+    OBJECT_REGION: str = ""
+    OBJECT_NAMESPACE: str = ""
+    OBJECT_ACCESS_KEY: SecretStr = SecretStr("")
+    OBJECT_SECRET_KEY: SecretStr = SecretStr("")
+    OBJECT_SESSION_TOKEN: SecretStr = SecretStr("")
+    OBJECT_GATEWAY_URL: str = ""
+    OBJECT_GATEWAY_API_URL: str = ""
+    OBJECT_DELIVERY_SECRET: SecretStr = SecretStr("")
+    OBJECT_UPLOAD_TIMEOUT_SECONDS: int = Field(default=1200, ge=30, le=3600)
+    DOWNLOAD_FAST_MP4_ENABLED: bool = False
+    DOWNLOAD_PARALLEL_STREAMS_ENABLED: bool = False
+    DOWNLOAD_SOURCE_CACHE_ENABLED: bool = False
     # Trusted operator configuration; never accepted from HTTP request bodies.
     YTDLP_PROXY: SecretStr = SecretStr("")
     YTDLP_JS_RUNTIME: Literal["disabled", "deno"] = "disabled"
@@ -53,6 +73,7 @@ class Settings(BaseSettings):
     VIDEO_PARSE_CONCURRENCY: int = Field(default=2, ge=1, le=4)
     VIDEO_PARSE_FAILURE_COOLDOWN_SECONDS: int = Field(default=30, ge=0, le=300)
     DOWNLOAD_TIMEOUT_SECONDS: int = Field(default=600, gt=0)
+    DOWNLOAD_RENDER_TIMEOUT_SECONDS: int = Field(default=900, gt=0)
     MAX_FILE_SIZE_MB: int = Field(default=512, gt=0)
     STORAGE_MIN_FREE_MB: int = Field(default=256, ge=0)
     UPLOAD_IDLE_TIMEOUT_SECONDS: int = Field(default=30, gt=0)
@@ -67,7 +88,10 @@ class Settings(BaseSettings):
     ASR_API_BASE_URL: str = "https://api.openai.com/v1"
     ASR_API_KEY: SecretStr = SecretStr("")
     ASR_MODEL: str = Field(default="whisper-1", min_length=1, max_length=128)
-    ASR_TOTAL_TIMEOUT_SECONDS: int = Field(default=90, gt=0)
+    # Stage budget is distinct from one cloud request (including its retry).
+    ASR_TOTAL_TIMEOUT_SECONDS: int = Field(default=3600, gt=0)
+    ASR_REQUEST_TIMEOUT_SECONDS: int = Field(default=180, gt=0)
+    ASR_PREPROCESS_TIMEOUT_SECONDS: int = Field(default=180, gt=0)
     ASR_MAX_UPLOAD_MB: int = Field(default=25, gt=0)
     ASR_CHUNK_CONCURRENCY: int = Field(default=1, ge=1, le=2)
     ASR_MOCK_TEXT: str = "离线模拟转写内容（非真实识别结果）"
@@ -78,13 +102,18 @@ class Settings(BaseSettings):
     LLM_API_BASE_URL: str = "https://api.openai.com/v1"
     LLM_API_KEY: SecretStr = SecretStr("")
     LLM_MODEL: str = Field(default="gpt-4o-mini", min_length=1, max_length=128)
-    LLM_TIMEOUT_SECONDS: int = Field(default=90, gt=0)
-    AI_TASK_TIMEOUT_SECONDS: int = Field(default=900, gt=0)
+    LLM_TIMEOUT_SECONDS: int = Field(default=180, gt=0)
+    LLM_STAGE_TIMEOUT_SECONDS: int = Field(default=1800, gt=0)
+    STAGED_TASKS_ENABLED: bool = False
+    AI_TASK_TIMEOUT_SECONDS: int = Field(default=7200, gt=0)
+    CLOUD_CONNECT_TIMEOUT_SECONDS: int = Field(default=5, gt=0)
+    CLOUD_READ_TIMEOUT_SECONDS: int = Field(default=120, gt=0)
+    CLOUD_WRITE_TIMEOUT_SECONDS: int = Field(default=120, gt=0)
     LLM_CHUNK_CHARS: int = Field(default=12000, ge=256)
     LLM_MAX_CHUNKS: int = Field(default=64, ge=1, le=256)
     LLM_CHUNK_CONCURRENCY: int = Field(default=2, ge=1, le=2)
     LLM_MAX_OUTPUT_TOKENS: int = Field(default=4096, ge=128, le=16384)
-    SUMMARY_PROMPT_VERSION: str = Field(default="summary-v2", min_length=1, max_length=64)
+    SUMMARY_PROMPT_VERSION: str = Field(default="summary-v3", min_length=1, max_length=64)
     MINDMAP_PROMPT_VERSION: str = Field(default="mindmap-v2", min_length=1, max_length=64)
     MINDMAP_SCHEMA_VERSION: str = Field(default="tree-v1", min_length=1, max_length=32)
     LLM_INPUT_COST_PER_MILLION: Decimal | None = Field(default=None, ge=0)

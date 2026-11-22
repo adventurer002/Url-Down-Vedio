@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, Uuid, func
+from sqlalchemy import Boolean, CheckConstraint, Index, DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +26,7 @@ ACTIVE_STATUSES = (TaskStatus.queued, TaskStatus.running, TaskStatus.processing)
 class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (
+        Index("ix_tasks_phase_dispatch", "phase", "status", "last_dispatched_at"),
         CheckConstraint("progress >= 0 AND progress <= 100", name="ck_tasks_progress"),
         CheckConstraint("attempts >= 0", name="ck_tasks_attempts"),
         CheckConstraint("status IN ('queued', 'running', 'processing', 'completed', 'failed', 'cancelled', 'expired')", name="ck_tasks_status"),
@@ -52,6 +53,10 @@ class Task(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    phase: Mapped[str | None] = mapped_column(String(24))
+    phase_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    prepared_transcript_id: Mapped[UUID | None] = mapped_column(Uuid)
+
 
 class TaskHistoryEntry(Base):
     __tablename__ = "task_history_entries"
@@ -59,3 +64,11 @@ class TaskHistoryEntry(Base):
     task_id: Mapped[UUID] = mapped_column(
         ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True
     )
+
+
+class TaskCheckpoint(Base):
+    __tablename__ = "task_checkpoints"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

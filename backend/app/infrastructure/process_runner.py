@@ -112,6 +112,10 @@ class ProcessRunner:
                         continue
                 except (ValueError, UnicodeError):
                     continue
+                if event.get("_source_timing") is True:
+                    from app.infrastructure.timing import log_child_stage
+                    log_child_stage(event)
+                    continue
                 if event.get("_source_metadata_ready") is True:
                     if not source_ready and on_source_ready is not None:
                         await on_source_ready()
@@ -124,6 +128,7 @@ class ProcessRunner:
                                 "DNS_TIMEOUT": "YouTube DNS 查询超时，请稍后重试",
                                 "UNSUPPORTED_URL": "视频不受支持", "PRESET_UNAVAILABLE": "视频已不提供所选档位",
                                 "DOWNLOAD_TIMEOUT": "下载或转换超时", "FILE_TOO_LARGE": "文件超过任务体积上限",
+                                "DOWNLOAD_SOURCE_STALE": "缓存媒体地址已失效",
                                 "FFMPEG_UNAVAILABLE": "服务端缺少 FFmpeg", "VIDEO_ID_CHANGED": "视频身份发生变化",
                                 "AUDIO_STREAM_UNAVAILABLE": "没有独立音轨，已阻止下载完整视频",
                                 "SUBTITLE_FETCH_FAILED": "字幕获取失败", "SUBTITLE_TOO_LARGE": "字幕文件超过大小限制",

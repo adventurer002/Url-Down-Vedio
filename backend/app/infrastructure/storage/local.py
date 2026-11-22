@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import time
 from uuid import UUID
 
 from app.core.exceptions import AppException
@@ -53,6 +54,19 @@ class LocalStorageAdapter:
             raise AppException("STORAGE_QUOTA_EXCEEDED", "存储配额不足，请先清理过期文件", 507)
         if shutil.disk_usage(self.root).free < self.min_free_bytes + pending + required_bytes:
             raise AppException("INSUFFICIENT_DISK_SPACE", "磁盘可用空间不足", 507)
+
+    def download_capacity_guard(self):
+        next_scan = time.monotonic() + 5  # Reservation just checked the global quota.
+
+        def check():
+            nonlocal next_scan
+            if shutil.disk_usage(self.root).free < self.min_free_bytes:
+                raise AppException("INSUFFICIENT_DISK_SPACE", "磁盘可用空间不足", 507)
+            instant = time.monotonic()
+            if instant >= next_scan:
+                self.check_capacity()
+                next_scan = instant + 5
+        return check
 
     def task_directory(self, task_id: UUID) -> Path:
         directory = self.root / "tmp" / str(UUID(str(task_id)))

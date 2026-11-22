@@ -1,5 +1,6 @@
 from datetime import timedelta
 import json
+from contextlib import nullcontext
 from uuid import UUID
 
 from app.core.config import settings
@@ -91,13 +92,18 @@ async def cleanup_expired_files(storage: StorageAdapter | None = None, media: Me
                     raise
                 removable = folder.stat().st_mtime < cutoff
             if removable:
-                storage.discard_batch(task_id, await database_call(media.storage_keys))
-                storage.remove_task_directory(task_id)
-                storage.release_reservation(task_id)
-                if task is not None:
-                    from app.modules.tasks.execution import discard_receipt
-                    discard_receipt(storage.root, task)
-                counts["temporary_directories"] += 1
+                from app.modules.tasks.execution import discard_receipt, execution_lock
+                try:
+                    with execution_lock(storage.root, task_id) if task and task.phase else nullcontext():
+                        storage.discard_batch(task_id, await database_call(media.storage_keys))
+                        storage.remove_task_directory(task_id)
+                        storage.release_reservation(task_id)
+                        if task is not None:
+                            discard_receipt(storage.root, task)
+                        counts["temporary_directories"] += 1
+                except AppException as error:
+                    if error.code != "TASK_EXECUTION_BUSY":
+                        raise
         registered = await database_call(media.storage_keys)
         for path in (storage.root / "files").iterdir():
             key = f"files/{path.name}"

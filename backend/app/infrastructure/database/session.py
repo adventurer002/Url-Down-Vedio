@@ -12,7 +12,8 @@ READINESS_TIMEOUT = 1.5
 CONNECT_ARGS = {"connect_timeout": 1, "options": "-c statement_timeout=1000"}
 
 engine = create_engine(
-    settings.DATABASE_URL, pool_pre_ping=True, pool_timeout=1, connect_args=CONNECT_ARGS
+    settings.DATABASE_URL, pool_pre_ping=True, pool_timeout=1, connect_args=CONNECT_ARGS,
+    pool_size=settings.DATABASE_POOL_SIZE, max_overflow=settings.DATABASE_MAX_OVERFLOW,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 

@@ -127,6 +127,15 @@ async def test_cloud_payload_usage_and_json_repair():
         parse_json_content("[]")
 
 
+async def test_cloud_reports_incomplete_json_at_output_limit():
+    response = {"choices": [{"finish_reason": "length", "message": {"content": '{"overview":"未完成'}}]}
+    provider = OpenAICompatibleLLMProvider("https://example.com", "secret", "test",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=response)))
+    with pytest.raises(AppException) as error:
+        await provider.generate(LLMRequest("summary", {}, {}, "zh", "asr"))
+    assert error.value.code == "LLM_OUTPUT_TRUNCATED"
+
+
 @pytest.mark.parametrize("status,attempts", [(401, 1), (503, 2)])
 async def test_cloud_errors_have_bounded_retries_without_secrets(status, attempts):
     calls = []
@@ -267,3 +276,42 @@ async def test_ai_timeout_is_durable_failed_status(repository, video, monkeypatc
     result = await execute_ai(task.id, TaskService(repository, MemoryBus()), AIRepository(repository.sessions),
         SimpleNamespace(acquire=slow), HeuristicLLMProvider())
     assert result["status"] == "failed" and repository.get(task.id).error_code == "AI_TIMEOUT"
+
+
+async def test_llm_stage_budget_starts_after_transcript_preparation(repository, video, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "AI_TASK_TIMEOUT_SECONDS", 2)
+    monkeypatch.setattr(settings, "LLM_STAGE_TIMEOUT_SECONDS", .3)
+    transcript = seed(repository, video)
+    task = task_for(repository, video, "ai_summary", output_language="zh")
+
+    async def prepare(*args):
+        await asyncio.sleep(.35)  # Longer than the LLM budget, within the overall task budget.
+        return transcript
+
+    output = await execute_ai(task.id, TaskService(repository, MemoryBus()), AIRepository(repository.sessions),
+        SimpleNamespace(acquire=prepare), HeuristicLLMProvider())
+    assert output["status"] == "completed"
+
+
+async def test_llm_stage_timeout_preserves_prepared_transcript(repository, video, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "AI_TASK_TIMEOUT_SECONDS", 2)
+    monkeypatch.setattr(settings, "LLM_STAGE_TIMEOUT_SECONDS", .04)
+    transcript = seed(repository, video)
+    task = task_for(repository, video, "ai_summary", output_language="zh")
+    cleaned = asyncio.Event()
+
+    async def stuck(*args):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+
+    provider = HeuristicLLMProvider()
+    provider.generate = stuck
+    output = await execute_ai(task.id, TaskService(repository, MemoryBus()), AIRepository(repository.sessions),
+        SimpleNamespace(acquire=AsyncMock(return_value=transcript)), provider)
+    assert output["status"] == "failed" and cleaned.is_set()
+    assert repository.get(task.id).error_code == "LLM_STAGE_TIMEOUT"
+    assert TranscriptRepository(repository.sessions).get(transcript.id).content_hash == transcript.content_hash

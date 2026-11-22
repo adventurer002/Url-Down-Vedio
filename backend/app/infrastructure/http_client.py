@@ -6,6 +6,7 @@ import httpcore
 import httpx
 
 from app.core.security import check_dns_results
+from app.core.config import settings
 
 
 class PublicNetworkBackend(httpcore.AsyncNetworkBackend):
@@ -14,10 +15,15 @@ class PublicNetworkBackend(httpcore.AsyncNetworkBackend):
 
     async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
         try:
-            async with asyncio.timeout(min(timeout or 5, 5)):
+            loop = asyncio.get_running_loop()
+            budget = min(settings.CLOUD_CONNECT_TIMEOUT_SECONDS,
+                         timeout if timeout is not None else settings.CLOUD_CONNECT_TIMEOUT_SECONDS)
+            deadline = loop.time() + budget
+            async with asyncio.timeout_at(deadline):
                 results = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
                 check_dns_results(results)
-                return await self.backend.connect_tcp(results[0][4][0], port, timeout, local_address, socket_options)
+                return await self.backend.connect_tcp(results[0][4][0], port, max(0, deadline - loop.time()),
+                                                      local_address, socket_options)
         except TimeoutError:
             raise httpcore.ConnectTimeout("DNS/connect timeout") from None
         except OSError:

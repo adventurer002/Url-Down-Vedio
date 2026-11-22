@@ -1,5 +1,10 @@
 # VideoHub AI backend
 
+4 核 / 8GB / 10Mbps 性能改造：总体见 [统一方案](DOWNLOAD_PERFORMANCE_PLAN.md)，长视频超时预算、配置诊断及启动验证见 [性能 A 包](PERFORMANCE_A.md)。本轮维持现有单 Solo Worker，后续按工作包推进阶段并行与文件分发。
+分阶段 Worker、转写与模型检查点及相应发布步骤见 [性能 B 包](PERFORMANCE_B.md)。在部署配置中启用阶段模式前，先应用迁移并就绪各队列消费者。
+私有对象镜像、下载网关实际流量结算、B 站来源缓存与 MP4 快速交付见 [性能 C 包](PERFORMANCE_C.md)。真实云桶、独立网关和云内传输需在生产启用前验收。
+1/2/5/10 账号波次、六个 Worker 的测试配置和容量报告口径见 [性能 D 包](PERFORMANCE_D.md)。
+
 三平台取源改造：总体设计见 [服务端方案](MULTIPLATFORM_SERVER_PLAN.md)，本地阶段 A 的出口分流、共享冷却、诊断与验收边界见 [阶段 A 交付](MULTIPLATFORM_A.md)。默认保持 legacy 配置，尚未部署生产。
 
 B 站专用 WBI/匿名取源、分 P 兼容、受控备用和真实服务器探测见 [阶段 B 交付](MULTIPLATFORM_B.md)。代码与单样本服务器直连元数据解析通过；完整媒体下载未验收，尚未启用生产。

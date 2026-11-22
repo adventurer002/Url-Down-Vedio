@@ -1,5 +1,6 @@
 import asyncio
 from app.infrastructure.timing import log_queue_wait, stage_timer
+from app.infrastructure.timeouts import operation_timeout
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -26,18 +27,22 @@ class AIDispatcher:
     def enqueue(self, task_id):
         celery_app.send_task("ai.generate", args=[str(task_id)], task_id=str(task_id))
 
+    def enqueue_routed(self, task_id, queue):
+        from app.modules.tasks.dispatch import send
+        send("ai.generate", task_id, queue)
+
 
 def result(item, cache_hit=False):
     return {"result_id": str(item.id), "result_type": item.result_type, "cache_hit": cache_hit}
 
 
-async def execute_ai(task_id, service, results, pipeline, provider):
+async def execute_ai(task_id, service, results, pipeline, provider, *, claimed=False):
     tasks = service.repository
-    if not await database_call(tasks.start, task_id):
+    if not claimed and not await database_call(tasks.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(tasks.get, task_id)).status}
     task = await database_call(tasks.get, task_id)
     log_queue_wait(task)
-    progress = 0
+    progress = task.progress
 
     async def publish(record, stage=None):
         try:
@@ -58,73 +63,90 @@ async def execute_ai(task_id, service, results, pipeline, provider):
 
     try:
         if task.input_payload.get("model_config"):
-            from app.modules.model_config.runtime import llm,TASK_USE
-            provider=await database_call(llm,TASK_USE[task.task_type],task.input_payload["model_config"],tasks.sessions)
-        elif provider is None:provider=get_llm_provider(managed=False)
+            from app.modules.model_config.runtime import TASK_USE, llm
+            provider = await database_call(llm, TASK_USE[task.task_type], task.input_payload["model_config"], tasks.sessions)
+        elif provider is None:
+            provider = get_llm_provider(managed=False)
         await publish(task)
         await database_call(tasks.mark_processing, task_id)
-        async with asyncio.timeout(settings.AI_TASK_TIMEOUT_SECONDS):
+        async with operation_timeout("ai_task", settings.AI_TASK_TIMEOUT_SECONDS, "AI_TIMEOUT", "AI 任务超过总执行时限", task_id):
             with stage_timer("transcript_acquire", task_id):
                 transcript = await pipeline.acquire(task_id, lambda event: advance(int(event["progress"] * .4), event.get("stage")))
-            if "allowance" in task.input_payload:
-                from app.modules.ai.providers.bounded import BoundedLLMProvider
-                limits = task.input_payload["allowance"]["ai_limits"]
-                if len(transcript.content_text) > limits["text_chars"]:
-                    raise AppException("TRANSCRIPT_TOO_LONG", "首版单次文稿最多 60000 字符", 413)
-                if provider.name == "openai_compatible":
-                    provider.model = task.input_payload["allowance"]["llm_model"]
-                provider = BoundedLLMProvider(provider, limits)
-            language = task.input_payload["output_language"]
-            kind = task.task_type.removeprefix("ai_")
-            summary_version = settings.SUMMARY_PROMPT_VERSION
-            version = summary_version if kind == "summary" else settings.MINDMAP_PROMPT_VERSION + ":" + settings.MINDMAP_SCHEMA_VERSION
-            if "allowance" in task.input_payload:
-                summary_version = task.input_payload["allowance"]["summary_version"]
-                version = summary_version if kind == "summary" else task.input_payload["allowance"]["mindmap_version"]
+            async with operation_timeout("llm_stage", settings.LLM_STAGE_TIMEOUT_SECONDS,
+                                         "LLM_STAGE_TIMEOUT", "总结或思维导图阶段超过执行时限", task_id):
+                allowance = task.input_payload.get("allowance")
+                if allowance:
+                    from app.modules.ai.providers.bounded import BoundedLLMProvider
+                    limits = allowance["ai_limits"]
+                    if len(transcript.content_text) > limits["text_chars"]:
+                        raise AppException("TRANSCRIPT_TOO_LONG", "首版单次文稿最多 60000 字符", 413)
+                    if provider.name == "openai_compatible":
+                        provider.model = allowance["llm_model"]
+                from app.modules.tasks.checkpoints import active_checkpoints
+                checkpoints = active_checkpoints.get()
+                if checkpoints is not None:
+                    from app.modules.ai.providers.checkpointed import CheckpointedLLMProvider
+                    revisions = [settings.SUMMARY_PROMPT_VERSION, settings.MINDMAP_PROMPT_VERSION, settings.MINDMAP_SCHEMA_VERSION]
+                    if allowance:
+                        revisions = [allowance["summary_version"], allowance["mindmap_version"]]
+                    provider = CheckpointedLLMProvider(provider, checkpoints, transcript.content_hash, revisions)
+                if allowance:
+                    provider = BoundedLLMProvider(provider, limits)
+                language = task.input_payload["output_language"]
+                kind = task.task_type.removeprefix("ai_")
+                summary_version = settings.SUMMARY_PROMPT_VERSION
+                version = summary_version if kind == "summary" else settings.MINDMAP_PROMPT_VERSION + ":" + settings.MINDMAP_SCHEMA_VERSION
+                if "allowance" in task.input_payload:
+                    summary_version = task.input_payload["allowance"]["summary_version"]
+                    version = summary_version if kind == "summary" else task.input_payload["allowance"]["mindmap_version"]
 
-            def delivered(item, cache_hit=False, summary_id=None):
-                value = {**result(item, cache_hit), "transcript_id": str(transcript.id)}
-                if summary_id:
-                    value["summary_result_id"] = str(summary_id)
-                return value
+                def delivered(item, cache_hit=False, summary_id=None):
+                    value = {**result(item, cache_hit), "transcript_id": str(transcript.id)}
+                    if summary_id:
+                        value["summary_result_id"] = str(summary_id)
+                    return value
 
-            summary_model=getattr(provider,"summary_model",provider.model)
-            cache_scope = await database_call(results.scope_for, transcript, exact=task.input_payload.get("source_kind") == "transcript")
-            cached = await database_call(results.find_cache, transcript.content_hash, kind, provider.model, version, language, cache_scope)
-            expected = task.input_payload.get("reuse_result") if task.input_payload.get("source_kind") == "transcript" else None
-            if expected and (cached is None or str(cached.id) != expected["result_id"]):
-                raise AppException("AI_RESULT_NOT_FOUND", "已确认复用的 AI 结果不存在，请重新获取报价", 409)
-            if cached:
-                summary_cached = await database_call(results.find_cache, transcript.content_hash, "summary", summary_model, summary_version, language, cache_scope)
-                task = await database_call(tasks.complete_with, task_id, delivered(cached, True,
-                    summary_cached.id if kind == "mindmap" and summary_cached else None), lambda session: None)
-            else:
-                summary_cache = await database_call(results.find_cache, transcript.content_hash, "summary", summary_model, summary_version, language, cache_scope)
-                if summary_cache:
-                    summary = VideoSummarySchema.model_validate(summary_cache.content_json)
-                    summary_id = summary_cache.id
+                summary_model = getattr(provider, "summary_model", provider.model)
+                cost_rates = getattr(provider, "cost_rates", None)
+                summary_cost_rates = getattr(provider, "summary_cost_rates", cost_rates)
+                cache_scope = await database_call(results.scope_for, transcript, exact=task.input_payload.get("source_kind") == "transcript")
+                cached = await database_call(results.find_cache, transcript.content_hash, kind, provider.model, version, language, cache_scope)
+                expected = task.input_payload.get("reuse_result") if task.input_payload.get("source_kind") == "transcript" else None
+                if expected and (cached is None or str(cached.id) != expected["result_id"]):
+                    raise AppException("AI_RESULT_NOT_FOUND", "已确认复用的 AI 结果不存在，请重新获取报价", 409)
+                if cached:
+                    summary_cached = await database_call(results.find_cache, transcript.content_hash, "summary", summary_model, summary_version, language, cache_scope)
+                    task = await database_call(tasks.complete_with, task_id, delivered(cached, True,
+                        summary_cached.id if kind == "mindmap" and summary_cached else None), lambda session: None)
                 else:
-                    with stage_timer("summary", task_id):
-                        generated = await Summarizer(provider).summarize(transcript, language, cancelled=cancelled,
-                            on_progress=lambda value: advance(40 + int(value * .45), "summary"))
-                    summary = generated.content
-                    def store_summary(session):
-                        return results.store(session, task_id, transcript, "summary", provider.name, summary_model,
-                            summary_version, language, summary.model_dump(), generated.usage, cache_scope=cache_scope,rates=getattr(provider,"summary_cost_rates",getattr(provider,"cost_rates",None)))
-                    if kind == "summary":
-                        task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(store_summary(session)))
+                    summary_cache = await database_call(results.find_cache, transcript.content_hash, "summary", summary_model, summary_version, language, cache_scope)
+                    if summary_cache:
+                        summary = VideoSummarySchema.model_validate(summary_cache.content_json)
+                        summary_id = summary_cache.id
                     else:
-                        summary_record = await database_call(tasks.perform_if_active, task_id, store_summary)
-                        summary_id = summary_record.id
-                if kind == "summary" and summary_cache:
-                    task = await database_call(tasks.complete_with, task_id, delivered(summary_cache, True), lambda session: None)
-                elif kind == "mindmap":
-                    await advance(90, "mindmap")
-                    with stage_timer("mindmap", task_id):
-                        mapped = await MindMapGenerator(provider).generate(summary, language, cancelled=cancelled)
-                    task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(results.store(
-                        session, task_id, transcript, "mindmap", provider.name, provider.model, version, language,
-                        mapped.content.model_dump(), mapped.usage, mapped.markdown, cache_scope=cache_scope,rates=getattr(provider,"cost_rates",None)), summary_id=summary_id))
+                        with stage_timer("summary", task_id):
+                            generated = await Summarizer(provider, concurrency=1 if claimed else None).summarize(transcript, language, cancelled=cancelled,
+                                on_progress=lambda value: advance(40 + int(value * .45), "summary"))
+                        summary = generated.content
+                        def store_summary(session):
+                            return results.store(session, task_id, transcript, "summary", provider.name, summary_model,
+                                summary_version, language, summary.model_dump(), generated.usage, cache_scope=cache_scope,
+                                rates=summary_cost_rates)
+                        if kind == "summary":
+                            task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(store_summary(session)))
+                        else:
+                            summary_record = await database_call(tasks.perform_if_active, task_id, store_summary)
+                            summary_id = summary_record.id
+                    if kind == "summary" and summary_cache:
+                        task = await database_call(tasks.complete_with, task_id, delivered(summary_cache, True), lambda session: None)
+                    elif kind == "mindmap":
+                        await advance(90, "mindmap")
+                        with stage_timer("mindmap", task_id):
+                            mapped = await MindMapGenerator(provider).generate(summary, language, cancelled=cancelled)
+                        task = await database_call(tasks.complete_with, task_id, {}, lambda session: delivered(results.store(
+                            session, task_id, transcript, "mindmap", provider.name, provider.model, version, language,
+                            mapped.content.model_dump(), mapped.usage, mapped.markdown, cache_scope=cache_scope,
+                            rates=cost_rates), summary_id=summary_id))
     except Exception as exc:
         code = exc.code if isinstance(exc, AppException) else "AI_TIMEOUT" if isinstance(exc, TimeoutError) else "AI_GENERATION_FAILED"
         message = exc.message if isinstance(exc, AppException) else "AI 任务超时" if isinstance(exc, TimeoutError) else "AI 生成失败"
