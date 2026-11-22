@@ -114,6 +114,13 @@ class MediaRepository:
             return session.scalar(select(MediaFile.id).where(*self.mirror_conditions(now))
                                   .order_by(MediaFile.created_at.desc()).limit(1))
 
+    def recent_mirror(self, file_id, now):
+        with self.sessions() as session:
+            return session.execute(select(MediaFile.object_store_tag).where(
+                MediaFile.id == file_id, MediaFile.created_at >= now - timedelta(seconds=15),
+                MediaFile.expires_at > now,
+            )).one_or_none()
+
     def begin_mirror(self, file_id, now):
         with self.sessions.begin() as session:
             return bool(session.execute(update(MediaFile).where(MediaFile.id == file_id,

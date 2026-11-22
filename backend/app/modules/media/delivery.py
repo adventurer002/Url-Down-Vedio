@@ -1,4 +1,6 @@
 """Authorize private object downloads through a gateway or a direct storage link."""
+import asyncio
+from dataclasses import replace
 from datetime import timedelta, timezone
 from hmac import compare_digest
 from urllib.parse import urlencode
@@ -20,6 +22,7 @@ from app.modules.tasks.service import database_call
 
 router = APIRouter(prefix="/internal/object-delivery", include_in_schema=False)
 TICKET_SECONDS = 60
+OBJECT_READY_WAIT_SECONDS = 2.5
 TICKET_AUDIENCE = "videohub-object-delivery"
 REDIRECT_HEADERS = {"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer"}
 
@@ -88,13 +91,30 @@ def delivery_destination(record, filename):
         return None
 
 
-async def redirect_download(record, filename, request, user, repository):
+async def wait_for_direct_object(record, media):
+    if (record.object_store_tag or record.purpose not in {"full_source", "full_audio"}
+            or not settings.OBJECT_MIRROR_ENABLED or not settings.OBJECT_DELIVERY_ENABLED):
+        return record
+    try:
+        async with asyncio.timeout(OBJECT_READY_WAIT_SECONDS):
+            while (row := await database_call(media.recent_mirror, record.id, utcnow())) is not None:
+                if row[0]:
+                    return replace(record, object_store_tag=row[0])
+                await asyncio.sleep(.25)
+    except TimeoutError:
+        pass
+    return record
+
+
+async def redirect_download(record, filename, request, user, repository, media):
     if (not user or request.query_params.get("delivery") == "local"
             or request.method != "GET"):
         return None
     direct = settings.OBJECT_DELIVERY_MODE == "direct"
     if not direct and "if-range" in request.headers:
         return None
+    if direct:
+        record = await wait_for_direct_object(record, media)
     destination = delivery_destination(record, filename)
     if not destination:
         return None

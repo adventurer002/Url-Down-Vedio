@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from types import SimpleNamespace
@@ -226,6 +227,42 @@ async def test_direct_link_expiry_and_missing_config_fallback(downloadable, monk
         monkeypatch.setattr(settings, "OBJECT_SECRET_KEY", SecretStr(""))
         fallback = await session.get(downloadable.path, headers={"Range": "bytes=2-4"})
         assert fallback.status_code == 206 and fallback.content == b"234"
+
+
+@pytest.mark.parametrize("mirror_completes", [True, False])
+async def test_first_direct_download_uses_cos_or_falls_back_within_budget(
+    downloadable, monkeypatch, mirror_completes,
+):
+    item, media = downloadable.item, downloadable.media
+    monkeypatch.setattr(settings, "OBJECT_DELIVERY_MODE", "direct")
+    monkeypatch.setattr(settings, "OBJECT_MIRROR_ENABLED", True)
+    if not mirror_completes:
+        monkeypatch.setattr(delivery, "OBJECT_READY_WAIT_SECONDS", .4)
+    started = asyncio.Event()
+    lookup = media.recent_mirror
+
+    def recent_mirror(*args):
+        row = lookup(*args)
+        loop.call_soon_threadsafe(started.set)
+        return row
+
+    async with client(downloadable.api) as session:
+        loop = asyncio.get_running_loop()
+        monkeypatch.setattr(media, "recent_mirror", recent_mirror)
+        async with asyncio.timeout(3):
+            download = asyncio.create_task(session.get(downloadable.path, headers={"Range": "bytes=2-4"}))
+            await started.wait()
+            if mirror_completes:
+                assert not download.done()
+                assert await asyncio.to_thread(media.finish_mirror, item.id, store_tag(), utcnow())
+            response = await download
+    if mirror_completes:
+        assert response.status_code == 307
+    else:
+        assert response.status_code == 206 and response.content == b"234"
+    assert downloadable.billing.quotas.balance(downloadable.billing.user.id)["daily"]["egress_used_bytes"] == (
+        10 if mirror_completes else 3
+    )
 
 
 def test_claim_expiry_dedup_and_reconciliation(billing):
