@@ -127,10 +127,16 @@ class OpenAICompatibleLLMProvider:
                             payload = json.loads(raw)
                             if not isinstance(payload, dict):
                                 raise ValueError("invalid envelope")
-                            message = payload["choices"][0]["message"]
+                            choice = payload["choices"][0]
+                            message = choice["message"]
                             if not isinstance(message, dict):
                                 raise ValueError("invalid message")
-                            content = parse_json_content(message.get("parsed") or message.get("content"))
+                            try:
+                                content = parse_json_content(message.get("parsed") or message.get("content"))
+                            except AppException:
+                                if choice.get("finish_reason") == "length":
+                                    raise AppException("LLM_OUTPUT_TRUNCATED", "模型输出达到上限，未返回完整 JSON", 502) from None
+                                raise
                             usage = payload.get("usage") or {}
                             if not isinstance(usage, dict):
                                 raise ValueError("invalid usage")

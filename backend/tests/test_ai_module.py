@@ -127,6 +127,15 @@ async def test_cloud_payload_usage_and_json_repair():
         parse_json_content("[]")
 
 
+async def test_cloud_reports_incomplete_json_at_output_limit():
+    response = {"choices": [{"finish_reason": "length", "message": {"content": '{"overview":"未完成'}}]}
+    provider = OpenAICompatibleLLMProvider("https://example.com", "secret", "test",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=response)))
+    with pytest.raises(AppException) as error:
+        await provider.generate(LLMRequest("summary", {}, {}, "zh", "asr"))
+    assert error.value.code == "LLM_OUTPUT_TRUNCATED"
+
+
 @pytest.mark.parametrize("status,attempts", [(401, 1), (503, 2)])
 async def test_cloud_errors_have_bounded_retries_without_secrets(status, attempts):
     calls = []

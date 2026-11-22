@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     LLM_MAX_CHUNKS: int = Field(default=64, ge=1, le=256)
     LLM_CHUNK_CONCURRENCY: int = Field(default=2, ge=1, le=2)
     LLM_MAX_OUTPUT_TOKENS: int = Field(default=4096, ge=128, le=16384)
-    SUMMARY_PROMPT_VERSION: str = Field(default="summary-v2", min_length=1, max_length=64)
+    SUMMARY_PROMPT_VERSION: str = Field(default="summary-v3", min_length=1, max_length=64)
     MINDMAP_PROMPT_VERSION: str = Field(default="mindmap-v2", min_length=1, max_length=64)
     MINDMAP_SCHEMA_VERSION: str = Field(default="tree-v1", min_length=1, max_length=32)
     LLM_INPUT_COST_PER_MILLION: Decimal | None = Field(default=None, ge=0)

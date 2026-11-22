@@ -12,6 +12,13 @@ from app.modules.ai.providers.base import LLMProvider, LLMRequest, Usage, genera
 from app.modules.ai.schemas import ChapterSummary, VideoSummarySchema, SummaryEvidence, format_timestamp
 
 
+SUMMARY_OUTPUT_GUIDANCE = (
+    "只输出精炼总结。overview 不超过 300 字，key_points 至多 6 条，chapters 至多 4 章，"
+    "conclusions、audience、action_steps 各至多 3 条，evidence 至多 3 条。"
+    "每条说明不超过 100 字，逐字引用不超过 60 字。不要重复引用或复述全文。"
+)
+
+
 @dataclass(frozen=True)
 class GeneratedSummary:
     content: VideoSummarySchema
@@ -148,7 +155,9 @@ class Summarizer:
         async def map_chunk(chunk):
             nonlocal completed
             reply = await generate(self.provider, LLMRequest("summary" if len(chunks) == 1 else "map", {"segments": chunk,
-                                    "instructions": "提炼核心结论、支撑依据、适合谁、可执行步骤。只填原文能支持的内容；未提及时返回空数组。evidence.quote 必须是逐字原文片段。"},
+                                    "instructions": ("提炼核心结论、支撑依据、适合谁、可执行步骤。只填原文能支持的内容；"
+                                                     "未提及时返回空数组。evidence.quote 必须是逐字原文片段。 "
+                                                     + SUMMARY_OUTPUT_GUIDANCE)},
                                     VideoSummarySchema.model_json_schema(), language, transcript.source_type), cancelled)
             summary = repair_summary(reply.content, chunk, transcript.source_type)
             async with progress_lock:
@@ -182,7 +191,8 @@ class Summarizer:
                 raise AppException("LLM_CONTEXT_TOO_SMALL", "汇总上下文预算不足", 422)
             async def reduce_group(group):
                 reply = await generate(self.provider, LLMRequest("reduce", {"summaries": group,
-                                        "instructions": "只汇总原材料支持的结论，不补充常识或虚构行动建议。"},
+                                        "instructions": ("只汇总原材料支持的结论，不补充常识或虚构行动建议。 "
+                                                         + SUMMARY_OUTPUT_GUIDANCE)},
                                         VideoSummarySchema.model_json_schema(), language, transcript.source_type), cancelled)
                 evidence = [{"start": item["start_seconds"], "end": item["start_seconds"], "text": item["overview"]} for item in group]
                 return repair_summary(reply.content, evidence, transcript.source_type), reply
