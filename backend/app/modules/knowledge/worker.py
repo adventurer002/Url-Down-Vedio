@@ -1,5 +1,6 @@
 import asyncio
 from app.infrastructure.timing import log_queue_wait, stage_timer
+from app.infrastructure.timeouts import operation_timeout
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -31,9 +32,11 @@ async def execute_question(task_id, service, repository, transcripts, provider):
     try:
         if payload.get("model_config"):
             from app.modules.model_config.runtime import llm
-            provider=await database_call(llm,"question",payload["model_config"],tasks.sessions)
-        elif provider is None:provider=get_llm_provider(managed=False)
-        async with asyncio.timeout(settings.AI_TASK_TIMEOUT_SECONDS):
+            provider = await database_call(llm, "question", payload["model_config"], tasks.sessions)
+        elif provider is None:
+            provider = get_llm_provider(managed=False)
+        async with operation_timeout("question_task", settings.AI_TASK_TIMEOUT_SECONDS,
+                                     "AI_TIMEOUT", "视频问答超过总执行时限", task_id):
             from app.modules.transcript.service import TranscriptService
             data = await TranscriptService(None, service, transcripts).get(UUID(payload["transcript_id"]), SimpleNamespace(id=task.user_id))
             transcript = SimpleNamespace(**data)

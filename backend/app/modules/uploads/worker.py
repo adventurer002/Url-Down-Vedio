@@ -22,6 +22,10 @@ class UploadDispatcher:
     def enqueue(self, task_id):
         celery_app.send_task("uploads.probe", args=[str(task_id)], task_id=str(task_id))
 
+    def enqueue_routed(self, task_id, queue):
+        from app.modules.tasks.dispatch import send
+        send("uploads.probe", task_id, queue)
+
 
 async def execute_probe(task_id, tasks, uploads, probe: MediaProbe):
     repository = tasks.repository

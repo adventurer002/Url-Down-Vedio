@@ -10,6 +10,7 @@ from app.modules.video.router import router as video_router
 from app.modules.tasks.router import router as tasks_router
 from app.modules.download.router import router as download_router
 from app.modules.media.router import router as audio_router
+from app.modules.media.delivery import router as object_delivery_router
 from app.modules.transcript.router import router as transcript_router
 
 from app.modules.ai.router import router as ai_router
@@ -35,6 +36,7 @@ router.include_router(video_router)
 router.include_router(tasks_router)
 router.include_router(download_router)
 router.include_router(audio_router)
+router.include_router(object_delivery_router)
 router.include_router(transcript_router)
 
 

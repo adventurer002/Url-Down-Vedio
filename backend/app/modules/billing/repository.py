@@ -6,7 +6,7 @@ from datetime import timedelta
 import hashlib
 from uuid import UUID, uuid4
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import object_session
 
 from app.core.config import settings
@@ -14,8 +14,8 @@ from app.core.exceptions import AppException
 from app.modules.auth.repository import UserRepository
 from app.modules.billing.models import (Allowance, AllowanceAccount, AllowanceAllocation,
     AllowanceEvent, AllowanceGrant, AllowanceQuote, AllowanceReservation, AllowanceTransfer, DailyAllowance)
-from app.modules.billing.policy import (BEIJING, MEMBERSHIP_TIERS, TIER_LIMITS, PRODUCTS, VERSION,
-    aware, month_boundary, now)
+from app.modules.billing.policy import (BEIJING, MEMBERSHIP_TIERS, PRODUCTS, VERSION,
+    aware, execution_limits, month_boundary, now)
 
 
 class AllowanceRepository:
@@ -80,7 +80,7 @@ class AllowanceRepository:
         return account.member_until is not None and aware(account.member_until) > now()
 
     def limits(self, account):
-        return dict(TIER_LIMITS[self.membership_tier(account)])
+        return execution_limits(self.membership_tier(account))
 
     @staticmethod
     def active_membership_grants(user_ids, instant):
@@ -401,7 +401,8 @@ class AllowanceRepository:
         if download:
             from app.modules.download.repository import DeliveryRepository
             running += DeliveryRepository.active_count(session, task.user_id)
-        if running >= (limits["download_concurrency"] if download else 1):
+        ai_limit = 2 if settings.STAGED_TASKS_ENABLED else 1
+        if running >= (limits["download_concurrency"] if download else ai_limit):
             return "capacity"
         if task.task_type == "clips_export" and task.input_payload.get("_clip_execution_mode") != "cache" and not task.input_payload.get("reuse_result") and not task.input_payload.get("reuse_assets"):
             from app.modules.tasks.repository import TaskRepository
@@ -482,10 +483,25 @@ class AllowanceRepository:
                    task_id=str(task.id), already_owned=owned, **item.settlement)
         session.flush()
 
-    def reserve_transfer(self, user_id, length):
+    def _transfer_allowance(self, session, account, length):
+        daily = self.daily(session, account.user_id)
+        limit = self.limits(account)["daily_egress_bytes"]
+        if limit is not None and daily.egress_used + daily.egress_held + length > limit:
+            raise AppException("DAILY_TRAFFIC_EXCEEDED", "今日下载流量额度不足", 429)
+        return daily
+
+    def charge_object_download(self, user_id, file_id, length):
         with self.sessions.begin() as session:
             account, _ = self.lock_account(session, user_id)
-            return self.reserve_transfer_in_transaction(session, account, length)
+            daily = self._transfer_allowance(session, account, length)
+            daily.egress_used += length
+            self.event(session, f"object-link:{uuid4()}", user_id, "object_link_issued",
+                       file_id=str(file_id), charged_bytes=length)
+
+    def reserve_transfer(self, user_id, length, *, claim_expires_at=None):
+        with self.sessions.begin() as session:
+            account, _ = self.lock_account(session, user_id)
+            return self.reserve_transfer_in_transaction(session, account, length, claim_expires_at=claim_expires_at)
 
     def active_downloads(self, session, user_id):
         from app.modules.download.repository import DeliveryRepository
@@ -494,13 +510,11 @@ class AllowanceRepository:
             AllowanceReservation.slot == "download"))
         return running + DeliveryRepository.active_count(session, user_id)
 
-    def reserve_transfer_in_transaction(self, session, account, length):
-        daily = self.daily(session, account.user_id)
-        limit = self.limits(account)["daily_egress_bytes"]
-        if limit is not None and daily.egress_used + daily.egress_held + length > limit:
-            raise AppException("DAILY_TRAFFIC_EXCEEDED", "今日下载流量额度不足", 429)
+    def reserve_transfer_in_transaction(self, session, account, length, *, claim_expires_at=None):
+        daily = self._transfer_allowance(session, account, length)
         daily.egress_held += length
-        item = AllowanceTransfer(id=uuid4(), user_id=account.user_id, day=daily.day, reserved=length)
+        item = AllowanceTransfer(id=uuid4(), user_id=account.user_id, day=daily.day, reserved=length,
+                                 claim_expires_at=claim_expires_at)
         session.add(item)
         session.flush()
         return item.id
@@ -516,6 +530,23 @@ class AllowanceRepository:
 
     def finish_transfer_in_transaction(self, session, transfer_id, sent, *, refund_download=False):
         item = session.get(AllowanceTransfer, transfer_id, populate_existing=True)
+        if item is not None:
+            self._finish_transfer(session, item, sent, refund_download=refund_download)
+
+    def finish_transfer(self, transfer_id, sent):
+        with self.sessions.begin() as session:
+            item = self._locked_transfer(session, transfer_id)
+            if item:
+                self._finish_transfer(session, item, sent)
+
+    def _locked_transfer(self, session, transfer_id):
+        item = session.get(AllowanceTransfer, transfer_id)
+        if item is not None:
+            self.lock_existing(session, item.user_id)
+            session.refresh(item)
+        return item
+
+    def _finish_transfer(self, session, item, sent, *, refund_download=False):
         if item.sent is not None:
             return
         item.sent = min(item.reserved, max(0, sent))
@@ -525,8 +556,44 @@ class AllowanceRepository:
         if refund_download:
             daily.downloads_used = max(0, daily.downloads_used - 1)
 
-    def finish_transfer(self, transfer_id, sent):
+    def claim_delivery(self, transfer_id, length):
         with self.sessions.begin() as session:
-            item = session.get(AllowanceTransfer, transfer_id)
-            self.lock_existing(session, item.user_id)
-            self.finish_transfer_in_transaction(session, transfer_id, sent)
+            item = self._locked_transfer(session, transfer_id)
+            if (item is None or item.claim_expires_at is None or aware(item.claim_expires_at) <= now()
+                    or item.claimed_at is not None or item.sent is not None or item.reserved != length):
+                return False
+            identity = self.identities.billing_identity(session, item.user_id)
+            if not identity or not identity["active"] or not identity["bound"]:
+                return False
+            return bool(session.execute(update(AllowanceTransfer).where(
+                AllowanceTransfer.id == transfer_id, AllowanceTransfer.claimed_at.is_(None),
+                AllowanceTransfer.sent.is_(None), AllowanceTransfer.claim_expires_at > now()
+            ).values(claimed_at=now()).execution_options(synchronize_session=False)).rowcount)
+
+    def settle_delivery(self, transfer_id, sent):
+        with self.sessions.begin() as session:
+            item = self._locked_transfer(session, transfer_id)
+            if (item is None or item.claim_expires_at is None or item.claimed_at is None
+                    or not 0 <= sent <= item.reserved):
+                return False
+            self._finish_transfer(session, item, sent)
+            return True
+
+    def reconcile_transfers(self):
+        cutoff = now() - timedelta(hours=1)
+        with self.sessions() as session:
+            pending = session.scalars(select(AllowanceTransfer.id).where(
+                AllowanceTransfer.sent.is_(None),
+                (AllowanceTransfer.created_at < cutoff) |
+                (AllowanceTransfer.claim_expires_at <= now()) & AllowanceTransfer.claimed_at.is_(None)
+            ).order_by(AllowanceTransfer.created_at).limit(100)).all()
+        for identifier in pending:
+            with self.sessions.begin() as session:
+                item = self._locked_transfer(session, identifier)
+                if item is None:
+                    continue
+                if item.claim_expires_at is not None and item.claimed_at is None and aware(item.claim_expires_at) <= now():
+                    self._finish_transfer(session, item, 0)
+                elif aware(item.created_at) < cutoff:
+                    self._finish_transfer(session, item, item.reserved)
+        return len(pending)

@@ -6,8 +6,10 @@ import time
 import httpx
 
 from app.core.exceptions import AppException
+from app.core.config import settings
 from app.core.security import normalize_url
 from app.infrastructure.http_client import public_transport
+from app.infrastructure.timeouts import operation_timeout
 from app.modules.ai.providers.base import LLMRequest, LLMResult
 
 
@@ -81,9 +83,10 @@ def tokens(value):
 class OpenAICompatibleLLMProvider:
     name = "openai_compatible"
 
-    def __init__(self, base_url: str, api_key: str, model: str, *, timeout: float = 90, max_tokens: int = 4096, transport=None):
+    def __init__(self, base_url: str, api_key: str, model: str, *, timeout: float | None = None, max_tokens: int = 4096, transport=None):
         self.url = base_url.rstrip("/") + "/chat/completions"
-        self.api_key, self.model, self.timeout, self.max_tokens = api_key, model, timeout, max_tokens
+        self.api_key, self.model, self.max_tokens = api_key, model, max_tokens
+        self.timeout = settings.LLM_TIMEOUT_SECONDS if timeout is None else timeout
         self.transport = transport
 
     async def generate(self, request: LLMRequest) -> LLMResult:
@@ -104,12 +107,13 @@ class OpenAICompatibleLLMProvider:
         if self.model.startswith("deepseek"):
             body["thinking"] = {"type": "disabled"}
         try:
-            async with asyncio.timeout(self.timeout):
+            async with operation_timeout("llm_request", self.timeout, "LLM_TIMEOUT", "模型调用超过总执行时限") as budget:
                 async with httpx.AsyncClient(transport=self.transport or public_transport(), trust_env=False, follow_redirects=False,
-                                             timeout=httpx.Timeout(min(60, self.timeout), connect=min(5, self.timeout), write=30, pool=5)) as client:
+                                             timeout=budget.http_timeout()) as client:
                     for attempt in range(2):
                         try:
-                            async with client.stream("POST", self.url, headers={"Authorization": f"Bearer {self.api_key}"}, json=body) as response:
+                            async with client.stream("POST", self.url, headers={"Authorization": f"Bearer {self.api_key}"},
+                                                     json=body, timeout=budget.http_timeout()) as response:
                                 if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
                                     await asyncio.sleep(0.5)
                                     continue

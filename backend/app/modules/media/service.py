@@ -39,16 +39,26 @@ class MediaService:
             return available
         return await asyncio.to_thread(check)
 
-    async def download(self, file_id: UUID):
+    async def download_record(self, file_id: UUID):
         record = await database_call(self.repository.get, file_id)
         expiry = record.expires_at.replace(tzinfo=timezone.utc) if record.expires_at.tzinfo is None else record.expires_at
         if expiry <= utcnow():
             raise AppException("FILE_NOT_FOUND", "文件不存在或已过期", 404)
-        path = self.storage.resolve_file(record.storage_key)
-        if not path.is_file() or path.stat().st_size != record.size_bytes:
-            raise AppException("FILE_NOT_FOUND", "文件不存在或已过期", 404)
         extension = "mp3" if record.mime_type == "audio/mpeg" else "mp4"
-        return record, path, safe_filename(record.filename.rsplit(".", 1)[0], extension)
+        return record, safe_filename(record.filename.rsplit(".", 1)[0], extension)
+
+    def local_download_path(self, record):
+        path = self.storage.resolve_file(record.storage_key)
+        try:
+            if path.is_file() and path.stat().st_size == record.size_bytes:
+                return path
+        except OSError:
+            pass
+        raise AppException("FILE_NOT_FOUND", "文件不存在或已过期", 404)
+
+    async def download(self, file_id: UUID):
+        record, filename = await self.download_record(file_id)
+        return record, self.local_download_path(record), filename
 
 
 class AudioExtractionService:

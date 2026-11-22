@@ -1,4 +1,5 @@
 """0011 -> 0012 preserves artifacts; shared relations reject lossy rollback."""
+from dataclasses import asdict
 from datetime import timedelta
 from unittest.mock import patch
 from uuid import uuid4
@@ -44,48 +45,39 @@ def test_shared_assets_migration_preserves_old_artifacts_and_guards_downgrade():
             video_id = videos.get_or_create(ParsedVideo("youtube", "old-source", "old source", duration=12),
                                            "https://example.com/old-source")
             tasks = TaskRepository(sessions)
-            legacy_tasks = sa.Table("tasks", sa.MetaData(), autoload_with=engine)
-
-            def create_legacy_task(payload=None):
-                identifier = uuid4()
-                with sessions.begin() as session:
-                    session.execute(legacy_tasks.insert().values(
-                        id=identifier, user_id=user.id, video_id=video_id,
-                        task_type="simulate_progress", input_payload=payload or {},
-                    ))
-                return tasks.get(identifier)
-
             transcript = TranscriptRepository(sessions)
             clips = ClipRepository(sessions)
             media = MediaRepository(sessions)
-            plan_task = create_legacy_task()
-            assert tasks.start(plan_task.id)
-            holder = {}
-            def plan_writer(session):
-                text = transcript.store(session, video_id, plan_task.id, "subtitle",
-                    make_transcript("zh", [{"start": 0, "end": 3, "text": "旧内容"}]), "v1", "none")
-                holder["plan_id"] = clips.store_plan(session, plan_task, text, "p"*64, {"candidates": []})
-                return {"clip_plan_id": str(holder["plan_id"])}
-            tasks.complete_with(plan_task.id, {}, plan_writer)
-            plan_id, file_id = holder["plan_id"], uuid4()
-            old_export, new_export = uuid4(), uuid4()
-            seed = create_legacy_task({"plan_id": str(plan_id), "export_key": "old"})
-            assert tasks.start(seed.id)
-            expiry = utcnow() + timedelta(hours=3)
-            record = MediaRecord(file_id, seed.id, video_id, "clip_720_mp4", f"files/{file_id}.mp4",
-                                 "old.mp4", "video/mp4", 1024, expiry, "clip", "a"*64, 0, 3)
             metadata = sa.MetaData()
+            old_tasks = sa.Table("tasks", metadata, autoload_with=engine)
+            old_media = sa.Table("media_files", metadata, autoload_with=engine)
             old_exports = sa.Table("clip_exports", metadata, autoload_with=engine)
             old_items = sa.Table("clip_export_items", metadata, autoload_with=engine)
+            plan_task, seed, plan_id, file_id = (uuid4() for _ in range(4))
+            old_export, new_export = uuid4(), uuid4()
+            expiry = utcnow() + timedelta(hours=3)
             item = {"file_id": str(file_id), "expires_at": expiry.isoformat()}
-            def old_writer(session):
-                media.register(session, record)
-                session.execute(old_exports.insert().values(id=old_export, user_id=user.id, task_id=seed.id,
+            with sessions.begin() as session:
+                # Seed with the 0011 schema before newer task and media columns exist.
+                for task_id, result in ((plan_task, {"clip_plan_id": str(plan_id)}),
+                                        (seed, {"clip_export_id": str(old_export)})):
+                    session.execute(old_tasks.insert().values(id=task_id, task_type="simulate_progress",
+                        user_id=user.id, video_id=video_id, status="completed", result_payload=result))
+                text = transcript.store(session, video_id, plan_task, "subtitle",
+                    make_transcript("zh", [{"start": 0, "end": 3, "text": "旧内容"}]), "v1", "none")
+                plan = sa.Table("clip_plans", metadata, autoload_with=engine)
+                session.execute(plan.insert().values(id=plan_id, user_id=user.id, task_id=plan_task,
+                    video_id=video_id, transcript_id=text.id, revision=1, cache_key="p"*64,
+                    content={"candidates": []}))
+                record = asdict(MediaRecord(file_id, seed, video_id, "clip_720_mp4", f"files/{file_id}.mp4",
+                    "old.mp4", "video/mp4", 1024, expiry, "clip", "a"*64, 0, 3))
+                record.pop("download_key")
+                record.pop("object_store_tag")
+                session.execute(old_media.insert().values(**record))
+                session.execute(old_exports.insert().values(id=old_export, user_id=user.id, task_id=seed,
                     plan_id=plan_id, cache_key="old", content={"items": [item]}))
                 session.execute(old_items.insert().values(id=uuid4(), export_id=old_export, file_id=file_id,
                     position=0, content=item))
-                return {"clip_export_id": str(old_export)}
-            tasks.complete_with(seed.id, {}, old_writer)
             command.upgrade(config, "head")
             command.check(config)
             assert clips.export(user.id, old_export)["items"] == [item]

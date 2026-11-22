@@ -37,14 +37,16 @@ class TaskService:
         from app.modules.auth.dependencies import task_user_id
         task = await database_call(self.repository.create, task_type, video_id, input_payload,
                                    utcnow() + timedelta(hours=24), user_id=task_user_id.get())
+        recoverable = "allowance" in task.input_payload or task.task_type in {"media_probe", "model_test"}
         try:
             await self.bus.publish(task.id, "queued", 0)
             async with asyncio.timeout(15):
-                await asyncio.to_thread(self.dispatcher.enqueue, task.id)
-            if "allowance" in task.input_payload or task.task_type in {"media_probe","model_test"}:
+                from app.modules.tasks.dispatch import enqueue
+                await asyncio.to_thread(enqueue, self.repository, task, self.dispatcher)
+            if not task.phase and recoverable:
                 await database_call(self.repository.mark_dispatched, task.id)
         except Exception:
-            if "allowance" in task.input_payload or task.task_type in {"media_probe","model_test"}:
+            if task.phase or recoverable:
                 # Publish/ACK failure is ambiguous: an executing worker may already
                 # own the task. Leave its durable state intact for reconciliation.
                 return await database_call(self.repository.get, task.id)
@@ -88,6 +90,8 @@ class TaskService:
         try:
             snapshot = await self.bus.snapshot(task_id)
             stage = "waiting_for_" + task.wait_reason if task.status == "queued" and task.wait_reason else task.status
+            if task.phase and task.status == "processing":
+                stage = task.phase
             # Heal a missed transition publish, e.g. worker exited after committing PG.
             if snapshot is None or snapshot["status"] != task.status or (task.status == "queued" and snapshot.get("stage") != stage):
                 await self.bus.publish(task_id, task.status, task.progress, stage=stage, error_code=task.error_code)
@@ -104,11 +108,17 @@ class TaskService:
         data.pop("worker_pid", None)
         data.pop("worker_host", None)
         data["input_payload"].pop("model_config", None)
+        data.pop("phase", None)
+        data.pop("phase_attempts", None)
+        data.pop("prepared_transcript_id", None)
+        data.pop("last_dispatched_at", None)
         data["input_payload"].pop("_execution_id", None)
         data["input_payload"].pop("_clip_execution_mode", None)
         data["input_payload"].pop("_download_execution_mode", None)
         data["task_id"] = str(data.pop("id"))
         data.update(seq=0, stage=task.status, updated_at=(task.finished_at or task.started_at or task.created_at).isoformat())
+        if task.phase and task.status == "processing":
+            data["stage"] = task.phase
         if snapshot and snapshot["status"] == task.status:
             data.update(snapshot)
         if task.wait_reason and task.status == "queued":

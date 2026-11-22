@@ -8,7 +8,8 @@ from urllib.parse import unquote
 REDACTED = "***REDACTED***"
 sensitive_http_urls = ContextVar("sensitive_http_urls", default=False)
 SENSITIVE_QUERY_KEYS = frozenset({"token", "access_token", "key", "api_key", "auth", "authorization",
-                                  "sig", "signature", "cookie", "sessdata", "password", "secret"})
+                                  "sig", "signature", "cookie", "sessdata", "password", "secret",
+                                  "x-amz-signature", "x-amz-credential", "x-amz-security-token"})
 _QUERY = re.compile(r"([?&;])([^?&;=#\s\"'<>]+)=([^&#\s\"'<>]*)")
 # Encoded URLs can occur inside an outer URL's query. Match one to three encoding layers.
 _ENCODED = [re.compile(rf"(%{('25' * level)}(?:3f|26|3b))(.+?)(%{('25' * level)}3d)(.*?)(?=%{('25' * level)}(?:26|23|3b)|[\s\"'<>]|$)", re.I)

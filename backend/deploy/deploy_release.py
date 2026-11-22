@@ -25,6 +25,8 @@ STATE = Path('/var/lib/videohub-deploy')
 INCOMING = Path('/home/videohub-deploy/incoming')
 SITE = Path('/opt/1panel/www/sites/vedio.vip')
 UNITS = ['videohub-api.service', 'videohub-worker.service']
+PHASE_WORKERS = tuple(f'videohub-phase@{name}.service'
+                      for name in ('control', 'media-1', 'media-2', 'asr', 'llm', 'render'))
 TIMERS = ['videohub-cleanup.timer', 'videohub-reconcile.timer']
 JOBS = ['videohub-cleanup.service', 'videohub-reconcile.service']
 MAX_BYTES = 128 * 1024 * 1024
@@ -68,12 +70,43 @@ def run(command, timeout=60, **kwargs):
     return subprocess.run(command, check=True, timeout=timeout, **kwargs)
 
 
-def runtime(release, operation):
+def runtime(release, operation, *, capture=False):
     # Imported dependencies and application code always run as the unprivileged user.
-    run(['/usr/sbin/runuser', '-u', 'videohub', '--',
+    result = run(['/usr/sbin/runuser', '-u', 'videohub', '--',
          str(release / 'backend/.venv/bin/python'), '/usr/local/lib/videohub/runtime.py', operation],
         cwd=release / 'backend', timeout=180,
-        env={**os.environ, 'PYTHONPATH': str(release / 'backend'), 'HOME': str(BASE)})
+        env={**os.environ, 'PYTHONPATH': str(release / 'backend'), 'HOME': str(BASE)},
+        capture_output=capture, text=capture)
+    if capture:
+        return result.stdout.strip()
+
+
+def unit_is_active(unit):
+    return subprocess.run(['systemctl', 'is-active', '--quiet', unit], timeout=5).returncode == 0
+
+
+def running_workers():
+    phased = tuple(unit for unit in PHASE_WORKERS if unit_is_active(unit))
+    legacy = unit_is_active(UNITS[1])
+    if phased and (legacy or phased != PHASE_WORKERS):
+        raise RuntimeError('Expected one legacy worker or all six phase workers before switching')
+    return phased or (UNITS[1],)
+
+
+def configured_workers(release):
+    mode = runtime(release, 'worker-mode', capture=True)
+    if mode == 'legacy':
+        return (UNITS[1],)
+    if mode != 'phased':
+        raise ValueError('Unknown worker mode')
+    if not (release / 'backend/app/modules/tasks/pipeline.py').is_file():
+        raise ValueError('Phase worker mode requires a staged release')
+    for unit in PHASE_WORKERS:
+        state = run(['systemctl', 'show', unit, '-p', 'LoadState', '--value'],
+                    timeout=5, capture_output=True, text=True).stdout.strip()
+        if state != 'loaded':
+            raise RuntimeError('Install and reload the phase worker template before deployment')
+    return PHASE_WORKERS
 
 
 def switch(target):
@@ -179,18 +212,17 @@ def publish_frontend(release, manifest):
     return True
 
 
-def healthy(started=None):
+def healthy(started=None, workers=(UNITS[1],)):
     deadline = time.monotonic() + 60
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     while time.monotonic() < deadline:
         try:
             with opener.open('http://127.0.0.1:8000/api/v1/health/ready', timeout=2) as response:
                 api_ready = response.status == 200
-            worker = subprocess.run(['systemctl', 'is-active', '--quiet', UNITS[1]], timeout=5).returncode == 0
-            logs = b' ready.' if started is None else subprocess.run(
-                ['journalctl', '-u', UNITS[1], '--since', f'@{started}', '--no-pager', '-o', 'cat'],
-                timeout=5, capture_output=True, check=True).stdout
-            if api_ready and worker and b' ready.' in logs:
+            workers_ready = all(unit_is_active(unit) and (started is None or b' ready.' in run(
+                ['journalctl', '-u', unit, '--since', f'@{started}', '--no-pager', '-o', 'cat'],
+                timeout=5, capture_output=True).stdout) for unit in workers)
+            if api_ready and workers_ready:
                 return
         except (OSError, ValueError, subprocess.SubprocessError):
             pass
@@ -231,7 +263,10 @@ def deploy(commit, expected_digest):
     if old and old.parent != BASE / 'releases':
         raise ValueError('Current release must be inside the managed releases directory')
     if old and json.loads((old / 'release.json').read_text())['commit'] == commit:
-        healthy()
+        workers = configured_workers(old)
+        if workers != running_workers():
+            raise RuntimeError('Worker mode changed; activate it with a new release or the administrator switch')
+        healthy(workers=workers)
         published = publish_frontend(old, json.loads((old / 'release.json').read_text()))
         print(f'This version is already active; frontend {"published" if published else "staged"}; no migration or restart performed', flush=True)
         return
@@ -258,18 +293,22 @@ def deploy(commit, expected_digest):
         env={**os.environ, 'HOME': str(BASE), 'UV_PYTHON_INSTALL_DIR': str(BASE / '.python'),
              'UV_PYTHON': '3.14', 'UV_HTTP_TIMEOUT': '30', 'UV_HTTP_RETRIES': '2'})
     runtime(release, 'preflight')
+    previous_workers = running_workers()
+    workers = configured_workers(release)
+    if previous_workers == PHASE_WORKERS and workers != previous_workers:
+        raise RuntimeError('Use the administrator switch to drain phase tasks and restore the legacy worker first')
     old_manifest = json.loads((old / 'release.json').read_text()) if old else None
     schema_unchanged = bool(old_manifest and migrations(old_manifest) == migrations(manifest))
     writers_stopped = False
     migration_attempted = False
     migration_completed = False
     try:
-        # Stop writers before the backup; worker warm-stop receives up to 1200s.
+        # Stop writers before taking the backup. Phase workers receive a bounded warm stop.
         record(commit, "stopping_writers", release=str(release))
         run(['systemctl', 'stop', *TIMERS, *JOBS], timeout=180)
         run(['systemctl', 'stop', UNITS[0]], timeout=90)
-        run(['systemctl', 'stop', UNITS[1]], timeout=1230)
-        for unit in UNITS:
+        run(['systemctl', 'stop', *previous_workers], timeout=3780 if previous_workers == PHASE_WORKERS else 1230)
+        for unit in (UNITS[0], *previous_workers):
             state = subprocess.run(['systemctl', 'show', unit, '-p', 'Result', '--value'],
                                    timeout=10, capture_output=True, text=True, check=True).stdout.strip()
             if state not in ('success', ''):
@@ -291,17 +330,22 @@ def deploy(commit, expected_digest):
         record(commit, "switching_version", release=str(release))
         switch(release)
         started = int(time.time())
-        run(['systemctl', 'start', *UNITS], timeout=90)
-        healthy(started)
+        run(['systemctl', 'start', UNITS[0], *workers], timeout=90)
+        healthy(started, workers)
         published = publish_frontend(release, manifest)
         run(['systemctl', 'start', *TIMERS], timeout=30)
+        if workers != previous_workers:
+            run(['systemctl', 'enable', *workers], timeout=30)
+            run(['systemctl', 'disable', *previous_workers], timeout=30)
         record(commit, 'success', previous=str(old) if old else None, backup=str(backup))
         print(f'Deployment successful: {commit}; API ready and Worker ready; frontend {"published" if published else "staged (no website configured)"}', flush=True)
     except Exception:
         # Do not let a failed new worker consume tasks while investigating.
         try:
-            run(['systemctl', 'stop', *UNITS], timeout=1320)
-            for unit in UNITS:
+            stop_workers = tuple(dict.fromkeys((*previous_workers, *workers)))
+            run(['systemctl', 'stop', UNITS[0], *stop_workers],
+                timeout=3780 if PHASE_WORKERS[0] in stop_workers else 1320)
+            for unit in (UNITS[0], *stop_workers):
                 result = subprocess.run(['systemctl', 'show', unit, '-p', 'Result', '--value'],
                     timeout=10, capture_output=True, text=True, check=True).stdout.strip()
                 if result not in ('success', ''):
@@ -309,11 +353,12 @@ def deploy(commit, expected_digest):
         except (subprocess.SubprocessError, RuntimeError):
             record(commit, 'manual_recovery_required', reason='Unable to stop services')
             raise
-        if old and writers_stopped and (not migration_attempted or (migration_completed and schema_unchanged)):
+        if (old and writers_stopped and workers == previous_workers
+                and (not migration_attempted or (migration_completed and schema_unchanged))):
             switch(old)
             started = int(time.time())
-            run(['systemctl', 'start', *UNITS, *TIMERS], timeout=90)
-            healthy(started)
+            run(['systemctl', 'start', UNITS[0], *previous_workers, *TIMERS], timeout=90)
+            healthy(started, previous_workers)
             publish_frontend(old, old_manifest)
             record(commit, 'rolled_back', previous=str(old))
         else:

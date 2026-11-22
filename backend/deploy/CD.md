@@ -52,6 +52,32 @@ GitHub → Actions → Deploy production → Run workflow：分支选择main，r
 
 ## 验收和排查
 
+### 分阶段 Worker 与 COS 直下
+
+发布候选以线上版本 `d53ab90` 为基线，在现有数据库迁移 0015 后应用 0016 和 0017。发布助手与运行时脚本更新需由管理员审阅，并与 `videohub-phase@.service` 一起安装。部署账号继续通过固定的发布助手操作。
+
+启用前核对以下条件。
+
+- 在隔离环境完成真实长视频和持续混合负载验收。按获准预算使用独立的模型凭据，并通过 readiness、视频下载和 AI 交付验证。
+- 保持 COS 桶 `vedio-1462213558` 为私有。在成都使用独立的生产命名空间 `cos-chengdu-production`。运行凭据只需在 `videohub-3546be8107d78ded/files/` 前缀具备 PutObject、HeadObject、GetObject。验收环境现有前缀及凭据仅用于验收。
+- 在 COS 为生产前缀设置与文件保留期限匹配的生命周期。默认文件保留 24 小时时，桶对象可按 2 天过期清理。安装和配置阶段保留生产数据库、Redis、模型和公众号配置。
+
+管理员使用经过审阅的 `backend/deploy/` 安装发布助手及阶段单元后，按原路径运行 CI 发布。当确实要启用并行和直下时，将以下设置合入 `/etc/videohub/backend.env`，凭据由管理员通过私有渠道填入。
+
+```dotenv
+STAGED_TASKS_ENABLED=true
+OBJECT_MIRROR_ENABLED=true
+OBJECT_DELIVERY_ENABLED=true
+OBJECT_DELIVERY_MODE=direct
+OBJECT_BUCKET=vedio-1462213558
+OBJECT_REGION=ap-chengdu
+OBJECT_NAMESPACE=cos-chengdu-production
+OBJECT_UPLOAD_ENDPOINT=https://cos.ap-chengdu.myqcloud.com
+OBJECT_READ_ENDPOINT=https://cos.ap-chengdu.myqcloud.com
+```
+
+发布助手按配置启动旧版单 Worker 或六个阶段 Worker，并检查每个实例和 API readiness。阶段 Worker 各自默认使用 2 个 PostgreSQL 连接及 1 个溢出连接，六个实例最多占用 18 个连接。上线后用测试账号分别验证鉴权、下载 Range、按签发扣额和两个媒体 Worker 重叠执行。回退 Worker 模式时先停止新阶段准入和排空在途阶段任务，再由管理员切换到旧 Worker。关闭 COS 直下开关可以单独恢复本地交付。
+
 ```sh
 curl --fail --max-time 3 http://127.0.0.1:8000/api/v1/health/ready
 systemctl status videohub-api videohub-worker --no-pager

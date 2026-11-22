@@ -96,7 +96,9 @@ def server(tmp_path, monkeypatch):
     monkeypatch.setattr(deploy, 'run', run)
     monkeypatch.setattr(deploy.subprocess, 'run', lambda *a, **k: SimpleNamespace(stdout='success'))
     monkeypatch.setattr(deploy, 'runtime', lambda release, operation: calls.append(operation))
-    monkeypatch.setattr(deploy, 'healthy', lambda *args: calls.append('healthy'))
+    monkeypatch.setattr(deploy, 'running_workers', lambda: (deploy.UNITS[1],))
+    monkeypatch.setattr(deploy, 'configured_workers', lambda release: (deploy.UNITS[1],))
+    monkeypatch.setattr(deploy, 'healthy', lambda *args, **kwargs: calls.append('healthy'))
     data = bundle()
     (home / 'incoming' / f'videohub-{SHA}.tar.gz').write_bytes(data)
     return SimpleNamespace(base=base, state=state, calls=calls, digest=hashlib.sha256(data).hexdigest())
@@ -119,6 +121,23 @@ def test_checksum_failure_does_not_stop_services(server):
     with pytest.raises(ValueError, match='SHA256'):
         deploy.deploy(SHA, '0' * 64)
     assert not server.calls
+
+
+def test_deployment_activates_fixed_phase_workers_and_disables_legacy_boot(server, monkeypatch):
+    monkeypatch.setattr(deploy, 'configured_workers', lambda release: deploy.PHASE_WORKERS)
+    deploy.deploy(SHA, server.digest)
+    calls = server.calls
+    assert ['systemctl', 'stop', deploy.UNITS[1]] in calls
+    assert ['systemctl', 'start', deploy.UNITS[0], *deploy.PHASE_WORKERS] in calls
+    assert calls.index('healthy') < calls.index(['systemctl', 'enable', *deploy.PHASE_WORKERS])
+    assert ['systemctl', 'disable', deploy.UNITS[1]] in calls
+
+
+def test_deployment_requires_phase_drain_before_switching_back(server, monkeypatch):
+    monkeypatch.setattr(deploy, 'running_workers', lambda: deploy.PHASE_WORKERS)
+    with pytest.raises(RuntimeError, match='drain phase tasks'):
+        deploy.deploy(SHA, server.digest)
+    assert not any(isinstance(c, list) and c[:2] == ['systemctl', 'stop'] for c in server.calls)
 
 
 def test_migration_failure_leaves_services_stopped_without_blind_rollback(server, monkeypatch):

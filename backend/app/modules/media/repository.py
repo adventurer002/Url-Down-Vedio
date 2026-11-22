@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.exceptions import AppException
@@ -24,6 +24,8 @@ class MediaRecord:
     source_sha256: str | None = None
     source_start: float | None = None
     source_end: float | None = None
+    download_key: str | None = None
+    object_store_tag: str | None = None
 
 
 class MediaRepository:
@@ -90,3 +92,36 @@ class MediaRepository:
                         MediaFile.video_id == video_id, MediaFile.expires_at > now,
                         MediaFile.purpose.in_(("legacy", "full_source", "full_audio"))
                     ).order_by(MediaFile.created_at.desc()))]
+
+    def find_download(self, key, now, file_limit):
+        with self.sessions() as session:
+            item = session.scalar(select(MediaFile).where(MediaFile.download_key == key,
+                MediaFile.expires_at > now, MediaFile.size_bytes <= file_limit
+            ).order_by(MediaFile.created_at.desc()).limit(1))
+            if item:
+                return MediaRecord(**{field: getattr(item, field) for field in MediaRecord.__dataclass_fields__})
+
+    @staticmethod
+    def mirror_conditions(now):
+        return (
+            MediaFile.object_store_tag.is_(None), MediaFile.purpose.in_(("full_source", "full_audio")),
+            MediaFile.expires_at > now, MediaFile.object_attempts < 3,
+            or_(MediaFile.object_attempted_at.is_(None), MediaFile.object_attempted_at <= now - timedelta(minutes=1)),
+        )
+
+    def next_mirror(self, now):
+        with self.sessions() as session:
+            return session.scalar(select(MediaFile.id).where(*self.mirror_conditions(now))
+                                  .order_by(MediaFile.created_at.desc()).limit(1))
+
+    def begin_mirror(self, file_id, now):
+        with self.sessions.begin() as session:
+            return bool(session.execute(update(MediaFile).where(MediaFile.id == file_id,
+                *self.mirror_conditions(now)).values(object_attempted_at=now,
+                    object_attempts=MediaFile.object_attempts + 1)).rowcount)
+
+    def finish_mirror(self, file_id, tag, now):
+        with self.sessions.begin() as session:
+            return bool(session.execute(update(MediaFile).where(MediaFile.id == file_id,
+                MediaFile.object_store_tag.is_(None), MediaFile.expires_at > now)
+                .values(object_store_tag=tag)).rowcount)

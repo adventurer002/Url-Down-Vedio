@@ -1,6 +1,9 @@
 import asyncio
 from contextlib import ExitStack
+from dataclasses import dataclass
+import os
 from app.infrastructure.timing import log_queue_wait, stage_timer
+from app.infrastructure.timeouts import operation_timeout
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -30,16 +33,41 @@ class TranscriptDispatcher:
     def enqueue(self, task_id: UUID):
         celery_app.send_task("transcripts.transcribe", args=[str(task_id)], task_id=str(task_id))
 
+    def enqueue_routed(self, task_id, queue):
+        from app.modules.tasks.dispatch import send
+        send("transcripts.transcribe", task_id, queue)
+
 
 def result(record, cache_hit=False):
     return {"transcript_id": str(record.id), "source_type": record.source_type,
             "content_hash": record.content_hash, "cache_hit": cache_hit}
 
 
-async def cooperative_asr(provider: ASRProvider, audio_path, language, cancelled):
-    operation = asyncio.create_task(provider.transcribe(audio_path, language))
+@dataclass(frozen=True)
+class PreparedAudio:
+    """Task-private audio that can be consumed by the next worker."""
+
+
+def prepared_audio(directory):
+    paths = [path for path in directory.glob("prepared.*")
+             if path.suffix in {".mp3", ".wav"} and path.is_file() and not path.is_symlink()]
+    return paths[0] if len(paths) == 1 else None
+
+
+def preserve_audio(path, directory):
+    target = directory / ("prepared.wav" if path.suffix.lower() == ".wav" else "prepared.mp3")
+    if path.parent == directory:
+        path.replace(target)
+    else:
+        # The cache/upload read lock is held and local storage uses one filesystem.
+        os.link(path, target, follow_symlinks=False)
+
+
+async def cooperative_asr(provider: ASRProvider, audio_path, language, cancelled, *, task_id=None):
+    operation = None
     try:
-        async with asyncio.timeout(settings.ASR_TOTAL_TIMEOUT_SECONDS):
+        async with operation_timeout("asr", settings.ASR_TOTAL_TIMEOUT_SECONDS, "ASR_TIMEOUT", "ASR 超过总执行时限", task_id):
+            operation = asyncio.create_task(provider.transcribe(audio_path, language))
             while not operation.done():
                 if await cancelled():
                     raise AppException("TASK_CANCELLED", "任务已取消", 409)
@@ -48,14 +76,16 @@ async def cooperative_asr(provider: ASRProvider, audio_path, language, cancelled
     except TimeoutError:
         raise AppException("ASR_TIMEOUT", "ASR 超过总执行时限", 504) from None
     finally:
-        if not operation.done():
-            operation.cancel()
-        await asyncio.gather(operation, return_exceptions=True)
+        if operation is not None:
+            if not operation.done():
+                operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
 
 
 async def execute_transcription(task_id: UUID, service: TaskService, transcripts: TranscriptRepository,
                                  media: MediaRepository, storage: StorageAdapter, subtitles: SubtitleProvider,
-                                 audio: TranscriptionAudioProvider, asr: ASRProvider, *, intermediate=False, intermediate_progress=None):
+                                 audio: TranscriptionAudioProvider, asr: ASRProvider, *, intermediate=False,
+                                 intermediate_progress=None, phase=None):
     tasks = service.repository
     if not intermediate and not await database_call(tasks.start, task_id):
         return {"task_id": str(task_id), "status": (await database_call(tasks.get, task_id)).status}
@@ -94,14 +124,15 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
     try:
         if task.input_payload.get("model_config"):
             from app.modules.model_config.runtime import asr as configured_asr
-            asr=await database_call(configured_asr,"transcription",task.input_payload["model_config"],tasks.sessions)
-        elif asr is None:asr=get_asr_provider(managed=False)
+            asr = await database_call(configured_asr, "transcription", task.input_payload["model_config"], tasks.sessions)
+        elif asr is None:
+            asr = get_asr_provider(managed=False)
         if "allowance" in task.input_payload:
-            asr.model=task.input_payload["allowance"]["asr_model"]
+            asr.model = task.input_payload["allowance"]["asr_model"]
         if not intermediate:
             log_queue_wait(task)
             await publish(task)
-        if task.input_payload.get("source_kind") == "upload":
+        if phase != "asr" and task.input_payload.get("source_kind") == "upload":
             from app.modules.uploads.service import upload_service
             uploads = upload_service(transcripts.sessions, storage)
             # Recheck the authoritative owner and current file state on execution.
@@ -126,11 +157,13 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
                 is_cancel_requested=cancelled, on_wait=waiting):
             if await cancelled():
                 raise AppException("TASK_CANCELLED", "任务已取消", 409)
-            directory = storage.create_task_directory(task_id)
+            directory = storage.root / "tmp" / str(task_id) if phase == "asr" else storage.create_task_directory(task_id)
             controls = {"is_cancel_requested": cancelled, "on_progress": on_progress, "check_capacity": storage.check_capacity}
-            await on_progress({"stage": "subtitles", "progress": 10})
-            with stage_timer("subtitles", task_id):
-                data = None if uploaded_path is not None else await subtitles.fetch(task.input_payload, directory, **controls)
+            data = None
+            if phase != "asr" and uploaded_path is None:
+                await on_progress({"stage": "subtitles", "progress": 10})
+                with stage_timer("subtitles", task_id):
+                    data = await subtitles.fetch(task.input_payload, directory, **controls)
             source, model = "subtitle", "none"
             if data is None:
                 source, model = "asr", asr.model
@@ -141,7 +174,11 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
                 if settings.APP_ENV != "development" and getattr(asr, "mock", False):
                     raise AppException("ASR_NOT_CONFIGURED", "生产转写不能使用 Mock ASR", 503)
                 with stage_timer("audio_acquire", task_id):
-                    if uploaded_path is not None:
+                    if phase == "asr":
+                        path = prepared_audio(directory)
+                        if path is None:
+                            raise AppException("PREPARED_AUDIO_MISSING", "待转写音频已失效，请重新提交任务", 409)
+                    elif uploaded_path is not None:
                         path = await audio.acquire_local(uploaded_path, payload["media_type"], directory,
                             source_extension=payload["title"].rsplit(".", 1)[-1].lower(), **controls)
                     else:
@@ -150,19 +187,34 @@ async def execute_transcription(task_id: UUID, service: TaskService, transcripts
                             source_guard.enter_context(storage.file_lock(path))
                             if not path.is_file():
                                 raise AppException("FILE_NOT_FOUND", "音频缓存已过期，请重试", 404)
-                if "allowance" in task.input_payload:
+                if phase == "prepare":
+                    preserve_audio(path, directory)
+                    keep_directory = True
+                    return PreparedAudio()
+                duration = 0
+                if phase == "asr" or "allowance" in task.input_payload:
                     from app.modules.media.probe import audio_seconds
                     duration = await audio_seconds(path, directory, controls, settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+                if "allowance" in task.input_payload:
                     await database_call(tasks.record_asr, task_id, duration)
-                await on_progress({"stage": "asr", "progress": 90})
+                await on_progress({"stage": "asr", "progress": 40 if phase == "asr" else 90})
                 with stage_timer("asr", task_id):
-                    from app.modules.transcript.providers import asr_work_directory, asr_capacity_check
+                    from app.modules.transcript.providers import (
+                        asr_audio_duration, asr_capacity_check, asr_chunk_progress, asr_work_directory,
+                    )
+                    async def chunk_progress(done, total):
+                        await on_progress({"stage": "asr", "progress": 40 + 55 * done // total})
+
                     directory_token = asr_work_directory.set(directory)
                     capacity_token = asr_capacity_check.set(storage.check_capacity)
+                    duration_token = asr_audio_duration.set(duration)
+                    progress_token = asr_chunk_progress.set(chunk_progress if phase == "asr" else None)
                     try:
-                        data = await cooperative_asr(asr, path, language, cancelled)
+                        data = await cooperative_asr(asr, path, language, cancelled, task_id=task_id)
                     finally:
                         asr_capacity_check.reset(capacity_token)
+                        asr_audio_duration.reset(duration_token)
+                        asr_chunk_progress.reset(progress_token)
                         asr_work_directory.reset(directory_token)
             data = make_transcript(language or data.language, data.segments)
             if await cancelled():

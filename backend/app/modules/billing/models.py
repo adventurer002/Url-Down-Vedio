@@ -105,4 +105,6 @@ class AllowanceTransfer(Base):
     day: Mapped[date] = mapped_column(Date)
     reserved: Mapped[int] = mapped_column(BigInteger)
     sent: Mapped[int | None] = mapped_column(BigInteger)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

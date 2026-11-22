@@ -113,6 +113,8 @@ class MetadataCache:
                     except AppException as error:
                         self.remember_failure(host, error)
                         raise
+                    from app.modules.video.parsers.source_cache import remember
+                    await remember(video)
                     value = json.dumps(asdict(video), ensure_ascii=False).encode("utf-8")
                     self.put(url, value)
                     return value

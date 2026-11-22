@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Float, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Float, Integer, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base
@@ -21,6 +21,10 @@ class MediaFile(Base):
     mime_type: Mapped[str] = mapped_column(String(255))
     size_bytes: Mapped[int] = mapped_column(BigInteger)
     purpose: Mapped[str] = mapped_column(String(16), default="legacy", server_default="legacy")
+    object_store_tag: Mapped[str | None] = mapped_column(String(64))
+    object_attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    object_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    download_key: Mapped[str | None] = mapped_column(String(64), index=True)
     source_sha256: Mapped[str | None] = mapped_column(String(64))
     source_start: Mapped[float | None] = mapped_column(Float)
     source_end: Mapped[float | None] = mapped_column(Float)

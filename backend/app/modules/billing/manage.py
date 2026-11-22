@@ -1,20 +1,16 @@
 """Audited operator grants and bounded reconciliation; never proof of payment."""
 import argparse
 import asyncio
-from datetime import timedelta
 import json
 import os
 import socket
 from uuid import UUID
 
-from sqlalchemy import select
-
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.infrastructure.database.session import SessionLocal
 from app.infrastructure.process_runner import ProcessRunner
-from app.modules.billing.models import AllowanceTransfer
-from app.modules.billing.policy import PRODUCTS, now
+from app.modules.billing.policy import PRODUCTS
 from app.modules.billing.repository import AllowanceRepository
 from app.modules.billing.service import resume_queued
 from app.modules.tasks.repository import TaskRepository
@@ -27,15 +23,16 @@ def recover(tasks, storage_path):
     storage = LocalStorageAdapter(storage_path, settings.STORAGE_MAX_QUOTA_MB, settings.STORAGE_MIN_FREE_MB)
     from app.modules.tasks.execution import execution_lock, recoverable_receipt, discard_receipt
     for task in tasks.running():
-        if ("allowance" not in task.input_payload and task.task_type not in {"media_probe","model_test"}) or not task.worker_pid or task.worker_host != socket.gethostname():
+        if ((not task.phase and "allowance" not in task.input_payload and task.task_type not in {"media_probe", "model_test"})
+                or not task.worker_pid or task.worker_host != socket.gethostname()):
             continue
         try:
             with execution_lock(storage_path, task.id):
                 task = tasks.get(task.id)
-                if task.status not in {"running", "processing"}:
+                if task.status not in {"running", "processing"} or not task.worker_pid:
                     continue
                 closed_attempt = recoverable_receipt(storage_path, task)
-                if not closed_attempt:
+                if not closed_attempt and not task.phase:
                     try:
                         os.kill(task.worker_pid, 0)
                     except ProcessLookupError:
@@ -46,8 +43,18 @@ def recover(tasks, storage_path):
                         continue  # Live legacy workers without an execution receipt remain protected.
                 if not ProcessRunner.directory_stopped(storage_path / "tmp" / str(task.id)):
                     continue
-                final = tasks.finish(task.id, "failed" if closed_attempt else "cancelled", task.progress,
-                    error_code="TASK_EXECUTION_INTERRUPTED" if closed_attempt else "WORKER_LOST",
+                if task.phase and not task.cancel_requested and task.phase_attempts < 2:
+                    from app.modules.media.repository import MediaRepository
+                    storage.discard_batch(task.id, MediaRepository(tasks.sessions).storage_keys())
+                    if task.phase not in {"asr", "render"}:
+                        storage.remove_task_directory(task.id)
+                    storage.release_reservation(task.id)
+                    if tasks.requeue_phase(task.id, task.input_payload["_execution_id"]):
+                        restored += 1
+                        continue
+                interrupted = closed_attempt or bool(task.phase)
+                final = tasks.finish(task.id, "failed" if interrupted else "cancelled", task.progress,
+                    error_code="TASK_EXECUTION_INTERRUPTED" if interrupted else "WORKER_LOST",
                     error_message="执行已停止且进程组已退出，已释放额度",
                     expected_execution_id=task.input_payload.get("_execution_id"))
                 if final.status not in {"failed", "cancelled", "expired"}:
@@ -99,15 +106,14 @@ def main(argv=None):
             print(json.dumps({"error": {"code": "ADMIN_OPERATION_FAILED", "message": "发放失败，请检查服务配置"}}, ensure_ascii=False))
             return 1
     else:
+        from app.modules.tasks.checkpoints import Checkpoints
         result = {"recovered": recover(tasks, settings.storage_path)}
-        with SessionLocal() as session:
-            # A crashed HTTP transfer cannot report its last bytes. Conservatively
-            # account for its entire reservation; do not enable unlimited reconnects.
-            stale = [(x.id, x.reserved) for x in session.scalars(select(AllowanceTransfer).where(
-                AllowanceTransfer.sent.is_(None), AllowanceTransfer.created_at < now() - timedelta(hours=1)).limit(100))]
-        for identifier, reserved in stale:
-            repository.finish_transfer(identifier, reserved)
-        result.update(transfers_reconciled=len(stale), dispatched=asyncio.run(resume_queued(tasks)))
+        result["checkpoints_expired"] = Checkpoints.purge(SessionLocal)
+        from app.modules.media.mirror import recover_mirrors
+        from app.modules.media.repository import MediaRepository
+        result.update(transfers_reconciled=repository.reconcile_transfers(),
+                      dispatched=asyncio.run(resume_queued(tasks)))
+        asyncio.run(recover_mirrors(MediaRepository(SessionLocal)))
     print(json.dumps(result, default=str, ensure_ascii=False))
     return 0
 

@@ -22,6 +22,10 @@ class AudioDispatcher:
     def enqueue(self, task_id: UUID):
         celery_app.send_task("media.extract_audio", args=[str(task_id)], task_id=str(task_id))
 
+    def enqueue_routed(self, task_id, queue):
+        from app.modules.tasks.dispatch import send
+        send("media.extract_audio", task_id, queue)
+
 
 @celery_app.task(name="media.extract_audio")
 def extract_audio_task(task_id: str):

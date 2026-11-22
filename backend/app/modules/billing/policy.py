@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from zoneinfo import ZoneInfo
 
 from app.core.exceptions import AppException
+from app.core.config import settings
 
 VERSION = "allowances-v1"
 BEIJING = ZoneInfo("Asia/Shanghai")
@@ -57,11 +58,20 @@ def catalog():
     return {"version": VERSION, "currency": "CNY", "products": PRODUCTS,
             "trial": {"asr_seconds": 1800, "ai_generations": 5, "valid_days": 30},
             "addon_valid_days": 30, "rollover": False, "free_daily_downloads": 2,
-            "free_limits": FREE_LIMITS, "member_limits": MEMBER_LIMITS, "tier_limits": TIER_LIMITS,
+            "free_limits": execution_limits("free"), "member_limits": MEMBER_LIMITS,
+            "tier_limits": {tier: execution_limits(tier) for tier in TIER_LIMITS},
             "max_text_chars": MAX_TEXT_CHARS, "max_output_tokens_per_call": MAX_OUTPUT_TOKENS,
             "max_total_output_tokens": 16384, "max_llm_calls": 16,
             "asr_rounding": "完整音频按秒向上取整；字幕及转写缓存不扣分钟",
             "cache_policy": "公共 AI 缓存首次获取扣 1 次；自己的相同结果免费",
             "refund_policy": "正常交付后不支持无理由退款；重复支付、未交付及依法应退款情形除外",
             "purchase_mode": "operator_grant_only", "real_payment_enabled": False,
-            "worker_capacity_note": "账号额度不代表机器并行能力；当前 Solo 单 Worker 实际串行"}
+            "worker_capacity_note": "实际并发受执行队列容量约束" if settings.STAGED_TASKS_ENABLED
+                else "账号额度不代表机器并行能力；当前 Solo 单 Worker 实际串行"}
+
+
+def execution_limits(tier):
+    limits = dict(TIER_LIMITS[tier])
+    if settings.STAGED_TASKS_ENABLED and tier == "free":
+        limits["download_concurrency"] = 2
+    return limits

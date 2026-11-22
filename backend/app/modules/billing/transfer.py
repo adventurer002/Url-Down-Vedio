@@ -7,10 +7,10 @@ from app.core.exceptions import AppException
 from app.modules.tasks.service import database_call
 
 
-def transfer_length(length, range_header=None, if_range=None):
+def transfer_range(length, range_header):
     if not range_header:
-        return length
-    match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+        return None
+    match = re.fullmatch(r"bytes=([0-9]{0,20})-([0-9]{0,20})", range_header.strip())
     if not match or not any(match.groups()):
         raise AppException("INVALID_RANGE", "首版仅支持单个 bytes Range", 416)
     start, end = match.groups()
@@ -19,13 +19,18 @@ def transfer_length(length, range_header=None, if_range=None):
         end = min(int(end), length - 1) if end else length - 1
         if start >= length or end < start:
             raise AppException("INVALID_RANGE", "请求的文件范围无效", 416)
-        amount = end - start + 1
+        return start, end
     else:
         amount = min(int(end), length)
         if not amount:
             raise AppException("INVALID_RANGE", "请求的文件范围无效", 416)
+    return length - amount, length - 1
+
+
+def transfer_length(length, range_header=None, if_range=None):
+    bounds = transfer_range(length, range_header)
     # A failed If-Range comparison makes Starlette send the whole file.
-    return length if if_range else amount
+    return length if if_range or bounds is None else bounds[1] - bounds[0] + 1
 
 
 class AllowanceFileResponse(FileResponse):

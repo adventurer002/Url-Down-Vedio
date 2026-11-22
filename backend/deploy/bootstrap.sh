@@ -30,5 +30,8 @@ printf '%s\n' 'videohub-deploy ALL=(root) NOPASSWD: /usr/local/sbin/videohub-dep
 visudo -cf "$rule"
 install -o root -g root -m 0440 "$rule" /etc/sudoers.d/videohub-deploy
 systemctl daemon-reload
-systemctl enable videohub-api.service videohub-worker.service videohub-cleanup.timer videohub-reconcile.timer
+systemctl enable videohub-api.service videohub-cleanup.timer videohub-reconcile.timer
+if ! systemctl is-enabled --quiet videohub-phase@control.service; then
+  systemctl enable videohub-worker.service
+fi
 printf '%s\n' 'Deployment helper installed. Services have NOT been started. Existing env and database preserved.'

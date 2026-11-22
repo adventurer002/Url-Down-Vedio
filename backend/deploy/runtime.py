@@ -35,6 +35,12 @@ def preflight():
     for url in (settings.REDIS_URL, settings.CELERY_BROKER_URL, settings.CELERY_RESULT_BACKEND):
         with Redis.from_url(url, socket_connect_timeout=5, socket_timeout=5) as client:
             client.ping()
+    if getattr(settings, 'OBJECT_MIRROR_ENABLED', False) or getattr(settings, 'OBJECT_DELIVERY_ENABLED', False):
+        from app.infrastructure.storage.objects import object_store
+        if settings.OBJECT_MIRROR_ENABLED:
+            object_store(upload=True)
+        if settings.OBJECT_DELIVERY_ENABLED:
+            object_store()
     pending = []
     for name in ('ASR_API_KEY', 'LLM_API_KEY', 'ASR_MODEL', 'LLM_MODEL', 'WECHAT_MP_TOKEN'):
         value = getattr(settings, name)
@@ -46,14 +52,24 @@ def preflight():
     print('Core production configuration, database and Redis verified', flush=True)
 
 
+def worker_mode():
+    from app.core.config import settings
+    if getattr(settings, 'STAGED_TASKS_ENABLED', False):
+        print('phased', flush=True)
+    else:
+        print('legacy', flush=True)
+
+
 if __name__ == '__main__':
     try:
         if sys.argv[1:] == ['preflight']:
             preflight()
         elif sys.argv[1:] == ['migrate']:
             subprocess.run([sys.executable, '-m', 'alembic', 'upgrade', 'head'], check=True, timeout=120)
+        elif sys.argv[1:] == ['worker-mode']:
+            worker_mode()
         else:
-            raise ValueError('Expected preflight or migrate')
+            raise ValueError('Unknown runtime operation')
     except Exception as exc:
         # Connection errors may contain credentials. Only disclose the type here.
         print(f'Runtime operation failed: {type(exc).__name__}; inspect private server configuration', file=sys.stderr)
