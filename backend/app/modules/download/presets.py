@@ -1,3 +1,4 @@
+from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.video.parsers.base import ParsedVideo
 from app.modules.video.service import _has_codec, _rank, requires_audio_only, source_video_streams, audio_rank, SAFE_PROTOCOLS
@@ -6,7 +7,7 @@ PRESETS = {"video_1080_mp4": 1080, "video_720_mp4": 720, "video_480_mp4": 480,
            "video_source_mp4": None, "audio_mp3": None}
 
 
-def select_streams(video: ParsedVideo, preset_id: str) -> list[dict]:
+def select_streams(video: ParsedVideo, preset_id: str, *, prefer_https: bool = True) -> list[dict]:
     if preset_id not in PRESETS:
         raise AppException("INVALID_PRESET", "下载档位无效", 422)
     if preset_id == "video_source_mp4":
@@ -28,6 +29,18 @@ def select_streams(video: ParsedVideo, preset_id: str) -> list[dict]:
                       and _has_codec(item, "vcodec") and (_has_codec(item, "acodec") or audio)]
         if candidates:
             video_stream = max(candidates, key=_rank)
+            if (prefer_https and settings.VIDEO_EGRESS_MODE == "platform" and video.platform == "youtube"
+                    and video_stream.get("protocol") in {"m3u8", "m3u8_native", "http_dash_segments"}):
+                # A manifest's advertised bandwidth can outrank a regular file
+                # with the same display properties and add many proxy requests.
+                equivalent = ("width", "height", "fps", "vcodec", "acodec", "ext")
+                direct = (
+                    item for item in candidates
+                    if item.get("protocol", "https") == "https" and item["url"].startswith("https://")
+                    and not item.get("fragments")
+                    and all(item.get(key) == video_stream.get(key) for key in equivalent)
+                )
+                video_stream = max(direct, key=_rank, default=video_stream)
             return [video_stream] if _has_codec(video_stream, "acodec") else [video_stream, max(audio, key=audio_rank)]
     raise AppException("PRESET_UNAVAILABLE", "当前视频不提供所选下载档位", 422)
 

@@ -103,7 +103,7 @@ async def download_file(file_id: UUID, request: Request, service: MediaService =
         from app.modules.media.delivery import redirect_download
         from app.modules.tasks.service import database_call
         repository = AllowanceRepository(service.repository.sessions)
-        redirect = await redirect_download(record, filename, request, user, repository)
+        redirect = await redirect_download(record, filename, request, user, repository, service.repository)
         if redirect is not None:
             return redirect
         path = service.local_download_path(record)

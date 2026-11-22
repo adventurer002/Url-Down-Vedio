@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import shutil
 import subprocess
 from threading import Barrier
@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 
 from redis.asyncio import Redis
 import pytest
+from yt_dlp.utils import DownloadError
 
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -15,6 +16,7 @@ from app.infrastructure.process_runner import ProcessRunner
 from app.modules.download import child
 from app.modules.download.adapter import LocalRenderAdapter, YtDlpDownloadAdapter
 from app.modules.download.fast_mp4 import fast_start_layout
+from app.modules.download.presets import select_streams
 from app.modules.video.parsers import source_cache
 from app.modules.video.parsers.base import ParsedVideo
 from app.modules.video.parsers.bilibili import HEADERS
@@ -32,6 +34,58 @@ def snapshots(now):
          "vcodec": "none", "acodec": "mp4a", "http_headers": dict(HEADERS)},
     ]
     return ParsedVideo("bilibili", "BVFixture", "Test", duration=20, formats=formats)
+
+
+def youtube_formats(fps=30):
+    common = {
+        "ext": "mp4", "vcodec": "avc1.4d401f", "acodec": "none",
+        "height": 720, "width": 1280, "fps": 30,
+    }
+    hls = {**common, "format_id": "232", "url": "https://media.example.com/playlist",
+           "protocol": "m3u8_native", "tbr": 1072}
+    progressive = {**common, "format_id": "136", "url": "https://media.example.com/video",
+                   "protocol": "https", "tbr": 268, "fps": fps}
+    audio = {"format_id": "140", "url": "https://media.example.com/audio",
+             "protocol": "https", "vcodec": "none", "acodec": "mp4a", "ext": "m4a"}
+    return hls, progressive, audio
+
+
+@pytest.mark.parametrize("fps,expected_format", [(30, "136"), (24, "232")])
+def test_youtube_prefers_equivalent_unfragmented_https(monkeypatch, fps, expected_format):
+    monkeypatch.setattr(settings, "VIDEO_EGRESS_MODE", "platform")
+    hls, progressive, audio = youtube_formats(fps)
+    video = ParsedVideo("youtube", "fixture", "Test", duration=643, formats=[hls, progressive, audio])
+    assert [item["format_id"] for item in select_streams(video, "video_720_mp4")] == [expected_format, "140"]
+    assert select_streams(video, "video_720_mp4", prefer_https=False) == [hls, audio]
+
+
+def test_youtube_rejected_https_retries_original_manifest(monkeypatch, tmp_path):
+    hls, progressive, audio = youtube_formats()
+    info = {"id": "fixture", "extractor_key": "Youtube", "duration": 643,
+            "formats": [hls, progressive, audio]}
+    guard = SimpleNamespace(violation=None, installed=nullcontext, check_url=lambda url: None)
+    monkeypatch.setattr(settings, "VIDEO_EGRESS_MODE", "platform")
+    monkeypatch.setattr(child, "server_proxy", lambda url: None)
+    monkeypatch.setattr(child.shutil, "which", lambda name: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(child, "NetworkGuard", lambda proxy: guard)
+    monkeypatch.setattr(child, "guarded_downloader", lambda *args: nullcontext())
+    monkeypatch.setattr(child, "extract_source", lambda *args: info)
+    calls = []
+    partial = tmp_path / "source_0.mp4.part"
+
+    def transfer(guard, info, streams, options, directory, size, audio_only, emit):
+        calls.append(streams)
+        if len(calls) == 1:
+            partial.write_bytes(b"partial")
+            raise DownloadError("HTTP Error 403: Forbidden")
+        assert not partial.exists()
+        return [directory / "source_0.mp4", directory / "source_1.m4a"]
+
+    monkeypatch.setattr(child, "transfer_streams", transfer)
+    child.download({"url": "https://www.youtube.com/watch?v=fixture", "platform": "youtube",
+                    "platform_video_id": "fixture", "preset_id": "video_720_mp4",
+                    "_defer_render": True}, tmp_path, lambda event: None)
+    assert calls == [[progressive, audio], [hls, audio]]
 
 
 async def test_source_cache_ttl_scope_rejects_unknown_expiry_and_reuses(redis_url, monkeypatch):

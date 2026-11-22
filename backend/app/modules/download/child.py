@@ -200,9 +200,19 @@ def download(payload: dict, directory: Path, emit) -> None:
         except DownloadError as error:
             if guard.violation:
                 raise guard.violation
-            if cached and not source_failure(error) and re.search(r"HTTP Error (403|404|410)\b", str(error)):
+            rejected_url = not source_failure(error) and re.search(r"HTTP Error (403|404|410)\b", str(error))
+            if cached and rejected_url:
                 raise AppException("DOWNLOAD_SOURCE_STALE", "缓存媒体地址已失效", 502) from None
-            raise
+            if not rejected_url or video.platform != "youtube" or payload.get("_audio_only"):
+                raise
+            fallback = select_streams(video, payload["preset_id"], prefer_https=False)
+            if fallback == streams or (directory / f"source_0.{streams[0]['ext']}").exists():
+                raise
+            # The HTTPS variant was rejected. Reuse the original manifest within this task's deadline.
+            for path in directory.glob("source_0.*"):
+                path.unlink()
+            streams = fallback
+            sources = transfer_streams(guard, info, streams, options, directory, source_limit, False, emit)
         source_timing(emit, "source_transfer", transfer_started, epoch_started)
         if payload.get("_defer_render"):
             manifest = {"sources": [path.name for path in sources],

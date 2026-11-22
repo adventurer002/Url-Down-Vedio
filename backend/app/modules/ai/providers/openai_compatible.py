@@ -106,6 +106,10 @@ class OpenAICompatibleLLMProvider:
                                                                       "context": request.context}, ensure_ascii=False)}]}
         if self.model.startswith("deepseek"):
             body["thinking"] = {"type": "disabled"}
+        elif self.model.casefold() == "qwen3.8-flash":
+            # DashScope enables thinking by default for this hybrid model.
+            # These structured jobs need their output budget for the JSON answer.
+            body["enable_thinking"] = False
         try:
             async with operation_timeout("llm_request", self.timeout, "LLM_TIMEOUT", "模型调用超过总执行时限") as budget:
                 async with httpx.AsyncClient(transport=self.transport or public_transport(), trust_env=False, follow_redirects=False,

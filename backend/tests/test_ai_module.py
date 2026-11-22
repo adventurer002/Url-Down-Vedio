@@ -136,6 +136,20 @@ async def test_cloud_reports_incomplete_json_at_output_limit():
     assert error.value.code == "LLM_OUTPUT_TRUNCATED"
 
 
+async def test_qwen38_flash_disables_default_thinking_for_structured_analysis():
+    def respond(request):
+        body = json.loads(request.content)
+        assert body["enable_thinking"] is False
+        assert body["max_tokens"] == 2048
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"candidates":[]}'}}],
+                                        "usage": {"completion_tokens": 10}})
+
+    provider = OpenAICompatibleLLMProvider("https://example.com", "secret", "qwen3.8-flash",
+        transport=httpx.MockTransport(respond))
+    result = await provider.generate(LLMRequest("clip_map", {}, {}, "zh", "subtitle", 2048))
+    assert result.content == {"candidates": []}
+
+
 @pytest.mark.parametrize("status,attempts", [(401, 1), (503, 2)])
 async def test_cloud_errors_have_bounded_retries_without_secrets(status, attempts):
     calls = []
